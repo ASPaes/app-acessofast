@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck } from "lucide-react";
+import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -72,9 +73,7 @@ function AuthPage() {
           }}
         />
         <div className="relative flex items-center gap-3">
-          <div className="h-9 w-9 rounded-md bg-primary/15 border border-primary/40 flex items-center justify-center">
-            <span className="text-primary font-bold">A</span>
-          </div>
+          <img src={acessofastLogo.url} alt="Acessofast" className="h-10 w-10 object-contain" />
           <div className="leading-tight">
             <div className="text-base font-semibold">Acessofast</div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
