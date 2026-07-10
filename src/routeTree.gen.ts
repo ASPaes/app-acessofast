@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
+import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
 import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authenticated/dispositivos'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
@@ -36,6 +37,12 @@ const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMonitoramentoRoute =
+  AuthenticatedMonitoramentoRouteImport.update({
+    id: '/monitoramento',
+    path: '/monitoramento',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDispositivosRoute =
   AuthenticatedDispositivosRouteImport.update({
     id: '/dispositivos',
@@ -59,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
+  '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesByTo {
@@ -67,6 +75,7 @@ export interface FileRoutesByTo {
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
+  '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesById {
@@ -77,6 +86,7 @@ export interface FileRoutesById {
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dispositivos': typeof AuthenticatedDispositivosRoute
+  '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRouteTypes {
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/auditoria'
     | '/dashboard'
     | '/dispositivos'
+    | '/monitoramento'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/auditoria'
     | '/dashboard'
     | '/dispositivos'
+    | '/monitoramento'
     | '/usuarios'
   id:
     | '__root__'
@@ -104,6 +116,7 @@ export interface FileRouteTypes {
     | '/_authenticated/auditoria'
     | '/_authenticated/dashboard'
     | '/_authenticated/dispositivos'
+    | '/_authenticated/monitoramento'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
 }
@@ -143,6 +156,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/monitoramento': {
+      id: '/_authenticated/monitoramento'
+      path: '/monitoramento'
+      fullPath: '/monitoramento'
+      preLoaderRoute: typeof AuthenticatedMonitoramentoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dispositivos': {
       id: '/_authenticated/dispositivos'
       path: '/dispositivos'
@@ -171,6 +191,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDispositivosRoute: typeof AuthenticatedDispositivosRoute
+  AuthenticatedMonitoramentoRoute: typeof AuthenticatedMonitoramentoRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
 
@@ -178,6 +199,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDispositivosRoute: AuthenticatedDispositivosRoute,
+  AuthenticatedMonitoramentoRoute: AuthenticatedMonitoramentoRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
 
