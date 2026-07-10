@@ -72,11 +72,11 @@ function AuthPage() {
             backgroundSize: "32px 32px",
           }}
         />
-        <div className="relative flex items-center gap-3">
-          <img src={acessofastLogo.url} alt="Acessofast" className="h-10 w-10 object-contain" />
+        <div className="relative flex items-center gap-4">
+          <img src={acessofastLogo.url} alt="Acessofast" className="h-24 w-24 object-contain" />
           <div className="leading-tight">
-            <div className="text-base font-semibold">Acessofast</div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="text-2xl font-semibold">Acessofast</div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">
               ASP Softwares
             </div>
           </div>
