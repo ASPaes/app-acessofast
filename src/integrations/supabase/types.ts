@@ -14,7 +14,405 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      address_book: {
+        Row: {
+          alias: string | null
+          created_at: string
+          created_by: string | null
+          device_group: string | null
+          id: string
+          last_online: string | null
+          os: string | null
+          rustdesk_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          alias?: string | null
+          created_at?: string
+          created_by?: string | null
+          device_group?: string | null
+          id?: string
+          last_online?: string | null
+          os?: string | null
+          rustdesk_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          alias?: string | null
+          created_at?: string
+          created_by?: string | null
+          device_group?: string | null
+          id?: string
+          last_online?: string | null
+          os?: string | null
+          rustdesk_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "address_book_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "address_book_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      connection_logs: {
+        Row: {
+          address_book_id: string | null
+          created_at: string
+          duration_seconds: number | null
+          id: string
+          notes: string | null
+          rustdesk_id: string
+          session_end: string | null
+          session_start: string
+          status: Database["public"]["Enums"]["session_status"]
+          technician_email: string | null
+          technician_id: string | null
+          technician_ip: unknown
+          tenant_id: string
+        }
+        Insert: {
+          address_book_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          notes?: string | null
+          rustdesk_id: string
+          session_end?: string | null
+          session_start?: string
+          status?: Database["public"]["Enums"]["session_status"]
+          technician_email?: string | null
+          technician_id?: string | null
+          technician_ip?: unknown
+          tenant_id: string
+        }
+        Update: {
+          address_book_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          notes?: string | null
+          rustdesk_id?: string
+          session_end?: string | null
+          session_start?: string
+          status?: Database["public"]["Enums"]["session_status"]
+          technician_email?: string | null
+          technician_id?: string | null
+          technician_ip?: unknown
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_logs_address_book_id_fkey"
+            columns: ["address_book_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_logs_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      features: {
+        Row: {
+          created_at: string
+          description: string | null
+          is_default: boolean
+          key: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          is_default?: boolean
+          key: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          is_default?: boolean
+          key?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          company: string | null
+          consent: boolean
+          created_at: string
+          email: string
+          id: string
+          message: string | null
+          name: string
+          phone: string | null
+          segment: string | null
+          source: string
+          status: Database["public"]["Enums"]["lead_status"]
+          team_size: string | null
+          updated_at: string
+        }
+        Insert: {
+          company?: string | null
+          consent?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          message?: string | null
+          name: string
+          phone?: string | null
+          segment?: string | null
+          source?: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          team_size?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company?: string | null
+          consent?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string | null
+          name?: string
+          phone?: string | null
+          segment?: string | null
+          source?: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          team_size?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          is_active: boolean
+          role: Database["public"]["Enums"]["user_role"]
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          is_active?: boolean
+          role?: Database["public"]["Enums"]["user_role"]
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          is_active?: boolean
+          role?: Database["public"]["Enums"]["user_role"]
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_features: {
+        Row: {
+          enabled: boolean
+          enabled_by: string | null
+          feature_key: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          enabled_by?: string | null
+          feature_key: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          enabled_by?: string | null
+          feature_key?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_features_enabled_by_fkey"
+            columns: ["enabled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_features_feature_key_fkey"
+            columns: ["feature_key"]
+            isOneToOne: false
+            referencedRelation: "features"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "tenant_features_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_settings: {
+        Row: {
+          alert_email: string | null
+          created_at: string
+          display_name: string | null
+          log_retention_days: number
+          notify_relay_quota: boolean
+          prefs: Json
+          tenant_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          alert_email?: string | null
+          created_at?: string
+          display_name?: string | null
+          log_retention_days?: number
+          notify_relay_quota?: boolean
+          prefs?: Json
+          tenant_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          alert_email?: string | null
+          created_at?: string
+          display_name?: string | null
+          log_retention_days?: number
+          notify_relay_quota?: boolean
+          prefs?: Json
+          tenant_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          relay_quota_gb: number
+          seat_limit: number
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          relay_quota_gb?: number
+          seat_limit?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          relay_quota_gb?: number
+          seat_limit?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vps_metrics: {
+        Row: {
+          active_sessions: number | null
+          captured_at: string
+          cpu_pct: number | null
+          disk_pct: number | null
+          host: string
+          id: string
+          mem_pct: number | null
+          net_rx_bytes: number | null
+          net_tx_bytes: number | null
+          relay_mbps: number | null
+        }
+        Insert: {
+          active_sessions?: number | null
+          captured_at?: string
+          cpu_pct?: number | null
+          disk_pct?: number | null
+          host?: string
+          id?: string
+          mem_pct?: number | null
+          net_rx_bytes?: number | null
+          net_tx_bytes?: number | null
+          relay_mbps?: number | null
+        }
+        Update: {
+          active_sessions?: number | null
+          captured_at?: string
+          cpu_pct?: number | null
+          disk_pct?: number | null
+          host?: string
+          id?: string
+          mem_pct?: number | null
+          net_rx_bytes?: number | null
+          net_tx_bytes?: number | null
+          relay_mbps?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +421,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      lead_status: "novo" | "em_contato" | "qualificado" | "ganho" | "perdido"
+      session_status: "active" | "ended" | "failed"
+      user_role: "super_admin" | "admin" | "tech"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +550,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      lead_status: ["novo", "em_contato", "qualificado", "ganho", "perdido"],
+      session_status: ["active", "ended", "failed"],
+      user_role: ["super_admin", "admin", "tech"],
+    },
   },
 } as const
