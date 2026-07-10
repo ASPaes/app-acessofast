@@ -19,6 +19,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 
 type NavItem = {
   title: string;
@@ -48,9 +49,11 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border/60 px-3 py-3">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-md bg-primary/15 border border-primary/40 flex items-center justify-center shrink-0">
-            <span className="text-primary text-sm font-bold">A</span>
-          </div>
+          <img
+            src={acessofastLogo.url}
+            alt="Acessofast"
+            className="h-8 w-8 object-contain shrink-0"
+          />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
               <span className="text-sm font-semibold">Acessofast</span>

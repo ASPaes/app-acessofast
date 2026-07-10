@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
+import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -12,7 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="h-14 flex items-center gap-3 border-b border-border/60 bg-card/40 px-4 backdrop-blur">
             <SidebarTrigger />
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]" />
+              <img src={acessofastLogo.url} alt="Acessofast" className="h-6 w-6 object-contain" />
               <span className="text-sm font-medium tracking-wide text-foreground">
                 Acessofast
               </span>
