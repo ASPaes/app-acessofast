@@ -418,12 +418,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      assign_member: {
+        Args: {
+          p_role: Database["public"]["Enums"]["user_role"]
+          p_tenant_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      provision_tenant: {
+        Args: { p_admin_user_id: string; p_name: string; p_seat_limit?: number }
+        Returns: string
+      }
     }
     Enums: {
       lead_status: "novo" | "em_contato" | "qualificado" | "ganho" | "perdido"
       session_status: "active" | "ended" | "failed"
-      user_role: "super_admin" | "admin" | "tech"
+      user_role: "super_admin" | "admin" | "head" | "tech"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -553,7 +564,7 @@ export const Constants = {
     Enums: {
       lead_status: ["novo", "em_contato", "qualificado", "ganho", "perdido"],
       session_status: ["active", "ended", "failed"],
-      user_role: ["super_admin", "admin", "tech"],
+      user_role: ["super_admin", "admin", "head", "tech"],
     },
   },
 } as const
