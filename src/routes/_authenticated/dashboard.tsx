@@ -242,12 +242,20 @@ function StatCard({
   );
 }
 
-function MetricPlaceholder({ label, icon: Icon }: { label: string; icon: typeof Cpu }) {
+function MetricPlaceholder({
+  label,
+  icon: Icon,
+  value,
+}: {
+  label: string;
+  icon: typeof Cpu;
+  value?: string;
+}) {
   return (
     <div className="rounded-md border border-dashed border-border/60 p-4 flex flex-col items-center justify-center text-center gap-2">
       <Icon className="h-5 w-5 text-muted-foreground" />
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold text-muted-foreground/60 tabular-nums">—</div>
+      <div className="text-2xl font-semibold text-muted-foreground/60 tabular-nums">{value ?? "—"}</div>
     </div>
   );
 }
