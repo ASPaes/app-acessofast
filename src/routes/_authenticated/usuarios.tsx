@@ -55,8 +55,6 @@ type InviteResult = {
 };
 
 function UsuariosPage() {
-  const queryClient = useQueryClient();
-
   const { data: me } = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
