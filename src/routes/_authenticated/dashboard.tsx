@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
@@ -28,6 +29,15 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+type VpsMetric = {
+  captured_at: string;
+  cpu_pct: number | string | null;
+  mem_pct: number | string | null;
+  disk_pct: number | string | null;
+  net_rx_bytes: number | string | null;
+  net_tx_bytes: number | string | null;
+};
+
 function Dashboard() {
   const stats = useQuery({
     queryKey: ["dashboard-stats"],
@@ -49,6 +59,42 @@ function Dashboard() {
       };
     },
   });
+
+  const vpsMetrics = useQuery({
+    queryKey: ["dashboard-vps-metrics"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vps_metrics")
+        .select("captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes")
+        .order("captured_at", { ascending: false })
+        .limit(2);
+      if (error) throw error;
+      return (data ?? []) as VpsMetric[];
+    },
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard_vps_rt")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "vps_metrics" },
+        () => {
+          vpsMetrics.refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const latest = vpsMetrics.data?.[0] ?? null;
+  const now = Date.now();
+  const capturedAt = latest ? new Date(latest.captured_at).getTime() : null;
+  const idadeSeg = capturedAt != null ? Math.floor((now - capturedAt) / 1000) : null;
+  const ativo = latest != null && idadeSeg != null && idadeSeg <= 60;
 
   return (
     <div className="p-6 space-y-6">
@@ -104,16 +150,45 @@ function Dashboard() {
                 <CardTitle className="text-base">Monitoramento do relay</CardTitle>
                 <CardDescription>Saúde da VPS compartilhada (super_admin)</CardDescription>
               </div>
-              <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                <AlertTriangle className="h-3 w-3" />
-                aguardando coletor
-              </Badge>
+              {ativo ? (
+                <Badge variant="outline" className="gap-1.5 text-emerald-500 border-emerald-500/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ao vivo · há {idadeSeg}s
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                  <AlertTriangle className="h-3 w-3" />
+                  aguardando coletor
+                </Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-3 gap-4">
-            <MetricPlaceholder label="CPU" icon={Cpu} />
-            <MetricPlaceholder label="Memória" icon={Gauge} />
-            <MetricPlaceholder label="Disco" icon={HardDrive} />
+            {vpsMetrics.isLoading ? (
+              <>
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </>
+            ) : (
+              <>
+                <MetricPlaceholder
+                  label="CPU"
+                  icon={Cpu}
+                  value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : undefined}
+                />
+                <MetricPlaceholder
+                  label="Memória"
+                  icon={Gauge}
+                  value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : undefined}
+                />
+                <MetricPlaceholder
+                  label="Disco"
+                  icon={HardDrive}
+                  value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : undefined}
+                />
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -125,7 +200,7 @@ function Dashboard() {
           <CardContent className="space-y-3">
             <StatusRow label="API do painel" ok />
             <StatusRow label="Banco (RLS)" ok />
-            <StatusRow label="Coletor VPS" ok={false} note="não configurado" />
+            <StatusRow label="Coletor VPS" ok={ativo} note={ativo ? undefined : "sem amostras"} />
             <StatusRow label="Realtime" ok />
           </CardContent>
         </Card>
@@ -167,12 +242,20 @@ function StatCard({
   );
 }
 
-function MetricPlaceholder({ label, icon: Icon }: { label: string; icon: typeof Cpu }) {
+function MetricPlaceholder({
+  label,
+  icon: Icon,
+  value,
+}: {
+  label: string;
+  icon: typeof Cpu;
+  value?: string;
+}) {
   return (
     <div className="rounded-md border border-dashed border-border/60 p-4 flex flex-col items-center justify-center text-center gap-2">
       <Icon className="h-5 w-5 text-muted-foreground" />
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold text-muted-foreground/60 tabular-nums">—</div>
+      <div className="text-2xl font-semibold text-muted-foreground/60 tabular-nums">{value ?? "—"}</div>
     </div>
   );
 }
