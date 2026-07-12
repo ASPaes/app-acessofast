@@ -150,16 +150,45 @@ function Dashboard() {
                 <CardTitle className="text-base">Monitoramento do relay</CardTitle>
                 <CardDescription>Saúde da VPS compartilhada (super_admin)</CardDescription>
               </div>
-              <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                <AlertTriangle className="h-3 w-3" />
-                aguardando coletor
-              </Badge>
+              {ativo ? (
+                <Badge variant="outline" className="gap-1.5 text-emerald-500 border-emerald-500/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ao vivo · há {idadeSeg}s
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                  <AlertTriangle className="h-3 w-3" />
+                  aguardando coletor
+                </Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-3 gap-4">
-            <MetricPlaceholder label="CPU" icon={Cpu} />
-            <MetricPlaceholder label="Memória" icon={Gauge} />
-            <MetricPlaceholder label="Disco" icon={HardDrive} />
+            {vpsMetrics.isLoading ? (
+              <>
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </>
+            ) : (
+              <>
+                <MetricPlaceholder
+                  label="CPU"
+                  icon={Cpu}
+                  value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : undefined}
+                />
+                <MetricPlaceholder
+                  label="Memória"
+                  icon={Gauge}
+                  value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : undefined}
+                />
+                <MetricPlaceholder
+                  label="Disco"
+                  icon={HardDrive}
+                  value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : undefined}
+                />
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -171,7 +200,7 @@ function Dashboard() {
           <CardContent className="space-y-3">
             <StatusRow label="API do painel" ok />
             <StatusRow label="Banco (RLS)" ok />
-            <StatusRow label="Coletor VPS" ok={false} note="não configurado" />
+            <StatusRow label="Coletor VPS" ok={ativo} note={ativo ? undefined : "sem amostras"} />
             <StatusRow label="Realtime" ok />
           </CardContent>
         </Card>
