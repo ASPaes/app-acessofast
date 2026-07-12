@@ -29,6 +29,15 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+type VpsMetric = {
+  captured_at: string;
+  cpu_pct: number | string | null;
+  mem_pct: number | string | null;
+  disk_pct: number | string | null;
+  net_rx_bytes: number | string | null;
+  net_tx_bytes: number | string | null;
+};
+
 function Dashboard() {
   const stats = useQuery({
     queryKey: ["dashboard-stats"],
@@ -50,6 +59,42 @@ function Dashboard() {
       };
     },
   });
+
+  const vpsMetrics = useQuery({
+    queryKey: ["dashboard-vps-metrics"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vps_metrics")
+        .select("captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes")
+        .order("captured_at", { ascending: false })
+        .limit(2);
+      if (error) throw error;
+      return (data ?? []) as VpsMetric[];
+    },
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard_vps_rt")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "vps_metrics" },
+        () => {
+          vpsMetrics.refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const latest = vpsMetrics.data?.[0] ?? null;
+  const now = Date.now();
+  const capturedAt = latest ? new Date(latest.captured_at).getTime() : null;
+  const idadeSeg = capturedAt != null ? Math.floor((now - capturedAt) / 1000) : null;
+  const ativo = latest != null && idadeSeg != null && idadeSeg <= 60;
 
   return (
     <div className="p-6 space-y-6">
