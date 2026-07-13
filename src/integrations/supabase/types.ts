@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       address_book: {
         Row: {
+          agent_token_hash: string | null
           alias: string | null
           created_at: string
           created_by: string | null
@@ -28,6 +29,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agent_token_hash?: string | null
           alias?: string | null
           created_at?: string
           created_by?: string | null
@@ -40,6 +42,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agent_token_hash?: string | null
           alias?: string | null
           created_at?: string
           created_by?: string | null
@@ -74,6 +77,7 @@ export type Database = {
           created_at: string
           duration_seconds: number | null
           id: string
+          last_heartbeat_at: string | null
           notes: string | null
           rustdesk_id: string
           session_end: string | null
@@ -89,6 +93,7 @@ export type Database = {
           created_at?: string
           duration_seconds?: number | null
           id?: string
+          last_heartbeat_at?: string | null
           notes?: string | null
           rustdesk_id: string
           session_end?: string | null
@@ -104,6 +109,7 @@ export type Database = {
           created_at?: string
           duration_seconds?: number | null
           id?: string
+          last_heartbeat_at?: string | null
           notes?: string | null
           rustdesk_id?: string
           session_end?: string | null
@@ -426,6 +432,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      close_stale_sessions: { Args: never; Returns: number }
       get_device_secret: {
         Args: { p_device_id: string }
         Returns: {
