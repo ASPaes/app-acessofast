@@ -29,11 +29,28 @@ function DispositivosPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["address_book"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) throw new Error("Sessao invalida");
+
+      const { data: profile, error: pErr } = await supabase
+        .from("profiles")
+        .select("role, tenant_id")
+        .eq("id", uid)
+        .single();
+      if (pErr) throw pErr;
+
+      let query = supabase
         .from("address_book")
         .select("id, rustdesk_id, alias, device_group, os, last_online, created_at")
         .order("created_at", { ascending: false })
         .limit(500);
+
+      if (profile.role !== "super_admin" && profile.tenant_id) {
+        query = query.eq("tenant_id", profile.tenant_id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
