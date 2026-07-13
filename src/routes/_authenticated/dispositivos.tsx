@@ -244,3 +244,226 @@ function DispositivosPage() {
     </div>
   );
 }
+
+function AdicionarDispositivoDialog({
+  role,
+  tenantId,
+}: {
+  role: string;
+  tenantId: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [rustdeskId, setRustdeskId] = useState("");
+  const [alias, setAlias] = useState("");
+  const [grupo, setGrupo] = useState("");
+  const [so, setSo] = useState("");
+  const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
+  const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
+  const isSuper = role === "super_admin";
+
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants_lista"],
+    enabled: isSuper,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const resetForm = () => {
+    setRustdeskId("");
+    setAlias("");
+    setGrupo("");
+    setSo("");
+    setTenantSelecionado("");
+    setSenhaGerada(null);
+    setCopiado(false);
+  };
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const tId = isSuper ? tenantSelecionado : tenantId;
+      if (!tId) throw new Error("Selecione um tenant");
+      if (!rustdeskId.trim()) throw new Error("Informe o Rustdesk ID");
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from("address_book")
+        .insert({
+          rustdesk_id: rustdeskId.trim(),
+          alias: alias.trim() || null,
+          device_group: grupo.trim() || null,
+          os: so.trim() || null,
+          tenant_id: tId,
+        })
+        .select("id")
+        .single();
+      if (insertErr) throw new Error(insertErr.message);
+
+      const { data: prov, error: provErr } = await supabase.functions.invoke<ProvisionResult>(
+        "provision-device-secret",
+        { body: { device_id: inserted.id } },
+      );
+
+      if (provErr || prov?.error) {
+        const msg = provErr ? await invokeErrorMessage(provErr) : prov?.error;
+        return { partial: true as const, message: msg };
+      }
+      return { partial: false as const, password: prov?.password ?? "" };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+      if (result.partial) {
+        toast.error("Dispositivo criado, mas falhou ao gerar a senha. Tente de novo.");
+        setOpen(false);
+        resetForm();
+      } else {
+        toast.success("Dispositivo cadastrado com sucesso");
+        setSenhaGerada(result.password);
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    mutation.mutate();
+  };
+
+  const copiarSenha = async () => {
+    if (!senhaGerada) return;
+    try {
+      await navigator.clipboard.writeText(senhaGerada);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      toast.error("Não foi possível copiar a senha");
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) resetForm();
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="h-4 w-4 mr-1" />
+          Adicionar dispositivo
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        {senhaGerada ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Senha gerada</DialogTitle>
+              <DialogDescription>
+                Configure esta senha como senha permanente (unattended) no client RustDesk deste
+                endpoint. Ela fica guardada cifrada e pode ser recuperada depois pelo botão
+                Conectar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={senhaGerada} className="font-mono text-xs" />
+              <Button type="button" size="sm" variant="outline" onClick={copiarSenha}>
+                {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span className="ml-1">{copiado ? "Copiado" : "Copiar"}</span>
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Fechar
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Adicionar dispositivo</DialogTitle>
+              <DialogDescription>
+                Cadastre um endpoint RustDesk. Uma senha permanente será gerada automaticamente.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="dev-rustdesk-id">Rustdesk ID *</Label>
+                <Input
+                  id="dev-rustdesk-id"
+                  value={rustdeskId}
+                  onChange={(e) => setRustdeskId(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dev-alias">Alias</Label>
+                <Input
+                  id="dev-alias"
+                  value={alias}
+                  onChange={(e) => setAlias(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dev-grupo">Grupo</Label>
+                <Input
+                  id="dev-grupo"
+                  value={grupo}
+                  onChange={(e) => setGrupo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dev-so">SO</Label>
+                <Input id="dev-so" value={so} onChange={(e) => setSo(e.target.value)} />
+              </div>
+              {isSuper && (
+                <div className="space-y-2">
+                  <Label htmlFor="dev-tenant">Tenant *</Label>
+                  <Select
+                    value={tenantSelecionado}
+                    onValueChange={(v) => setTenantSelecionado(v)}
+                  >
+                    <SelectTrigger id="dev-tenant">
+                      <SelectValue placeholder="Selecione um tenant" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenants?.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setOpen(false);
+                    resetForm();
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending ? "Salvando..." : "Cadastrar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
