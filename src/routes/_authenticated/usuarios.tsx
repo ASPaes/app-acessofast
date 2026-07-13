@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Building2, Copy, Check } from "lucide-react";
+import { Users, UserPlus, Building2, Copy, Check, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -91,6 +91,15 @@ function UsuariosPage() {
     tech: "Técnico",
   };
 
+  const canResend = (u: { id: string; role: string; tenant_id: string | null }) => {
+    if (!me) return false;
+    if (u.id === me.id) return false;
+    if (u.role === "super_admin") return false;
+    if (me.role === "super_admin") return true;
+    if (me.role === "admin" && me.tenant_id && u.tenant_id === me.tenant_id) return true;
+    return false;
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -126,13 +135,14 @@ function UsuariosPage() {
                   <TableHead>Papel</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 6 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
@@ -141,7 +151,7 @@ function UsuariosPage() {
                   ))}
                 {!isLoading && data && data.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
                       Nenhum usuário visível para o seu papel.
                     </TableCell>
                   </TableRow>
@@ -162,6 +172,16 @@ function UsuariosPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(u.created_at).toLocaleDateString("pt-BR")}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {canResend(u) && u.email && u.tenant_id && (
+                          <ResendInviteButton
+                            email={u.email}
+                            tenantId={u.tenant_id}
+                            role={u.role as "tech" | "head" | "admin"}
+                            fullName={u.full_name}
+                          />
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
               </TableBody>
@@ -170,6 +190,80 @@ function UsuariosPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ResendInviteButton({
+  email,
+  tenantId,
+  role,
+  fullName,
+}: {
+  email: string;
+  tenantId: string;
+  role: "tech" | "head" | "admin";
+  fullName: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, unknown> = {
+        mode: "add_member",
+        tenant_id: tenantId,
+        email,
+        role,
+        redirect_to: `${window.location.origin}/definir-senha`,
+      };
+      if (fullName) body.full_name = fullName;
+      const { data, error } = await supabase.functions.invoke<InviteResult>("invite-user", {
+        body,
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao reenviar convite");
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success("Convite reenviado com sucesso");
+      if (data.invite_link) {
+        setInviteLink(data.invite_link);
+        setOpen(true);
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        <Send className="h-3.5 w-3.5 mr-1" />
+        {mutation.isPending ? "Enviando..." : "Reenviar convite"}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Convite reenviado</DialogTitle>
+            <DialogDescription>
+              Compartilhe este link com {email} para definir a senha.
+            </DialogDescription>
+          </DialogHeader>
+          {inviteLink && <InviteLinkBlock link={inviteLink} />}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
