@@ -140,8 +140,7 @@ function DispositivosPage() {
     },
   });
 
-  const podeAdicionar =
-    perfil?.role === "super_admin" || perfil?.role === "admin" || perfil?.role === "head";
+  const podeAdicionar = !!perfil;
 
   const { data, isLoading } = useQuery({
     queryKey: ["address_book"],
@@ -402,45 +401,41 @@ function AdicionarDispositivoDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const tId = isSuper ? tenantSelecionado : tenantId;
-      if (!tId) throw new Error("Selecione um tenant");
       const normalizado = rustdeskId.replace(/\D/g, "");
       if (!normalizado) throw new Error("Informe um Rustdesk ID válido (somente dígitos)");
 
-      const { data: inserted, error: insertErr } = await supabase
-        .from("address_book")
-        .insert({
-          rustdesk_id: normalizado,
-          alias: alias.trim() || null,
-          device_group: grupo.trim() || null,
-          os: so.trim() || null,
-          tenant_id: tId,
-        })
-        .select("id")
-        .single();
-      if (insertErr) throw new Error(insertErr.message);
+      const body: Record<string, unknown> = {
+        rustdesk_id: normalizado,
+        alias: alias.trim() || null,
+        device_group: grupo.trim() || null,
+        os: so.trim() || null,
+      };
+      if (isSuper) {
+        if (!tenantSelecionado) throw new Error("Selecione um tenant");
+        body.tenant_id = tenantSelecionado;
+      }
 
-      const { data: prov, error: provErr } = await supabase.functions.invoke<ProvisionResult>(
-        "provision-device-secret",
-        { body: { device_id: inserted.id } },
+      const { data, error } = await supabase.functions.invoke<ProvisionResult>(
+        "register-device",
+        { body },
       );
 
-      if (provErr || prov?.error) {
-        const msg = provErr ? await invokeErrorMessage(provErr) : prov?.error;
-        return { partial: true as const, message: msg };
+      if (error || data?.error) {
+        const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+        if (raw.includes("device_already_registered")) {
+          throw new Error("Este dispositivo (Rustdesk ID) já está cadastrado neste tenant.");
+        }
+        if (raw.includes("rustdesk_id_invalido")) {
+          throw new Error("Rustdesk ID inválido — informe de 6 a 12 dígitos.");
+        }
+        throw new Error(raw || "Falha ao cadastrar dispositivo");
       }
-      return { partial: false as const, password: prov?.password ?? "" };
+      return { password: data?.password ?? "" };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
-      if (result.partial) {
-        toast.error("Dispositivo criado, mas falhou ao gerar a senha. Tente de novo.");
-        setOpen(false);
-        resetForm();
-      } else {
-        toast.success("Dispositivo cadastrado com sucesso");
-        setSenhaGerada(result.password);
-      }
+      toast.success("Dispositivo cadastrado");
+      setSenhaGerada(result.password);
     },
     onError: (err: Error) => {
       toast.error(err.message);
