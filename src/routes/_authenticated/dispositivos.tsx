@@ -91,6 +91,7 @@ function DispositivosPage() {
                   <TableHead>Grupo</TableHead>
                   <TableHead>SO</TableHead>
                   <TableHead>Últ. online</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
