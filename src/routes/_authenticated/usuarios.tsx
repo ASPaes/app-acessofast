@@ -77,7 +77,7 @@ function UsuariosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, role, is_active, created_at")
+        .select("id, full_name, email, role, is_active, created_at, tenant_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
