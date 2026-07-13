@@ -44,6 +44,13 @@ type ProvisionResult = {
   error?: string;
 };
 
+type ConnectResult = {
+  rustdesk_id?: string;
+  password?: string;
+  deep_link?: string;
+  error?: string;
+};
+
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
     try {
@@ -65,6 +72,58 @@ export const Route = createFileRoute("/_authenticated/dispositivos")({
 
 function DispositivosPage() {
   const [q, setQ] = useState("");
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [connectData, setConnectData] = useState<{
+    rustdesk_id: string;
+    password: string;
+    deep_link: string;
+  } | null>(null);
+  const [copiadoConn, setCopiadoConn] = useState(false);
+
+  const handleConectar = async (deviceId: string) => {
+    setConnectingId(deviceId);
+    try {
+      const { data, error } = await supabase.functions.invoke<ConnectResult>(
+        "connect-device",
+        { body: { device_id: deviceId } },
+      );
+      if (error || data?.error) {
+        const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+        if (raw.includes("sem_senha_provisionada")) {
+          toast.error(
+            "Dispositivo sem senha provisionada. Provisione a senha antes de conectar.",
+          );
+        } else {
+          toast.error(raw || "Falha ao conectar");
+        }
+        return;
+      }
+      if (!data?.rustdesk_id || !data?.password || !data?.deep_link) {
+        toast.error("Resposta inválida do servidor");
+        return;
+      }
+      setConnectData({
+        rustdesk_id: data.rustdesk_id,
+        password: data.password,
+        deep_link: data.deep_link,
+      });
+      setCopiadoConn(false);
+    } finally {
+      setConnectingId(null);
+    }
+  };
+
+  const copiarSenhaConn = async () => {
+    if (!connectData) return;
+    try {
+      await navigator.clipboard.writeText(connectData.password);
+      setCopiadoConn(true);
+      setTimeout(() => setCopiadoConn(false), 2000);
+    } catch {
+      toast.error("Não foi possível copiar a senha");
+    }
+  };
+
   const { data: perfil } = useQuery({
     queryKey: ["meu_perfil"],
     queryFn: async () => {
@@ -219,19 +278,11 @@ function DispositivosPage() {
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={async () => {
-                            try {
-                              await supabase.rpc("log_connection_attempt", {
-                                p_address_book_id: d.id,
-                              });
-                            } catch (e) {
-                              console.error("Falha ao registrar auditoria:", e);
-                            }
-                            window.location.href = `rustdesk://connection/new/${d.rustdesk_id}`;
-                          }}
+                          disabled={connectingId === d.id}
+                          onClick={() => handleConectar(d.id)}
                         >
                           <Monitor className="h-4 w-4 mr-2" />
-                          Conectar
+                          {connectingId === d.id ? "Conectando..." : "Conectar"}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -241,6 +292,68 @@ function DispositivosPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={connectData !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setConnectData(null);
+            setCopiadoConn(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Conectar</DialogTitle>
+            <DialogDescription>
+              Ao abrir a conexão, o RustDesk vai pedir a senha acima. Cole-a para conectar.
+            </DialogDescription>
+          </DialogHeader>
+          {connectData && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Rustdesk ID</Label>
+                <Input readOnly value={connectData.rustdesk_id} className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label>Senha</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={connectData.password}
+                    className="font-mono text-xs"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={copiarSenhaConn}>
+                    {copiadoConn ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    <span className="ml-1">{copiadoConn ? "Copiado" : "Copiar"}</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setConnectData(null);
+                setCopiadoConn(false);
+              }}
+            >
+              Fechar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (connectData) window.location.href = connectData.deep_link;
+              }}
+            >
+              <Monitor className="h-4 w-4 mr-2" />
+              Abrir conexão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -291,12 +404,13 @@ function AdicionarDispositivoDialog({
     mutationFn: async () => {
       const tId = isSuper ? tenantSelecionado : tenantId;
       if (!tId) throw new Error("Selecione um tenant");
-      if (!rustdeskId.trim()) throw new Error("Informe o Rustdesk ID");
+      const normalizado = rustdeskId.replace(/\D/g, "");
+      if (!normalizado) throw new Error("Informe um Rustdesk ID válido (somente dígitos)");
 
       const { data: inserted, error: insertErr } = await supabase
         .from("address_book")
         .insert({
-          rustdesk_id: rustdeskId.trim(),
+          rustdesk_id: normalizado,
           alias: alias.trim() || null,
           device_group: grupo.trim() || null,
           os: so.trim() || null,
