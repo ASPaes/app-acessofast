@@ -218,6 +218,7 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
         role,
       };
       if (fullName.trim()) body.full_name = fullName.trim();
+      body.redirect_to = `${window.location.origin}/definir-senha`;
       const { data, error } = await supabase.functions.invoke<InviteResult>("invite-user", {
         body,
       });
@@ -347,6 +348,7 @@ function ProvisionTenantDialog() {
           name: name.trim(),
           email: email.trim(),
           seat_limit: seatLimit,
+          redirect_to: `${window.location.origin}/definir-senha`,
         },
       });
       if (error) throw new Error(error.message);
