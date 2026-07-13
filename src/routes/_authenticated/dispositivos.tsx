@@ -153,7 +153,14 @@ function DispositivosPage() {
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => {
+                          onClick={async () => {
+                            try {
+                              await supabase.rpc("log_connection_attempt", {
+                                p_address_book_id: d.id,
+                              });
+                            } catch (e) {
+                              console.error("Falha ao registrar auditoria:", e);
+                            }
                             window.location.href = `rustdesk://connection/new/${d.rustdesk_id}`;
                           }}
                         >

@@ -434,6 +434,10 @@ export type Database = {
           key_version: number
         }[]
       }
+      log_connection_attempt: {
+        Args: { p_address_book_id: string }
+        Returns: string
+      }
       provision_tenant: {
         Args: { p_admin_user_id: string; p_name: string; p_seat_limit?: number }
         Returns: string
