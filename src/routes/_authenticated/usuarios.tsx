@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,6 +54,18 @@ type InviteResult = {
   error?: string;
   detail?: string;
 };
+
+async function invokeErrorMessage(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const b = await error.context.json();
+      return b?.detail ?? b?.error ?? error.message;
+    } catch {
+      return error.message;
+    }
+  }
+  return (error as { message?: string })?.message ?? "Erro ao chamar a função";
+}
 
 function UsuariosPage() {
   const { data: me } = useQuery({
@@ -210,7 +223,7 @@ function ResendInviteButton({
   const mutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, unknown> = {
-        mode: "add_member",
+        mode: "resend_invite",
         tenant_id: tenantId,
         email,
         role,
@@ -220,7 +233,7 @@ function ResendInviteButton({
       const { data, error } = await supabase.functions.invoke<InviteResult>("invite-user", {
         body,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await invokeErrorMessage(error));
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao reenviar convite");
       return data;
     },
@@ -316,7 +329,7 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
       const { data, error } = await supabase.functions.invoke<InviteResult>("invite-user", {
         body,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await invokeErrorMessage(error));
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao convidar");
       return data;
     },
@@ -445,7 +458,7 @@ function ProvisionTenantDialog() {
           redirect_to: `${window.location.origin}/definir-senha`,
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await invokeErrorMessage(error));
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao provisionar");
       return data;
     },
