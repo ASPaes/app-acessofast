@@ -426,9 +426,27 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_device_secret: {
+        Args: { p_device_id: string }
+        Returns: {
+          ciphertext: string
+          iv: string
+          key_version: number
+        }[]
+      }
       provision_tenant: {
         Args: { p_admin_user_id: string; p_name: string; p_seat_limit?: number }
         Returns: string
+      }
+      set_device_secret: {
+        Args: {
+          p_actor: string
+          p_ciphertext: string
+          p_device_id: string
+          p_iv: string
+          p_key_version: number
+        }
+        Returns: undefined
       }
     }
     Enums: {
