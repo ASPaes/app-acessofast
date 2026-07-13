@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,46 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { MonitorSmartphone, Search, Monitor } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check } from "lucide-react";
 import { useMemo, useState } from "react";
+
+type ProvisionResult = {
+  device_id?: string;
+  rustdesk_id?: string;
+  password?: string;
+  note?: string;
+  error?: string;
+};
+
+async function invokeErrorMessage(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const b = await error.context.json();
+      return b?.detail ?? b?.error ?? error.message;
+    } catch {
+      return error.message;
+    }
+  }
+  return (error as { message?: string })?.message ?? "Erro ao chamar a função";
+}
 
 export const Route = createFileRoute("/_authenticated/dispositivos")({
   head: () => ({
@@ -26,6 +65,25 @@ export const Route = createFileRoute("/_authenticated/dispositivos")({
 
 function DispositivosPage() {
   const [q, setQ] = useState("");
+  const { data: perfil } = useQuery({
+    queryKey: ["meu_perfil"],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role, tenant_id")
+        .eq("id", uid)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const podeAdicionar =
+    perfil?.role === "super_admin" || perfil?.role === "admin" || perfil?.role === "head";
+
   const { data, isLoading } = useQuery({
     queryKey: ["address_book"],
     queryFn: async () => {
@@ -88,14 +146,22 @@ function DispositivosPage() {
               {data ? `${data.length} dispositivo(s)` : "Carregando…"}
             </CardDescription>
           </div>
-          <div className="relative w-72">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="Buscar por ID, alias, grupo…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative w-72">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Buscar por ID, alias, grupo…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+            {podeAdicionar && perfil && (
+              <AdicionarDispositivoDialog
+                role={perfil.role}
+                tenantId={perfil.tenant_id}
+              />
+            )}
           </div>
         </CardHeader>
         <CardContent>
