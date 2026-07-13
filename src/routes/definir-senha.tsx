@@ -33,6 +33,23 @@ function DefinirSenhaPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const tokenHash = sp.get("token_hash");
+    const tipo = sp.get("type");
+    if (tokenHash && tipo) {
+      supabase.auth
+        .verifyOtp({ token_hash: tokenHash, type: tipo as any })
+        .then(({ error }) => {
+          if (error) {
+            setErroLink("Link inválido ou expirado. Peça um novo convite ao administrador.");
+            setEstado("linkInvalido");
+          } else {
+            setEstado("pronto");
+          }
+        });
+      return;
+    }
+
     const hash = window.location.hash ?? "";
     if (hash.includes("error=")) {
       const params = new URLSearchParams(hash.replace(/^#/, ""));
