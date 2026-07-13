@@ -98,7 +98,7 @@ function DispositivosPage() {
                 {isLoading &&
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 6 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
@@ -107,7 +107,7 @@ function DispositivosPage() {
                   ))}
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
                       Nenhum dispositivo encontrado.
                     </TableCell>
                   </TableRow>
@@ -131,6 +131,18 @@ function DispositivosPage() {
                         {d.last_online
                           ? new Date(d.last_online).toLocaleString("pt-BR")
                           : "nunca"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => {
+                            window.location.href = `rustdesk://connection/new/${d.rustdesk_id}`;
+                          }}
+                        >
+                          <Monitor className="h-4 w-4 mr-2" />
+                          Conectar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
