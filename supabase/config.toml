@@ -1,1 +1,19 @@
 project_id = "plmfyibyrowbgjjyblcl"
+
+[functions.vps-metrics-ingest]
+verify_jwt = false
+
+[functions.invite-user]
+verify_jwt = true
+
+[functions.connect-device]
+verify_jwt = true
+
+[functions.provision-device-secret]
+verify_jwt = true
+
+[functions.session-ingest]
+verify_jwt = false
+
+[functions.register-device]
+verify_jwt = true
