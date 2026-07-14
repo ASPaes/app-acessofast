@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -203,9 +203,8 @@ function AuditoriaPage() {
                   grupos.map((g) => {
                     const aberto = expandedRustdeskId === g.rustdesk_id;
                     return (
-                      <>
+                      <Fragment key={g.rustdesk_id}>
                         <TableRow
-                          key={g.rustdesk_id}
                           className="cursor-pointer"
                           onClick={() =>
                             setExpandedRustdeskId(aberto ? null : g.rustdesk_id)
@@ -228,7 +227,7 @@ function AuditoriaPage() {
                           </TableCell>
                         </TableRow>
                         {aberto && (
-                          <TableRow key={g.rustdesk_id + ":detalhe"}>
+                          <TableRow>
                             <TableCell colSpan={5} className="bg-muted/30 p-0">
                               <div className="p-3">
                                 <Table>
@@ -267,7 +266,7 @@ function AuditoriaPage() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
               </TableBody>
