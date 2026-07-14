@@ -18,9 +18,13 @@ export type Database = {
         Row: {
           agent_token_hash: string | null
           alias: string | null
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           created_by: string | null
           device_group: string | null
+          enrolled_via_secret_id: string | null
+          enrollment_status: Database["public"]["Enums"]["enrollment_status"]
           id: string
           last_online: string | null
           os: string | null
@@ -31,9 +35,13 @@ export type Database = {
         Insert: {
           agent_token_hash?: string | null
           alias?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           created_by?: string | null
           device_group?: string | null
+          enrolled_via_secret_id?: string | null
+          enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
           last_online?: string | null
           os?: string | null
@@ -44,9 +52,13 @@ export type Database = {
         Update: {
           agent_token_hash?: string | null
           alias?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           created_by?: string | null
           device_group?: string | null
+          enrolled_via_secret_id?: string | null
+          enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
           last_online?: string | null
           os?: string | null
@@ -424,6 +436,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_device: { Args: { p_device_id: string }; Returns: undefined }
       assign_member: {
         Args: {
           p_role: Database["public"]["Enums"]["user_role"]
@@ -433,6 +446,13 @@ export type Database = {
         Returns: undefined
       }
       close_stale_sessions: { Args: never; Returns: number }
+      create_enrollment_secret: {
+        Args: { p_label?: string; p_tenant_id: string }
+        Returns: {
+          plaintext: string
+          secret_id: string
+        }[]
+      }
       get_device_secret: {
         Args: { p_device_id: string }
         Returns: {
@@ -449,6 +469,25 @@ export type Database = {
         Args: { p_admin_user_id: string; p_name: string; p_seat_limit?: number }
         Returns: string
       }
+      redeem_enrollment: {
+        Args: {
+          p_agent_token_hash: string
+          p_alias?: string
+          p_os?: string
+          p_rustdesk_id: string
+          p_secret_hash: string
+        }
+        Returns: {
+          r_device_id: string
+          r_status: Database["public"]["Enums"]["enrollment_status"]
+          r_tenant_id: string
+        }[]
+      }
+      reject_device: { Args: { p_device_id: string }; Returns: undefined }
+      revoke_enrollment_secret: {
+        Args: { p_secret_id: string }
+        Returns: undefined
+      }
       set_device_secret: {
         Args: {
           p_actor: string
@@ -461,6 +500,7 @@ export type Database = {
       }
     }
     Enums: {
+      enrollment_status: "pending" | "approved" | "rejected"
       lead_status: "novo" | "em_contato" | "qualificado" | "ganho" | "perdido"
       session_status: "active" | "ended" | "failed"
       user_role: "super_admin" | "admin" | "head" | "tech"
@@ -591,6 +631,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      enrollment_status: ["pending", "approved", "rejected"],
       lead_status: ["novo", "em_contato", "qualificado", "ganho", "perdido"],
       session_status: ["active", "ended", "failed"],
       user_role: ["super_admin", "admin", "head", "tech"],
