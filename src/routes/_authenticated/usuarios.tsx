@@ -288,7 +288,7 @@ function ResendInviteButton({
 }: {
   email: string;
   tenantId: string;
-  role: "tech" | "head" | "admin";
+  role: "tech" | "admin";
   fullName: string | null;
 }) {
   const [open, setOpen] = useState(false);
