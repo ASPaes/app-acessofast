@@ -35,7 +35,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ProvisionTenantDialog } from "@/components/provision-tenant-dialog";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   head: () => ({
@@ -87,12 +86,18 @@ function UsuariosPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["profiles"],
+    queryKey: ["profiles", me?.role, me?.tenant_id],
+    enabled: !!me,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("profiles")
         .select("id, full_name, email, role, is_active, created_at, tenant_id, tenants(name)")
         .order("created_at", { ascending: false });
+      if (me!.role !== "super_admin") {
+        if (!me!.tenant_id) throw new Error("Perfil sem empresa vinculada");
+        query = query.eq("tenant_id", me!.tenant_id);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
@@ -150,8 +155,8 @@ function UsuariosPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {me?.role === "admin" && me.tenant_id && (
-            <InviteMemberDialog tenantId={me.tenant_id} />
+          {me && (me.role === "super_admin" || (me.role === "admin" && me.tenant_id)) && (
+            <InviteMemberDialog role={me.role} tenantId={me.tenant_id} />
           )}
         </div>
       </div>
@@ -259,7 +264,7 @@ function UsuariosPage() {
                           <ResendInviteButton
                             email={u.email}
                             tenantId={u.tenant_id}
-                            role={u.role as "tech" | "head" | "admin"}
+                            role={u.role as "tech" | "admin"}
                             fullName={u.full_name}
                           />
                         )}
