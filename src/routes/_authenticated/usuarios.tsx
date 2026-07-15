@@ -90,11 +90,37 @@ function UsuariosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, role, is_active, created_at, tenant_id")
+        .select("id, full_name, email, role, is_active, created_at, tenant_id, tenants(name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
+  });
+
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const [tenantFilter, setTenantFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const filteredData = (data ?? []).filter((u) => {
+    const tenantMatch = tenantFilter === "all" || u.tenant_id === tenantFilter;
+    const term = search.trim().toLowerCase();
+    const searchMatch =
+      !term ||
+      (u.full_name ?? "").toLowerCase().includes(term) ||
+      (u.email ?? "").toLowerCase().includes(term);
+    return tenantMatch && searchMatch;
   });
 
   const roleLabel: Record<string, string> = {
