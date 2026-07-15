@@ -363,7 +363,7 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<"tech" | "admin">("tech");
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
 
   const mutation = useMutation({
     mutationFn: async () => {
