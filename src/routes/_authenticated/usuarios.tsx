@@ -217,22 +217,22 @@ function UsuariosPage() {
                 {isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 7 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                       ))}
                     </TableRow>
                   ))}
-                {!isLoading && data && data.length === 0 && (
+                {!isLoading && filteredData.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                       Nenhum usuário visível para o seu papel.
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading &&
-                  data?.map((u) => (
+                  filteredData.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>{u.full_name ?? "—"}</TableCell>
                       <TableCell className="text-xs">{u.email ?? "—"}</TableCell>
