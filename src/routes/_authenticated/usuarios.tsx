@@ -237,6 +237,13 @@ function UsuariosPage() {
                       <TableCell>{u.full_name ?? "—"}</TableCell>
                       <TableCell className="text-xs">{u.email ?? "—"}</TableCell>
                       <TableCell>
+                        {u.tenant_id ? (
+                          <span className="text-xs">{u.tenants?.name ?? "—"}</span>
+                        ) : (
+                          <Badge variant="outline">Plataforma</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <Badge variant="outline">{roleLabel[u.role] ?? u.role}</Badge>
                       </TableCell>
                       <TableCell>
