@@ -383,16 +383,13 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao convidar");
       return data;
     },
-    onSuccess: (data) => {
-      toast.success("Convite criado com sucesso");
+    onSuccess: () => {
+      toast.success(`Convite enviado por e-mail para ${email.trim()}`);
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      if (data.invite_link) {
-        setInviteLink(data.invite_link);
-      } else {
-        setOpen(false);
-        resetForm();
-      }
+      setOpen(false);
+      resetForm();
     },
+
     onError: (err: Error) => {
       toast.error(err.message);
     },
