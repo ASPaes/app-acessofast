@@ -162,9 +162,44 @@ function UsuariosPage() {
             <Users className="h-4 w-4 text-primary" />
             Membros
           </CardTitle>
-          <CardDescription>{data ? `${data.length} usuário(s)` : "Carregando…"}</CardDescription>
+          <CardDescription>
+            {data ? `${filteredData.length} usuário(s)` : "Carregando…"}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {me?.role === "super_admin" && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="space-y-1.5 flex-1">
+                <Label htmlFor="filter-tenant" className="text-xs">
+                  Empresa
+                </Label>
+                <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                  <SelectTrigger id="filter-tenant">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as empresas</SelectItem>
+                    {tenants?.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <Label htmlFor="filter-search" className="text-xs">
+                  Buscar por nome ou e-mail
+                </Label>
+                <Input
+                  id="filter-search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por nome ou e-mail"
+                />
+              </div>
+            </div>
+          )}
           <div className="rounded-md border border-border/60 overflow-hidden">
             <Table>
               <TableHeader>
