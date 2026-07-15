@@ -547,6 +547,7 @@ function AdicionarDispositivoDialog({
   tenantId: string | null;
 }) {
   const queryClient = useQueryClient();
+  void tenantId;
   const [open, setOpen] = useState(false);
   const [rustdeskId, setRustdeskId] = useState("");
   const [alias, setAlias] = useState("");
