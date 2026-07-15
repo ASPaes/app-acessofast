@@ -302,9 +302,6 @@ function ResendInviteButton({
   role: "tech" | "admin";
   fullName: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-
   const mutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, unknown> = {
@@ -322,12 +319,8 @@ function ResendInviteButton({
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao reenviar convite");
       return data;
     },
-    onSuccess: (data) => {
-      toast.success("Convite reenviado com sucesso");
-      if (data.invite_link) {
-        setInviteLink(data.invite_link);
-        setOpen(true);
-      }
+    onSuccess: () => {
+      toast.success(`E-mail de redefinição enviado para ${email}`);
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -335,35 +328,18 @@ function ResendInviteButton({
   });
 
   return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        <Send className="h-3.5 w-3.5 mr-1" />
-        {mutation.isPending ? "Enviando..." : "Reenviar convite"}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convite reenviado</DialogTitle>
-            <DialogDescription>
-              Compartilhe este link com {email} para definir a senha.
-            </DialogDescription>
-          </DialogHeader>
-          {inviteLink && <InviteLinkBlock link={inviteLink} />}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={mutation.isPending}
+      onClick={() => mutation.mutate()}
+    >
+      <Send className="h-3.5 w-3.5 mr-1" />
+      {mutation.isPending ? "Enviando..." : "Reenviar convite"}
+    </Button>
   );
 }
+
 
 
 function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenantId: string | null }) {
