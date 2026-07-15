@@ -33,8 +33,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type ProvisionResult = {
   device_id?: string;
@@ -49,6 +60,19 @@ type ConnectResult = {
   password?: string;
   deep_link?: string;
   error?: string;
+};
+
+type AddressBookRow = {
+  id: string;
+  rustdesk_id: string;
+  alias: string | null;
+  device_group: string | null;
+  os: string | null;
+  last_online: string | null;
+  created_at: string;
+  tenant_id: string | null;
+  is_active: boolean;
+  tenants: { name: string } | null;
 };
 
 async function invokeErrorMessage(error: unknown): Promise<string> {
@@ -72,6 +96,11 @@ export const Route = createFileRoute("/_authenticated/dispositivos")({
 
 function DispositivosPage() {
   const [q, setQ] = useState("");
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [showInativos, setShowInativos] = useState(false);
+  const [editing, setEditing] = useState<AddressBookRow | null>(null);
+  const [confirmInativarId, setConfirmInativarId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectData, setConnectData] = useState<{
     rustdesk_id: string;
@@ -93,6 +122,8 @@ function DispositivosPage() {
           toast.error(
             "Dispositivo sem senha provisionada. Provisione a senha antes de conectar.",
           );
+        } else if (raw.includes("device_inativo")) {
+          toast.error("Dispositivo inativo. Reative-o para conectar.");
         } else {
           toast.error(raw || "Falha ao conectar");
         }
@@ -141,6 +172,21 @@ function DispositivosPage() {
   });
 
   const podeAdicionar = !!perfil;
+  const isSuper = perfil?.role === "super_admin";
+  const podeInativar = perfil?.role === "super_admin" || perfil?.role === "admin";
+
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants_lista"],
+    enabled: !!isSuper,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["address_book"],
@@ -158,11 +204,12 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
-      if (profile.role !== "super_admin" && profile.tenant_id) {
+      if (profile.role !== "super_admin") {
+        if (!profile.tenant_id) throw new Error("Perfil sem empresa vinculada");
         query = query.eq("tenant_id", profile.tenant_id);
       }
 
@@ -175,14 +222,38 @@ function DispositivosPage() {
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
-    if (!t) return data;
-    return data.filter(
-      (d) =>
-        d.rustdesk_id.toLowerCase().includes(t) ||
-        (d.alias ?? "").toLowerCase().includes(t) ||
-        (d.device_group ?? "").toLowerCase().includes(t),
-    );
-  }, [data, q]);
+    return data.filter((d) => {
+      if (!showInativos && d.is_active === false) return false;
+      if (isSuper && tenantFilter !== "all" && d.tenant_id !== tenantFilter) return false;
+      if (t) {
+        const match =
+          d.rustdesk_id.toLowerCase().includes(t) ||
+          (d.alias ?? "").toLowerCase().includes(t) ||
+          (d.device_group ?? "").toLowerCase().includes(t);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [data, q, showInativos, isSuper, tenantFilter]);
+
+  const toggleAtivoMutation = useMutation({
+    mutationFn: async (vars: { id: string; ativar: boolean }) => {
+      const { error } = await supabase.rpc("set_device_active", {
+        p_device_id: vars.id,
+        p_active: vars.ativar,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      toast.success(vars.ativar ? "Dispositivo reativado" : "Dispositivo inativado");
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  const colCount = isSuper ? 8 : 7;
 
   return (
     <div className="p-6 space-y-6">
@@ -214,6 +285,31 @@ function DispositivosPage() {
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
+            {isSuper && (
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as empresas</SelectItem>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex items-center gap-2 px-2">
+              <Switch
+                id="show-inativos"
+                checked={showInativos}
+                onCheckedChange={setShowInativos}
+              />
+              <Label htmlFor="show-inativos" className="text-xs text-muted-foreground">
+                Mostrar inativos
+              </Label>
+            </div>
             {podeAdicionar && perfil && (
               <AdicionarDispositivoDialog
                 role={perfil.role}
@@ -232,6 +328,8 @@ function DispositivosPage() {
                   <TableHead>Grupo</TableHead>
                   <TableHead>SO</TableHead>
                   <TableHead>Últ. online</TableHead>
+                  {isSuper && <TableHead>Empresa</TableHead>}
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -239,7 +337,7 @@ function DispositivosPage() {
                 {isLoading &&
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: colCount }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
@@ -248,7 +346,7 @@ function DispositivosPage() {
                   ))}
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={colCount} className="text-center text-muted-foreground py-10">
                       Nenhum dispositivo encontrado.
                     </TableCell>
                   </TableRow>
@@ -273,16 +371,63 @@ function DispositivosPage() {
                           ? new Date(d.last_online).toLocaleString("pt-BR")
                           : "nunca"}
                       </TableCell>
+                      {isSuper && (
+                        <TableCell className="text-xs">
+                          {d.tenants?.name ?? <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        {d.is_active ? (
+                          <Badge>Ativo</Badge>
+                        ) : (
+                          <Badge variant="secondary">Inativo</Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          disabled={connectingId === d.id}
-                          onClick={() => handleConectar(d.id)}
-                        >
-                          <Monitor className="h-4 w-4 mr-2" />
-                          {connectingId === d.id ? "Conectando..." : "Conectar"}
-                        </Button>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={connectingId === d.id || d.is_active === false}
+                            onClick={() => handleConectar(d.id)}
+                          >
+                            <Monitor className="h-4 w-4 mr-2" />
+                            {connectingId === d.id ? "Conectando..." : "Conectar"}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Editar"
+                            onClick={() => setEditing(d)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {podeInativar && (
+                            d.is_active ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setConfirmInativarId(d.id)}
+                                disabled={toggleAtivoMutation.isPending}
+                              >
+                                <PowerOff className="h-4 w-4 mr-1" />
+                                Inativar
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  toggleAtivoMutation.mutate({ id: d.id, ativar: true })
+                                }
+                                disabled={toggleAtivoMutation.isPending}
+                              >
+                                <Power className="h-4 w-4 mr-1" />
+                                Reativar
+                              </Button>
+                            )
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -291,6 +436,43 @@ function DispositivosPage() {
           </div>
         </CardContent>
       </Card>
+
+      {editing && (
+        <EditarDispositivoDialog
+          device={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      <AlertDialog
+        open={confirmInativarId !== null}
+        onOpenChange={(v) => {
+          if (!v) setConfirmInativarId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Inativar dispositivo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O dispositivo ficará indisponível para novas conexões. Você pode reativá-lo
+              depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmInativarId) {
+                  toggleAtivoMutation.mutate({ id: confirmInativarId, ativar: false });
+                  setConfirmInativarId(null);
+                }
+              }}
+            >
+              Inativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={connectData !== null}
@@ -572,6 +754,89 @@ function AdicionarDispositivoDialog({
             </form>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+function EditarDispositivoDialog({
+  device,
+  onClose,
+}: {
+  device: AddressBookRow;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [alias, setAlias] = useState(device.alias ?? "");
+  const [grupo, setGrupo] = useState(device.device_group ?? "");
+  const [so, setSo] = useState(device.os ?? "");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("address_book")
+        .update({
+          alias: alias.trim() || null,
+          device_group: grupo.trim() || null,
+          os: so.trim() || null,
+        })
+        .eq("id", device.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Dispositivo atualizado");
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    mutation.mutate();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar dispositivo</DialogTitle>
+          <DialogDescription>
+            Atualize alias, grupo e sistema operacional. Rustdesk ID e senha não são alterados
+            aqui.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-alias">Alias</Label>
+            <Input
+              id="edit-alias"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-grupo">Grupo</Label>
+            <Input
+              id="edit-grupo"
+              value={grupo}
+              onChange={(e) => setGrupo(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-so">SO</Label>
+            <Input id="edit-so" value={so} onChange={(e) => setSo(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

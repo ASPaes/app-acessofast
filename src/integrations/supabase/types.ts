@@ -22,10 +22,13 @@ export type Database = {
           approved_by: string | null
           created_at: string
           created_by: string | null
+          deactivated_at: string | null
+          deactivated_by: string | null
           device_group: string | null
           enrolled_via_secret_id: string | null
           enrollment_status: Database["public"]["Enums"]["enrollment_status"]
           id: string
+          is_active: boolean
           last_online: string | null
           os: string | null
           rustdesk_id: string
@@ -39,10 +42,13 @@ export type Database = {
           approved_by?: string | null
           created_at?: string
           created_by?: string | null
+          deactivated_at?: string | null
+          deactivated_by?: string | null
           device_group?: string | null
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          is_active?: boolean
           last_online?: string | null
           os?: string | null
           rustdesk_id: string
@@ -56,10 +62,13 @@ export type Database = {
           approved_by?: string | null
           created_at?: string
           created_by?: string | null
+          deactivated_at?: string | null
+          deactivated_by?: string | null
           device_group?: string | null
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          is_active?: boolean
           last_online?: string | null
           os?: string | null
           rustdesk_id?: string
@@ -70,6 +79,13 @@ export type Database = {
           {
             foreignKeyName: "address_book_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "address_book_deactivated_by_fkey"
+            columns: ["deactivated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -156,11 +172,87 @@ export type Database = {
           },
         ]
       }
+      device_secret_shares: {
+        Row: {
+          device_id: string
+          id: string
+          rustdesk_id: string
+          shared_at: string
+          shared_by: string | null
+          shared_by_email: string | null
+          source_device_id: string | null
+          source_tenant_id: string | null
+          source_tenant_name: string | null
+          target_tenant_id: string
+        }
+        Insert: {
+          device_id: string
+          id?: string
+          rustdesk_id: string
+          shared_at?: string
+          shared_by?: string | null
+          shared_by_email?: string | null
+          source_device_id?: string | null
+          source_tenant_id?: string | null
+          source_tenant_name?: string | null
+          target_tenant_id: string
+        }
+        Update: {
+          device_id?: string
+          id?: string
+          rustdesk_id?: string
+          shared_at?: string
+          shared_by?: string | null
+          shared_by_email?: string | null
+          source_device_id?: string | null
+          source_tenant_id?: string | null
+          source_tenant_name?: string | null
+          target_tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_secret_shares_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_secret_shares_shared_by_fkey"
+            columns: ["shared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_secret_shares_source_device_id_fkey"
+            columns: ["source_device_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_secret_shares_source_tenant_id_fkey"
+            columns: ["source_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_secret_shares_target_tenant_id_fkey"
+            columns: ["target_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       features: {
         Row: {
           created_at: string
           description: string | null
           is_default: boolean
+          is_internal: boolean
           key: string
           name: string
         }
@@ -168,6 +260,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           is_default?: boolean
+          is_internal?: boolean
           key: string
           name: string
         }
@@ -175,6 +268,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           is_default?: boolean
+          is_internal?: boolean
           key?: string
           name?: string
         }
@@ -486,6 +580,10 @@ export type Database = {
       reject_device: { Args: { p_device_id: string }; Returns: undefined }
       revoke_enrollment_secret: {
         Args: { p_secret_id: string }
+        Returns: undefined
+      }
+      set_device_active: {
+        Args: { p_active: boolean; p_device_id: string }
         Returns: undefined
       }
       set_device_secret: {
