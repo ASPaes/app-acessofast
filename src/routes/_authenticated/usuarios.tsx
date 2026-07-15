@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Building2, Send, UserX, UserCheck } from "lucide-react";
+import { Users, UserPlus, Send, UserX, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -322,7 +322,7 @@ function UsuariosPage() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Desativar usuário?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Ele deixa de conseguir obter senhas de dispositivos pelo painel. Você pode reativá-lo depois.
+                                      Ele deixa de conseguir obter senhas de dispositivos pelo painel. A sessão aberta dele não é encerrada e as senhas que ele já viu continuam válidas. Você pode reativá-lo depois.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
