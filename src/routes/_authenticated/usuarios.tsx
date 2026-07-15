@@ -400,8 +400,8 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
     setFullName("");
     setRole("tech");
     setTenantSelecionado("");
-    setInviteLink(null);
   };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
