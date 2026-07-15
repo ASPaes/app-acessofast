@@ -206,6 +206,7 @@ function UsuariosPage() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
+                  <TableHead>Empresa</TableHead>
                   <TableHead>Papel</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
