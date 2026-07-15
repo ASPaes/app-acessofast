@@ -599,6 +599,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_user_active: {
+        Args: { p_active: boolean; p_user_id: string }
+        Returns: undefined
+      }
       tenant_has_feature: {
         Args: { p_feature_key: string; p_tenant_id: string }
         Returns: boolean

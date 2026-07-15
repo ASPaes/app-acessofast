@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Building2, Copy, Check, Send } from "lucide-react";
+import { Users, UserPlus, Building2, Send, UserX, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +35,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   head: () => ({
@@ -68,7 +79,9 @@ async function invokeErrorMessage(error: unknown): Promise<string> {
 }
 
 function UsuariosPage() {
+  const queryClient = useQueryClient();
   const { data: me } = useQuery({
+
     queryKey: ["me"],
     queryFn: async () => {
       const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -144,6 +157,33 @@ function UsuariosPage() {
     if (me.role === "admin" && me.tenant_id && u.tenant_id === me.tenant_id) return true;
     return false;
   };
+
+  const podeAtivarDesativar = (u: { id: string; role: string; tenant_id: string | null }) => {
+    if (!me) return false;
+    if (u.id === me.id) return false;
+    if (u.role === "super_admin") return false;
+    if (me.role === "super_admin") return true;
+    if (me.role === "admin" && me.tenant_id && u.tenant_id === me.tenant_id) return true;
+    return false;
+  };
+
+  const toggleAtivoMutation = useMutation({
+    mutationFn: async (vars: { id: string; ativar: boolean }) => {
+      const { error } = await supabase.rpc("set_user_active", {
+        p_user_id: vars.id,
+        p_active: vars.ativar,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      toast.success(vars.ativar ? "Usuário reativado" : "Usuário desativado");
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
 
   return (
     <div className="p-6 space-y-6">
@@ -260,15 +300,55 @@ function UsuariosPage() {
                         {new Date(u.created_at).toLocaleDateString("pt-BR")}
                       </TableCell>
                       <TableCell className="text-right">
-                        {canResend(u) && u.email && u.tenant_id && (
-                          <ResendInviteButton
-                            email={u.email}
-                            tenantId={u.tenant_id}
-                            role={u.role as "tech" | "admin"}
-                            fullName={u.full_name}
-                          />
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {canResend(u) && u.email && u.tenant_id && (
+                            <ResendInviteButton
+                              email={u.email}
+                              tenantId={u.tenant_id}
+                              role={u.role as "tech" | "admin"}
+                              fullName={u.full_name}
+                            />
+                          )}
+                          {podeAtivarDesativar(u) && (
+                            u.is_active ? (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <UserX className="h-3.5 w-3.5 mr-1" />
+                                    Desativar
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Desativar usuário?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Ele deixa de conseguir obter senhas de dispositivos pelo painel. Você pode reativá-lo depois.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => toggleAtivoMutation.mutate({ id: u.id, ativar: false })}
+                                    >
+                                      Desativar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => toggleAtivoMutation.mutate({ id: u.id, ativar: true })}
+                              >
+                                <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                Reativar
+                              </Button>
+                            )
+                          )}
+                        </div>
                       </TableCell>
+
                     </TableRow>
                   ))}
               </TableBody>
@@ -291,9 +371,6 @@ function ResendInviteButton({
   role: "tech" | "admin";
   fullName: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-
   const mutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, unknown> = {
@@ -311,12 +388,8 @@ function ResendInviteButton({
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao reenviar convite");
       return data;
     },
-    onSuccess: (data) => {
-      toast.success("Convite reenviado com sucesso");
-      if (data.invite_link) {
-        setInviteLink(data.invite_link);
-        setOpen(true);
-      }
+    onSuccess: () => {
+      toast.success(`E-mail de redefinição enviado para ${email}`);
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -324,63 +397,19 @@ function ResendInviteButton({
   });
 
   return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        <Send className="h-3.5 w-3.5 mr-1" />
-        {mutation.isPending ? "Enviando..." : "Reenviar convite"}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convite reenviado</DialogTitle>
-            <DialogDescription>
-              Compartilhe este link com {email} para definir a senha.
-            </DialogDescription>
-          </DialogHeader>
-          {inviteLink && <InviteLinkBlock link={inviteLink} />}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={mutation.isPending}
+      onClick={() => mutation.mutate()}
+    >
+      <Send className="h-3.5 w-3.5 mr-1" />
+      {mutation.isPending ? "Enviando..." : "Reenviar convite"}
+    </Button>
   );
 }
 
-function InviteLinkBlock({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Não foi possível copiar o link");
-    }
-  };
-  return (
-    <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3 space-y-2">
-      <p className="text-xs text-muted-foreground">
-        E-mail automático não está configurado. Compartilhe este link com o convidado para
-        definir a senha:
-      </p>
-      <div className="flex items-center gap-2">
-        <Input readOnly value={link} className="text-xs" />
-        <Button type="button" size="sm" variant="outline" onClick={copy}>
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          <span className="ml-1">{copied ? "Copiado" : "Copiar"}</span>
-        </Button>
-      </div>
-    </div>
-  );
-}
+
 
 function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenantId: string | null }) {
   const queryClient = useQueryClient();
@@ -403,7 +432,7 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<"tech" | "admin">("tech");
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -423,16 +452,13 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao convidar");
       return data;
     },
-    onSuccess: (data) => {
-      toast.success("Convite criado com sucesso");
+    onSuccess: () => {
+      toast.success(`Convite enviado por e-mail para ${email.trim()}`);
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      if (data.invite_link) {
-        setInviteLink(data.invite_link);
-      } else {
-        setOpen(false);
-        resetForm();
-      }
+      setOpen(false);
+      resetForm();
     },
+
     onError: (err: Error) => {
       toast.error(err.message);
     },
@@ -443,8 +469,8 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
     setFullName("");
     setRole("tech");
     setTenantSelecionado("");
-    setInviteLink(null);
   };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -529,7 +555,7 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
               </SelectContent>
             </Select>
           </div>
-          {inviteLink && <InviteLinkBlock link={inviteLink} />}
+          
           <DialogFooter>
             <Button
               type="button"
