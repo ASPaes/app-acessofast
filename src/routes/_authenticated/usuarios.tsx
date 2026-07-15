@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Building2, Copy, Check, Send } from "lucide-react";
+import { Users, UserPlus, Building2, Send, UserX, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
