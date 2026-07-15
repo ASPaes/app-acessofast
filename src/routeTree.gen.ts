@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
+import { Route as AuthenticatedEmpresasRouteImport } from './routes/_authenticated/empresas'
 import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authenticated/dispositivos'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
@@ -50,6 +51,11 @@ const AuthenticatedMonitoramentoRoute =
     path: '/monitoramento',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedEmpresasRoute = AuthenticatedEmpresasRouteImport.update({
+  id: '/empresas',
+  path: '/empresas',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDispositivosRoute =
   AuthenticatedDispositivosRouteImport.update({
     id: '/dispositivos',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
+  '/empresas': typeof AuthenticatedEmpresasRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
+  '/empresas': typeof AuthenticatedEmpresasRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dispositivos': typeof AuthenticatedDispositivosRoute
+  '/_authenticated/empresas': typeof AuthenticatedEmpresasRoute
   '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/dashboard'
     | '/dispositivos'
+    | '/empresas'
     | '/monitoramento'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/dashboard'
     | '/dispositivos'
+    | '/empresas'
     | '/monitoramento'
     | '/usuarios'
   id:
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/_authenticated/configuracoes'
     | '/_authenticated/dashboard'
     | '/_authenticated/dispositivos'
+    | '/_authenticated/empresas'
     | '/_authenticated/monitoramento'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
@@ -196,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMonitoramentoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/empresas': {
+      id: '/_authenticated/empresas'
+      path: '/empresas'
+      fullPath: '/empresas'
+      preLoaderRoute: typeof AuthenticatedEmpresasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dispositivos': {
       id: '/_authenticated/dispositivos'
       path: '/dispositivos'
@@ -232,6 +251,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDispositivosRoute: typeof AuthenticatedDispositivosRoute
+  AuthenticatedEmpresasRoute: typeof AuthenticatedEmpresasRoute
   AuthenticatedMonitoramentoRoute: typeof AuthenticatedMonitoramentoRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
@@ -241,6 +261,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDispositivosRoute: AuthenticatedDispositivosRoute,
+  AuthenticatedEmpresasRoute: AuthenticatedEmpresasRoute,
   AuthenticatedMonitoramentoRoute: AuthenticatedMonitoramentoRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
