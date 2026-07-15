@@ -486,7 +486,7 @@ function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenant
               </SelectContent>
             </Select>
           </div>
-          {inviteLink && <InviteLinkBlock link={inviteLink} />}
+          
           <DialogFooter>
             <Button
               type="button"
