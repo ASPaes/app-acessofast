@@ -95,8 +95,6 @@ export function ProvisionTenantDialog() {
     onSuccess: (data) => {
       toast.success("Tenant provisionado com sucesso");
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
-      queryClient.invalidateQueries({ queryKey: ["tenants-empresas"] });
       if (data.invite_link) {
         setInviteLink(data.invite_link);
       } else {
