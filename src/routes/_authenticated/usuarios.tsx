@@ -300,15 +300,55 @@ function UsuariosPage() {
                         {new Date(u.created_at).toLocaleDateString("pt-BR")}
                       </TableCell>
                       <TableCell className="text-right">
-                        {canResend(u) && u.email && u.tenant_id && (
-                          <ResendInviteButton
-                            email={u.email}
-                            tenantId={u.tenant_id}
-                            role={u.role as "tech" | "admin"}
-                            fullName={u.full_name}
-                          />
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {canResend(u) && u.email && u.tenant_id && (
+                            <ResendInviteButton
+                              email={u.email}
+                              tenantId={u.tenant_id}
+                              role={u.role as "tech" | "admin"}
+                              fullName={u.full_name}
+                            />
+                          )}
+                          {podeAtivarDesativar(u) && (
+                            u.is_active ? (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <UserX className="h-3.5 w-3.5 mr-1" />
+                                    Desativar
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Desativar usuário?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Ele deixa de conseguir obter senhas de dispositivos pelo painel. Você pode reativá-lo depois.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => toggleAtivoMutation.mutate({ id: u.id, ativar: false })}
+                                    >
+                                      Desativar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => toggleAtivoMutation.mutate({ id: u.id, ativar: true })}
+                              >
+                                <UserCheck className="h-3.5 w-3.5 mr-1" />
+                                Reativar
+                              </Button>
+                            )
+                          )}
+                        </div>
                       </TableCell>
+
                     </TableRow>
                   ))}
               </TableBody>
