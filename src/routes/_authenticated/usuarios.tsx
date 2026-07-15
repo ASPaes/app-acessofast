@@ -79,7 +79,9 @@ async function invokeErrorMessage(error: unknown): Promise<string> {
 }
 
 function UsuariosPage() {
+  const queryClient = useQueryClient();
   const { data: me } = useQuery({
+
     queryKey: ["me"],
     queryFn: async () => {
       const { data: userData, error: userErr } = await supabase.auth.getUser();
