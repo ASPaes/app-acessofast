@@ -62,6 +62,19 @@ type ConnectResult = {
   error?: string;
 };
 
+type AddressBookRow = {
+  id: string;
+  rustdesk_id: string;
+  alias: string | null;
+  device_group: string | null;
+  os: string | null;
+  last_online: string | null;
+  created_at: string;
+  tenant_id: string | null;
+  is_active: boolean;
+  tenants: { name: string } | null;
+};
+
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
     try {
