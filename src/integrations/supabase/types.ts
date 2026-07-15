@@ -174,7 +174,7 @@ export type Database = {
       }
       device_secret_shares: {
         Row: {
-          device_id: string
+          device_id: string | null
           id: string
           rustdesk_id: string
           shared_at: string
@@ -183,10 +183,11 @@ export type Database = {
           source_device_id: string | null
           source_tenant_id: string | null
           source_tenant_name: string | null
-          target_tenant_id: string
+          target_tenant_id: string | null
+          target_tenant_name: string | null
         }
         Insert: {
-          device_id: string
+          device_id?: string | null
           id?: string
           rustdesk_id: string
           shared_at?: string
@@ -195,10 +196,11 @@ export type Database = {
           source_device_id?: string | null
           source_tenant_id?: string | null
           source_tenant_name?: string | null
-          target_tenant_id: string
+          target_tenant_id?: string | null
+          target_tenant_name?: string | null
         }
         Update: {
-          device_id?: string
+          device_id?: string | null
           id?: string
           rustdesk_id?: string
           shared_at?: string
@@ -207,7 +209,8 @@ export type Database = {
           source_device_id?: string | null
           source_tenant_id?: string | null
           source_tenant_name?: string | null
-          target_tenant_id?: string
+          target_tenant_id?: string | null
+          target_tenant_name?: string | null
         }
         Relationships: [
           {
@@ -595,6 +598,10 @@ export type Database = {
           p_key_version: number
         }
         Returns: undefined
+      }
+      tenant_has_feature: {
+        Args: { p_feature_key: string; p_tenant_id: string }
+        Returns: boolean
       }
     }
     Enums: {

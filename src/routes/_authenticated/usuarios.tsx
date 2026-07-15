@@ -35,7 +35,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ProvisionTenantDialog } from "@/components/provision-tenant-dialog";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   head: () => ({
@@ -87,12 +86,18 @@ function UsuariosPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["profiles"],
+    queryKey: ["profiles", me?.role, me?.tenant_id],
+    enabled: !!me,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("profiles")
         .select("id, full_name, email, role, is_active, created_at, tenant_id, tenants(name)")
         .order("created_at", { ascending: false });
+      if (me!.role !== "super_admin") {
+        if (!me!.tenant_id) throw new Error("Perfil sem empresa vinculada");
+        query = query.eq("tenant_id", me!.tenant_id);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
@@ -150,8 +155,8 @@ function UsuariosPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {me?.role === "admin" && me.tenant_id && (
-            <InviteMemberDialog tenantId={me.tenant_id} />
+          {me && (me.role === "super_admin" || (me.role === "admin" && me.tenant_id)) && (
+            <InviteMemberDialog role={me.role} tenantId={me.tenant_id} />
           )}
         </div>
       </div>
@@ -259,7 +264,7 @@ function UsuariosPage() {
                           <ResendInviteButton
                             email={u.email}
                             tenantId={u.tenant_id}
-                            role={u.role as "tech" | "head" | "admin"}
+                            role={u.role as "tech" | "admin"}
                             fullName={u.full_name}
                           />
                         )}
@@ -283,7 +288,7 @@ function ResendInviteButton({
 }: {
   email: string;
   tenantId: string;
-  role: "tech" | "head" | "admin";
+  role: "tech" | "admin";
   fullName: string | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -377,19 +382,35 @@ function InviteLinkBlock({ link }: { link: string }) {
   );
 }
 
-function InviteMemberDialog({ tenantId }: { tenantId: string }) {
+function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenantId: string | null }) {
   const queryClient = useQueryClient();
+  const isSuper = userRole === "super_admin";
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: isSuper,
+  });
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"tech" | "head" | "admin">("tech");
+  const [role, setRole] = useState<"tech" | "admin">("tech");
+  const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const efetivoTenantId = isSuper ? tenantSelecionado : tenantId;
       const body: Record<string, unknown> = {
         mode: "add_member",
-        tenant_id: tenantId,
+        tenant_id: efetivoTenantId,
         email: email.trim(),
         role,
       };
@@ -421,6 +442,7 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
     setEmail("");
     setFullName("");
     setRole("tech");
+    setTenantSelecionado("");
     setInviteLink(null);
   };
 
@@ -428,6 +450,11 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
     e.preventDefault();
     if (!emailRegex.test(email.trim())) {
       toast.error("Informe um e-mail válido");
+      return;
+    }
+    const efetivoTenantId = isSuper ? tenantSelecionado : tenantId;
+    if (!efetivoTenantId) {
+      toast.error("Selecione a empresa");
       return;
     }
     mutation.mutate();
@@ -473,6 +500,23 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               onChange={(e) => setFullName(e.target.value)}
             />
           </div>
+          {isSuper && (
+            <div className="space-y-2">
+              <Label htmlFor="invite-tenant">Empresa *</Label>
+              <Select value={tenantSelecionado} onValueChange={setTenantSelecionado}>
+                <SelectTrigger id="invite-tenant">
+                  <SelectValue placeholder="Selecione a empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="invite-role">Papel</Label>
             <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
@@ -481,7 +525,6 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="tech">Técnico</SelectItem>
-                <SelectItem value="head">Supervisor</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
