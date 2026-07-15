@@ -382,19 +382,35 @@ function InviteLinkBlock({ link }: { link: string }) {
   );
 }
 
-function InviteMemberDialog({ tenantId }: { tenantId: string }) {
+function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenantId: string | null }) {
   const queryClient = useQueryClient();
+  const isSuper = userRole === "super_admin";
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: isSuper,
+  });
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"tech" | "head" | "admin">("tech");
+  const [role, setRole] = useState<"tech" | "admin">("tech");
+  const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const efetivoTenantId = isSuper ? tenantSelecionado : tenantId;
       const body: Record<string, unknown> = {
         mode: "add_member",
-        tenant_id: tenantId,
+        tenant_id: efetivoTenantId,
         email: email.trim(),
         role,
       };
@@ -426,6 +442,7 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
     setEmail("");
     setFullName("");
     setRole("tech");
+    setTenantSelecionado("");
     setInviteLink(null);
   };
 
@@ -433,6 +450,11 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
     e.preventDefault();
     if (!emailRegex.test(email.trim())) {
       toast.error("Informe um e-mail válido");
+      return;
+    }
+    const efetivoTenantId = isSuper ? tenantSelecionado : tenantId;
+    if (!efetivoTenantId) {
+      toast.error("Selecione a empresa");
       return;
     }
     mutation.mutate();
@@ -478,6 +500,23 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               onChange={(e) => setFullName(e.target.value)}
             />
           </div>
+          {isSuper && (
+            <div className="space-y-2">
+              <Label htmlFor="invite-tenant">Empresa *</Label>
+              <Select value={tenantSelecionado} onValueChange={setTenantSelecionado}>
+                <SelectTrigger id="invite-tenant">
+                  <SelectValue placeholder="Selecione a empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="invite-role">Papel</Label>
             <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
@@ -486,7 +525,6 @@ function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="tech">Técnico</SelectItem>
-                <SelectItem value="head">Supervisor</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
