@@ -365,33 +365,6 @@ function ResendInviteButton({
   );
 }
 
-function InviteLinkBlock({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Não foi possível copiar o link");
-    }
-  };
-  return (
-    <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3 space-y-2">
-      <p className="text-xs text-muted-foreground">
-        E-mail automático não está configurado. Compartilhe este link com o convidado para
-        definir a senha:
-      </p>
-      <div className="flex items-center gap-2">
-        <Input readOnly value={link} className="text-xs" />
-        <Button type="button" size="sm" variant="outline" onClick={copy}>
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          <span className="ml-1">{copied ? "Copiado" : "Copiar"}</span>
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function InviteMemberDialog({ role: userRole, tenantId }: { role: string; tenantId: string | null }) {
   const queryClient = useQueryClient();
