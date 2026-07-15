@@ -156,6 +156,33 @@ function UsuariosPage() {
     return false;
   };
 
+  const podeAtivarDesativar = (u: { id: string; role: string; tenant_id: string | null }) => {
+    if (!me) return false;
+    if (u.id === me.id) return false;
+    if (u.role === "super_admin") return false;
+    if (me.role === "super_admin") return true;
+    if (me.role === "admin" && me.tenant_id && u.tenant_id === me.tenant_id) return true;
+    return false;
+  };
+
+  const toggleAtivoMutation = useMutation({
+    mutationFn: async (vars: { id: string; ativar: boolean }) => {
+      const { error } = await supabase.rpc("set_user_active", {
+        p_user_id: vars.id,
+        p_active: vars.ativar,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      toast.success(vars.ativar ? "Usuário reativado" : "Usuário desativado");
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
