@@ -758,3 +758,86 @@ function AdicionarDispositivoDialog({
     </Dialog>
   );
 }
+function EditarDispositivoDialog({
+  device,
+  onClose,
+}: {
+  device: AddressBookRow;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [alias, setAlias] = useState(device.alias ?? "");
+  const [grupo, setGrupo] = useState(device.device_group ?? "");
+  const [so, setSo] = useState(device.os ?? "");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("address_book")
+        .update({
+          alias: alias.trim() || null,
+          device_group: grupo.trim() || null,
+          os: so.trim() || null,
+        })
+        .eq("id", device.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Dispositivo atualizado");
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    mutation.mutate();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar dispositivo</DialogTitle>
+          <DialogDescription>
+            Atualize alias, grupo e sistema operacional. Rustdesk ID e senha não são alterados
+            aqui.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-alias">Alias</Label>
+            <Input
+              id="edit-alias"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-grupo">Grupo</Label>
+            <Input
+              id="edit-grupo"
+              value={grupo}
+              onChange={(e) => setGrupo(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-so">SO</Label>
+            <Input id="edit-so" value={so} onChange={(e) => setSo(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
