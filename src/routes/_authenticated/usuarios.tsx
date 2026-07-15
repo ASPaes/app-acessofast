@@ -90,11 +90,37 @@ function UsuariosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, role, is_active, created_at, tenant_id")
+        .select("id, full_name, email, role, is_active, created_at, tenant_id, tenants(name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
+  });
+
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const [tenantFilter, setTenantFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const filteredData = (data ?? []).filter((u) => {
+    const tenantMatch = tenantFilter === "all" || u.tenant_id === tenantFilter;
+    const term = search.trim().toLowerCase();
+    const searchMatch =
+      !term ||
+      (u.full_name ?? "").toLowerCase().includes(term) ||
+      (u.email ?? "").toLowerCase().includes(term);
+    return tenantMatch && searchMatch;
   });
 
   const roleLabel: Record<string, string> = {
@@ -136,15 +162,51 @@ function UsuariosPage() {
             <Users className="h-4 w-4 text-primary" />
             Membros
           </CardTitle>
-          <CardDescription>{data ? `${data.length} usuário(s)` : "Carregando…"}</CardDescription>
+          <CardDescription>
+            {data ? `${filteredData.length} usuário(s)` : "Carregando…"}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {me?.role === "super_admin" && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="space-y-1.5 flex-1">
+                <Label htmlFor="filter-tenant" className="text-xs">
+                  Empresa
+                </Label>
+                <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                  <SelectTrigger id="filter-tenant">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as empresas</SelectItem>
+                    {tenants?.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <Label htmlFor="filter-search" className="text-xs">
+                  Buscar por nome ou e-mail
+                </Label>
+                <Input
+                  id="filter-search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por nome ou e-mail"
+                />
+              </div>
+            </div>
+          )}
           <div className="rounded-md border border-border/60 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
+                  <TableHead>Empresa</TableHead>
                   <TableHead>Papel</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
@@ -155,25 +217,32 @@ function UsuariosPage() {
                 {isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 7 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                       ))}
                     </TableRow>
                   ))}
-                {!isLoading && data && data.length === 0 && (
+                {!isLoading && filteredData.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                       Nenhum usuário visível para o seu papel.
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading &&
-                  data?.map((u) => (
+                  filteredData.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>{u.full_name ?? "—"}</TableCell>
                       <TableCell className="text-xs">{u.email ?? "—"}</TableCell>
+                      <TableCell>
+                        {u.tenant_id ? (
+                          <span className="text-xs">{u.tenants?.name ?? "—"}</span>
+                        ) : (
+                          <Badge variant="outline">Plataforma</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">{roleLabel[u.role] ?? u.role}</Badge>
                       </TableCell>
