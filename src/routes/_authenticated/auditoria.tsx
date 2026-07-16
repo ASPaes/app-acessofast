@@ -2,6 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -11,9 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { cn } from "@/lib/utils";
+import { History, ChevronDown, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/auditoria")({
   head: () => ({
@@ -78,67 +79,64 @@ function AuditoriaPage() {
   }, [data]);
 
   return (
-    <>
-      <PageHeader
-        title="Auditoria"
-        subtitle="Registro append-only das sessões de suporte. Nenhum técnico apaga um log."
-      />
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Auditoria</h1>
+        <p className="text-sm text-muted-foreground">
+          Registro append-only das sessões de suporte. Nenhum técnico apaga um log.
+        </p>
+      </div>
 
-      <div className="p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-[13px] font-medium">Últimas 200 sessões</h2>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              {data ? `${data.length} registro(s)` : "carregando…"}
-            </span>
+      <Card className="border-border/60">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <History className="h-4 w-4 text-primary" />
+                Últimas 200 sessões
+              </CardTitle>
+              <CardDescription>
+                {data ? `${data.length} registro(s)` : "Carregando…"}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={view === "grouped" ? "default" : "outline"}
+                onClick={() => setView("grouped")}
+              >
+                Por máquina
+              </Button>
+              <Button
+                size="sm"
+                variant={view === "flat" ? "default" : "outline"}
+                onClick={() => setView("flat")}
+              >
+                Todas as sessões
+              </Button>
+            </div>
           </div>
-          <div className="inline-flex rounded-md border border-border/60 bg-card p-0.5 text-[12px]">
-            <button
-              type="button"
-              onClick={() => setView("grouped")}
-              className={cn(
-                "px-3 h-7 rounded-sm transition-colors",
-                view === "grouped"
-                  ? "bg-[#1C2532] text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Por máquina
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("flat")}
-              className={cn(
-                "px-3 h-7 rounded-sm transition-colors",
-                view === "flat"
-                  ? "bg-[#1C2532] text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Todas as sessões
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-md border border-border/60 bg-card overflow-hidden">
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-border/60 overflow-hidden">
             {view === "flat" ? (
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/60">
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Início</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Técnico</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Dispositivo</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Duração</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">IP</TableHead>
+                <TableRow>
+                  <TableHead>Início</TableHead>
+                  <TableHead>Técnico</TableHead>
+                  <TableHead>Dispositivo</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Duração</TableHead>
+                  <TableHead>IP</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading &&
                   Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={i} className="border-border/60">
+                    <TableRow key={i}>
                       {Array.from({ length: 6 }).map((_, j) => (
-                        <TableCell key={j} className="h-11">
+                        <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                       ))}
@@ -153,19 +151,19 @@ function AuditoriaPage() {
                 )}
                 {!isLoading &&
                   data?.map((l) => (
-                    <TableRow key={l.id} className="border-border/60 h-11">
-                      <TableCell className="font-mono text-[11px] text-muted-foreground">
+                    <TableRow key={l.id}>
+                      <TableCell className="text-xs">
                         {new Date(l.session_start).toLocaleString("pt-BR")}
                       </TableCell>
-                      <TableCell className="text-[12px]">{l.technician_email ?? "—"}</TableCell>
-                      <TableCell className="font-mono text-[12px]">{l.rustdesk_id}</TableCell>
+                      <TableCell className="text-xs">{l.technician_email ?? "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{l.rustdesk_id}</TableCell>
                       <TableCell>
-                        <StatusPill status={l.status} />
+                        <StatusBadge status={l.status} />
                       </TableCell>
-                      <TableCell className="tabular-nums text-[12px]">
+                      <TableCell className="tabular-nums text-xs">
                         {formatDuration(l.duration_seconds)}
                       </TableCell>
-                      <TableCell className="font-mono text-[11px] text-muted-foreground">
+                      <TableCell className="font-mono text-xs text-muted-foreground">
                         {(l.technician_ip as unknown as string) ?? "—"}
                       </TableCell>
                     </TableRow>
@@ -175,20 +173,20 @@ function AuditoriaPage() {
             ) : (
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/60">
-                  <TableHead className="w-8 h-9"></TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Dispositivo</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Último acesso</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Técnico</TableHead>
-                  <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground text-right">Acessos</TableHead>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Dispositivo</TableHead>
+                  <TableHead>Último acesso</TableHead>
+                  <TableHead>Técnico</TableHead>
+                  <TableHead className="text-right">Acessos</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading &&
                   Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={i} className="border-border/60">
+                    <TableRow key={i}>
                       {Array.from({ length: 5 }).map((_, j) => (
-                        <TableCell key={j} className="h-11">
+                        <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                       ))}
@@ -207,7 +205,7 @@ function AuditoriaPage() {
                     return (
                       <Fragment key={g.rustdesk_id}>
                         <TableRow
-                          className="cursor-pointer border-border/60 h-11"
+                          className="cursor-pointer"
                           onClick={() =>
                             setExpandedRustdeskId(aberto ? null : g.rustdesk_id)
                           }
@@ -219,33 +217,52 @@ function AuditoriaPage() {
                               <ChevronRight className="h-4 w-4 text-muted-foreground" />
                             )}
                           </TableCell>
-                          <TableCell className="font-mono text-[12px]">{g.rustdesk_id}</TableCell>
-                          <TableCell className="font-mono text-[11px] text-muted-foreground">
+                          <TableCell className="font-mono text-xs">{g.rustdesk_id}</TableCell>
+                          <TableCell className="text-xs">
                             {new Date(g.ultimo.session_start).toLocaleString("pt-BR")}
                           </TableCell>
-                          <TableCell className="text-[12px]">{g.tecnico ?? "—"}</TableCell>
-                          <TableCell className="text-right tabular-nums text-[12px]">
+                          <TableCell className="text-xs">{g.tecnico ?? "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums text-xs">
                             {g.acessos}
                           </TableCell>
                         </TableRow>
                         {aberto && (
-                          <TableRow className="border-border/60 hover:bg-transparent">
-                            <TableCell colSpan={5} className="bg-[#171E29] p-0">
-                              <ul className="divide-y divide-border/60">
-                                {g.sessoes.map((s) => (
-                                  <li key={s.id} className="grid grid-cols-12 gap-3 px-6 py-2 text-[12px] items-center">
-                                    <span className="col-span-3 font-mono text-[11px] text-muted-foreground">
-                                      {new Date(s.session_start).toLocaleString("pt-BR")}
-                                    </span>
-                                    <span className="col-span-3 truncate">{s.technician_email ?? "—"}</span>
-                                    <span className="col-span-2"><StatusPill status={s.status} /></span>
-                                    <span className="col-span-2 tabular-nums">{formatDuration(s.duration_seconds)}</span>
-                                    <span className="col-span-2 font-mono text-[11px] text-muted-foreground text-right">
-                                      {(s.technician_ip as unknown as string) ?? "—"}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
+                          <TableRow>
+                            <TableCell colSpan={5} className="bg-muted/30 p-0">
+                              <div className="p-3">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Início</TableHead>
+                                      <TableHead>Técnico</TableHead>
+                                      <TableHead>Status</TableHead>
+                                      <TableHead>Duração</TableHead>
+                                      <TableHead>IP</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {g.sessoes.map((s) => (
+                                      <TableRow key={s.id}>
+                                        <TableCell className="text-xs">
+                                          {new Date(s.session_start).toLocaleString("pt-BR")}
+                                        </TableCell>
+                                        <TableCell className="text-xs">
+                                          {s.technician_email ?? "—"}
+                                        </TableCell>
+                                        <TableCell>
+                                          <StatusBadge status={s.status} />
+                                        </TableCell>
+                                        <TableCell className="tabular-nums text-xs">
+                                          {formatDuration(s.duration_seconds)}
+                                        </TableCell>
+                                        <TableCell className="font-mono text-xs text-muted-foreground">
+                                          {(s.technician_ip as unknown as string) ?? "—"}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )}
@@ -255,26 +272,21 @@ function AuditoriaPage() {
               </TableBody>
             </Table>
             )}
-        </div>
-      </div>
-    </>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function StatusPill({ status }: { status: "active" | "ended" | "failed" }) {
+function StatusBadge({ status }: { status: "active" | "ended" | "failed" }) {
   const map = {
-    active: { label: "ativa", color: "bg-emerald-400 text-emerald-400" },
-    ended: { label: "encerrada", color: "bg-muted-foreground/60 text-muted-foreground" },
-    failed: { label: "falhou", color: "bg-[#E15C64] text-[#E15C64]" },
-  } as const;
+    active: { label: "ativa", variant: "default" as const },
+    ended: { label: "encerrada", variant: "secondary" as const },
+    failed: { label: "falhou", variant: "destructive" as const },
+  };
   const s = map[status];
-  const [dot, text] = s.color.split(" ");
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[12px]">
-      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
-      <span className={text}>{s.label}</span>
-    </span>
-  );
+  return <Badge variant={s.variant}>{s.label}</Badge>;
 }
 
 function formatDuration(seconds: number | null): string {

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -31,10 +33,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power } from "lucide-react";
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/page-header";
-import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -256,82 +256,89 @@ function DispositivosPage() {
   const colCount = isSuper ? 8 : 7;
 
   return (
-    <>
-      <PageHeader
-        title="Dispositivos"
-        subtitle={
-          data
-            ? `${data.length} dispositivo(s) no address book · endpoints RustDesk.`
-            : "Endpoints RustDesk cadastrados no address book do seu tenant."
-        }
-        actions={
-          podeAdicionar && perfil ? (
-            <AdicionarDispositivoDialog role={perfil.role} tenantId={perfil.tenant_id} />
-          ) : undefined
-        }
-      />
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dispositivos</h1>
+        <p className="text-sm text-muted-foreground">
+          Endpoints RustDesk cadastrados no address book do seu tenant.
+        </p>
+      </div>
 
-      <div className="p-6 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-72">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              className="h-9 pl-8 text-[13px]"
-              placeholder="Buscar por ID, alias, grupo…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
+      <Card className="border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MonitorSmartphone className="h-4 w-4 text-primary" />
+              Address book
+            </CardTitle>
+            <CardDescription>
+              {data ? `${data.length} dispositivo(s)` : "Carregando…"}
+            </CardDescription>
           </div>
-          {isSuper && (
-            <Select value={tenantFilter} onValueChange={setTenantFilter}>
-              <SelectTrigger className="w-56 h-9">
-                <SelectValue placeholder="Empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as empresas</SelectItem>
-                {tenants?.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border/60 bg-card">
-            <Switch
-              id="show-inativos"
-              checked={showInativos}
-              onCheckedChange={setShowInativos}
-            />
-            <Label htmlFor="show-inativos" className="text-[12px] text-muted-foreground">
-              Mostrar inativos
-            </Label>
+          <div className="flex items-center gap-2">
+            <div className="relative w-72">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Buscar por ID, alias, grupo…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+            {isSuper && (
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as empresas</SelectItem>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex items-center gap-2 px-2">
+              <Switch
+                id="show-inativos"
+                checked={showInativos}
+                onCheckedChange={setShowInativos}
+              />
+              <Label htmlFor="show-inativos" className="text-xs text-muted-foreground">
+                Mostrar inativos
+              </Label>
+            </div>
+            {podeAdicionar && perfil && (
+              <AdicionarDispositivoDialog
+                role={perfil.role}
+                tenantId={perfil.tenant_id}
+              />
+            )}
           </div>
-          <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-            {filtered.length} de {data?.length ?? 0}
-          </span>
-        </div>
-
-        <div className="rounded-md border border-border/60 bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-border/60">
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">Rustdesk ID</TableHead>
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">Alias</TableHead>
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">Grupo</TableHead>
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">SO</TableHead>
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">Últ. online</TableHead>
-                {isSuper && <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">Empresa</TableHead>}
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                <TableHead className="h-10 text-[11px] uppercase tracking-wider text-muted-foreground text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rustdesk ID</TableHead>
+                  <TableHead>Alias</TableHead>
+                  <TableHead>Grupo</TableHead>
+                  <TableHead>SO</TableHead>
+                  <TableHead>Últ. online</TableHead>
+                  {isSuper && <TableHead>Empresa</TableHead>}
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {isLoading &&
                   Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i} className="border-border/60">
+                    <TableRow key={i}>
                       {Array.from({ length: colCount }).map((_, j) => (
-                        <TableCell key={j} className="h-12">
+                        <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                       ))}
@@ -346,80 +353,77 @@ function DispositivosPage() {
                 )}
                 {!isLoading &&
                   filtered.map((d) => (
-                    <TableRow key={d.id} className="border-border/60 h-[50px] hover:bg-[#171E29]/50">
-                      <TableCell className="font-mono text-[12px]">{d.rustdesk_id}</TableCell>
-                      <TableCell className="text-[13px]">{d.alias ?? "—"}</TableCell>
-                      <TableCell className="text-[12px]">
+                    <TableRow key={d.id}>
+                      <TableCell className="font-mono text-xs">{d.rustdesk_id}</TableCell>
+                      <TableCell>{d.alias ?? "—"}</TableCell>
+                      <TableCell>
                         {d.device_group ? (
-                          <span className="text-muted-foreground">{d.device_group}</span>
+                          <Badge variant="secondary">{d.device_group}</Badge>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-[12px] text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground">
                         {d.os ?? "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-[11px] text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground">
                         {d.last_online
                           ? new Date(d.last_online).toLocaleString("pt-BR")
                           : "nunca"}
                       </TableCell>
                       {isSuper && (
-                        <TableCell className="text-[12px]">
+                        <TableCell className="text-xs">
                           {d.tenants?.name ?? <span className="text-muted-foreground">—</span>}
                         </TableCell>
                       )}
                       <TableCell>
-                        <span className="inline-flex items-center gap-1.5 text-[12px]">
-                          <span className={cn("h-1.5 w-1.5 rounded-full", d.is_active ? "bg-emerald-400" : "bg-muted-foreground/40")} />
-                          {d.is_active ? "ativo" : "inativo"}
-                        </span>
+                        {d.is_active ? (
+                          <Badge>Ativo</Badge>
+                        ) : (
+                          <Badge variant="secondary">Inativo</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1 justify-end">
                           <Button
                             size="sm"
                             variant="default"
-                            className="h-7 text-[12px]"
                             disabled={connectingId === d.id || d.is_active === false}
                             onClick={() => handleConectar(d.id)}
                           >
-                            <Monitor className="h-3.5 w-3.5 mr-1.5" />
+                            <Monitor className="h-4 w-4 mr-2" />
                             {connectingId === d.id ? "Conectando..." : "Conectar"}
                           </Button>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7"
                             title="Editar"
                             onClick={() => setEditing(d)}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           {podeInativar && (
                             d.is_active ? (
                               <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                title="Inativar"
+                                size="sm"
+                                variant="outline"
                                 onClick={() => setConfirmInativarId(d.id)}
                                 disabled={toggleAtivoMutation.isPending}
                               >
-                                <PowerOff className="h-3.5 w-3.5" />
+                                <PowerOff className="h-4 w-4 mr-1" />
+                                Inativar
                               </Button>
                             ) : (
                               <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                title="Reativar"
+                                size="sm"
+                                variant="outline"
                                 onClick={() =>
                                   toggleAtivoMutation.mutate({ id: d.id, ativar: true })
                                 }
                                 disabled={toggleAtivoMutation.isPending}
                               >
-                                <Power className="h-3.5 w-3.5" />
+                                <Power className="h-4 w-4 mr-1" />
+                                Reativar
                               </Button>
                             )
                           )}
@@ -427,10 +431,11 @@ function DispositivosPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {editing && (
         <EditarDispositivoDialog
@@ -530,7 +535,7 @@ function DispositivosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
 
