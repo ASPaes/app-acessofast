@@ -80,18 +80,16 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border/60 px-3 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <img
             src={acessofastLogo.url}
             alt="Acessofast"
-            className="h-8 w-8 object-contain shrink-0"
+            className="h-7 w-7 object-contain shrink-0"
           />
           {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold">Acessofast</span>
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                ASP Softwares
-              </span>
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-[13px] font-semibold tracking-tight">Acessofast</span>
+              <span className="text-[10px] text-muted-foreground truncate">acesso remoto</span>
             </div>
           )}
         </div>
