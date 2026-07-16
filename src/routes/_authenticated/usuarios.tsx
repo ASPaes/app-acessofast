@@ -3,7 +3,6 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -15,6 +14,10 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, UserPlus, Send, UserX, UserCheck } from "lucide-react";
+import { PageHeader, SectionHeader } from "@/components/ui-shell/page-header";
+import { Toolbar, SearchField, ToolbarSpacer } from "@/components/ui-shell/toolbar";
+import { StatusDot } from "@/components/ui-shell/status-dot";
+import { EmptyState } from "@/components/ui-shell/empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -186,76 +189,60 @@ function UsuariosPage() {
 
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Usuários</h1>
-          <p className="text-sm text-muted-foreground">
-            Membros do painel. Convites e mudança de papel são operações do backend.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {me && (me.role === "super_admin" || (me.role === "admin" && me.tenant_id)) && (
+    <div className="px-6 py-6 space-y-6">
+      <PageHeader
+        title="Usuários"
+        description="Membros do painel. Convites e mudança de papel são operações do backend."
+        actions={
+          me && (me.role === "super_admin" || (me.role === "admin" && me.tenant_id)) ? (
             <InviteMemberDialog role={me.role} tenantId={me.tenant_id} />
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            Membros
-          </CardTitle>
-          <CardDescription>
-            {data ? `${filteredData.length} usuário(s)` : "Carregando…"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <section className="space-y-3">
+        <SectionHeader
+          title="Membros"
+          count={data ? `${filteredData.length}` : "…"}
+          hint={data ? "usuário(s)" : "carregando…"}
+        />
+
+        <div className="rounded-lg border border-border-subtle bg-surface overflow-hidden">
           {me?.role === "super_admin" && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="space-y-1.5 flex-1">
-                <Label htmlFor="filter-tenant" className="text-xs">
-                  Empresa
-                </Label>
-                <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                  <SelectTrigger id="filter-tenant">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as empresas</SelectItem>
-                    {tenants?.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 flex-1">
-                <Label htmlFor="filter-search" className="text-xs">
-                  Buscar por nome ou e-mail
-                </Label>
-                <Input
-                  id="filter-search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar por nome ou e-mail"
-                />
-              </div>
-            </div>
+            <Toolbar>
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger id="filter-tenant" className="w-56 h-9 text-[13px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as empresas</SelectItem>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <SearchField
+                value={search}
+                onChange={setSearch}
+                placeholder="Buscar por nome ou e-mail"
+                className="w-full sm:w-80"
+              />
+              <ToolbarSpacer />
+            </Toolbar>
           )}
-          <div className="rounded-md border border-border/60 overflow-hidden">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Papel</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                <TableRow className="border-border-subtle hover:bg-transparent">
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Nome</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">E-mail</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Empresa</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Papel</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Status</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Criado em</TableHead>
+                  <TableHead className="h-9 text-right text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -271,32 +258,32 @@ function UsuariosPage() {
                   ))}
                 {!isLoading && filteredData.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
-                      Nenhum usuário visível para o seu papel.
+                    <TableCell colSpan={7} className="p-0">
+                      <EmptyState icon={Users} title="Nenhum usuário visível para o seu papel" />
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading &&
                   filteredData.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.full_name ?? "—"}</TableCell>
-                      <TableCell className="text-xs">{u.email ?? "—"}</TableCell>
-                      <TableCell>
+                    <TableRow key={u.id} className="border-border-subtle h-12 hover:bg-surface-hover/50">
+                      <TableCell className="text-[13px] font-medium">{u.full_name ?? <span className="text-text-dim font-normal">—</span>}</TableCell>
+                      <TableCell className="font-mono text-[11.5px] text-muted-foreground">{u.email ?? "—"}</TableCell>
+                      <TableCell className="text-[12px]">
                         {u.tenant_id ? (
-                          <span className="text-xs">{u.tenants?.name ?? "—"}</span>
+                          u.tenants?.name ?? <span className="text-text-dim">—</span>
                         ) : (
-                          <Badge variant="outline">Plataforma</Badge>
+                          <Badge variant="outline" className="text-[10.5px]">Plataforma</Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-[12px] text-muted-foreground">{roleLabel[u.role] ?? u.role}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{roleLabel[u.role] ?? u.role}</Badge>
+                        {u.is_active ? (
+                          <StatusDot tone="online">ativo</StatusDot>
+                        ) : (
+                          <StatusDot tone="neutral">inativo</StatusDot>
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={u.is_active ? "default" : "secondary"}>
-                          {u.is_active ? "ativo" : "inativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="font-mono text-[11.5px] text-muted-foreground">
                         {new Date(u.created_at).toLocaleDateString("pt-BR")}
                       </TableCell>
                       <TableCell className="text-right">
@@ -313,7 +300,7 @@ function UsuariosPage() {
                             u.is_active ? (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="outline">
+                                  <Button size="sm" variant="ghost" className="h-8 text-danger hover:text-danger">
                                     <UserX className="h-3.5 w-3.5 mr-1" />
                                     Desativar
                                   </Button>
@@ -338,7 +325,8 @@ function UsuariosPage() {
                             ) : (
                               <Button
                                 size="sm"
-                                variant="outline"
+                                variant="ghost"
+                                className="h-8"
                                 onClick={() => toggleAtivoMutation.mutate({ id: u.id, ativar: true })}
                               >
                                 <UserCheck className="h-3.5 w-3.5 mr-1" />
@@ -348,14 +336,13 @@ function UsuariosPage() {
                           )}
                         </div>
                       </TableCell>
-
                     </TableRow>
                   ))}
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }
