@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Copy, Check } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -24,7 +24,6 @@ type InviteResult = {
   user_id?: string;
   tenant_id?: string;
   role?: string;
-  invite_link?: string;
   error?: string;
   detail?: string;
 };
@@ -41,41 +40,12 @@ async function invokeErrorMessage(error: unknown): Promise<string> {
   return (error as { message?: string })?.message ?? "Erro ao chamar a função";
 }
 
-function InviteLinkBlock({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Não foi possível copiar o link");
-    }
-  };
-  return (
-    <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3 space-y-2">
-      <p className="text-xs text-muted-foreground">
-        E-mail automático não está configurado. Compartilhe este link com o convidado para
-        definir a senha:
-      </p>
-      <div className="flex items-center gap-2">
-        <Input readOnly value={link} className="text-xs" />
-        <Button type="button" size="sm" variant="outline" onClick={copy}>
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          <span className="ml-1">{copied ? "Copiado" : "Copiar"}</span>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function ProvisionTenantDialog() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [seatLimit, setSeatLimit] = useState<number>(1);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -92,15 +62,13 @@ export function ProvisionTenantDialog() {
       if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao provisionar");
       return data;
     },
-    onSuccess: (data) => {
-      toast.success("Tenant provisionado com sucesso");
+    onSuccess: () => {
+      toast.success(`Tenant provisionado. Convite enviado por e-mail para ${email.trim()}`);
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      if (data.invite_link) {
-        setInviteLink(data.invite_link);
-      } else {
-        setOpen(false);
-        resetForm();
-      }
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["tenants-empresas"] });
+      setOpen(false);
+      resetForm();
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -111,7 +79,6 @@ export function ProvisionTenantDialog() {
     setName("");
     setEmail("");
     setSeatLimit(1);
-    setInviteLink(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -140,8 +107,8 @@ export function ProvisionTenantDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Building2 className="h-4 w-4 mr-1" />
+        <Button size="sm">
+          <Building2 className="h-4 w-4 mr-1.5" />
           Provisionar novo tenant
         </Button>
       </DialogTrigger>
@@ -183,7 +150,6 @@ export function ProvisionTenantDialog() {
               onChange={(e) => setSeatLimit(parseInt(e.target.value, 10) || 1)}
             />
           </div>
-          {inviteLink && <InviteLinkBlock link={inviteLink} />}
           <DialogFooter>
             <Button
               type="button"
