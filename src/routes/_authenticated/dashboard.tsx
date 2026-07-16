@@ -39,17 +39,48 @@ type VpsMetric = {
 };
 
 function Dashboard() {
-  const stats = useQuery({
-    queryKey: ["dashboard-stats"],
+  const { data: me } = useQuery({
+    queryKey: ["me"],
     queryFn: async () => {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const uid = userData.user?.id;
+      if (!uid) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, role, tenant_id")
+        .eq("id", uid)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const stats = useQuery({
+    queryKey: ["dashboard-stats", me?.role, me?.tenant_id],
+    enabled: !!me,
+    queryFn: async () => {
+      const isSuper = me!.role === "super_admin";
+      if (!isSuper && !me!.tenant_id) {
+        throw new Error("Perfil sem empresa vinculada");
+      }
+      const tid = me!.tenant_id as string;
+      const withTenant = <T extends { eq: (c: string, v: string) => T }>(q: T): T =>
+        isSuper ? q : q.eq("tenant_id", tid);
       const [devices, users, activeLogs, logsToday] = await Promise.all([
-        supabase.from("address_book").select("id", { count: "exact", head: true }),
-        supabase.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
-        supabase.from("connection_logs").select("id", { count: "exact", head: true }).eq("status", "active"),
-        supabase
-          .from("connection_logs")
-          .select("id", { count: "exact", head: true })
-          .gte("session_start", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+        withTenant(supabase.from("address_book").select("id", { count: "exact", head: true })),
+        withTenant(
+          supabase.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
+        ),
+        withTenant(
+          supabase.from("connection_logs").select("id", { count: "exact", head: true }).eq("status", "active"),
+        ),
+        withTenant(
+          supabase
+            .from("connection_logs")
+            .select("id", { count: "exact", head: true })
+            .gte("session_start", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+        ),
       ]);
       return {
         devices: devices.count ?? 0,
@@ -96,11 +127,31 @@ function Dashboard() {
   const idadeSeg = capturedAt != null ? Math.floor((now - capturedAt) / 1000) : null;
   const ativo = latest != null && idadeSeg != null && idadeSeg <= 60;
 
+  const role = me?.role;
+  const isSuper = role === "super_admin";
+  const isTech = role === "tech";
+
+  const hintUsuarios = isSuper ? "Contas de todas as empresas" : "Contas habilitadas no seu tenant";
+  const hintDispositivos = isSuper ? "Endpoints de todas as empresas" : "Endpoints no address book";
+  const hintAtivas = isSuper
+    ? "Em andamento na plataforma"
+    : isTech
+      ? "Minhas conexões em andamento"
+      : "Conexões em andamento agora";
+  const hint24h = isSuper
+    ? "Total da plataforma em 24h"
+    : isTech
+      ? "Minhas sessões nas últimas 24h"
+      : "Total nas últimas 24 horas";
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            Dashboard
+            {isSuper && <Badge variant="outline">Plataforma</Badge>}
+          </h1>
           <p className="text-sm text-muted-foreground">
             Visão geral em tempo quase-real do seu ambiente.
           </p>
@@ -111,33 +162,35 @@ function Dashboard() {
         </Badge>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Usuários ativos"
-          value={stats.data?.users}
-          icon={Users}
-          hint="Contas habilitadas no seu tenant"
-          loading={stats.isLoading}
-        />
+      <div className={`grid gap-4 grid-cols-2 ${isTech ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
+        {!isTech && (
+          <StatCard
+            title="Usuários ativos"
+            value={stats.data?.users}
+            icon={Users}
+            hint={hintUsuarios}
+            loading={stats.isLoading}
+          />
+        )}
         <StatCard
           title="Dispositivos"
           value={stats.data?.devices}
           icon={MonitorSmartphone}
-          hint="Endpoints no address book"
+          hint={hintDispositivos}
           loading={stats.isLoading}
         />
         <StatCard
           title="Sessões ativas"
           value={stats.data?.activeSessions}
           icon={Radio}
-          hint="Conexões em andamento agora"
+          hint={hintAtivas}
           loading={stats.isLoading}
         />
         <StatCard
           title="Sessões 24h"
           value={stats.data?.sessions24h}
           icon={Activity}
-          hint="Total nas últimas 24 horas"
+          hint={hint24h}
           loading={stats.isLoading}
         />
       </div>
