@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Cpu, Gauge, HardDrive, Network } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Activity, Cpu, Gauge, HardDrive, Network } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/ui-shell/page-header";
-import { StatusDot } from "@/components/ui-shell/status-dot";
 
 export const Route = createFileRoute("/_authenticated/monitoramento")({
   head: () => ({
@@ -102,48 +102,56 @@ function MonitoramentoPage() {
   ];
 
   return (
-    <div className="px-6 py-6 space-y-6">
-      <PageHeader
-        title="Monitoramento da VPS"
-        description="Saúde do relay compartilhado (visível apenas para super_admin)."
-        actions={
-          isLoading ? (
-            <Skeleton className="h-4 w-40" />
-          ) : isActive ? (
-            <StatusDot tone="online" pulse>
-              Coletor ativo · última amostra há {ageSec}s
-            </StatusDot>
-          ) : (
-            <StatusDot tone="warning">
-              {latest ? `sem amostras há ${ageSec}s` : "sem amostras"}
-            </StatusDot>
-          )
-        }
-      />
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+          <Activity className="h-6 w-6 text-primary" />
+          Monitoramento da VPS
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Saúde do relay compartilhado (visível apenas para super_admin).
+        </p>
+      </div>
 
-      <div className="rounded-lg border border-border-subtle bg-surface">
-        <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-border-subtle">
-          {cards.map(({ label, icon: Icon, value }) => (
-            <div key={label} className="flex flex-col gap-1.5 px-5 py-4 min-w-0">
-              <div className="flex items-center gap-2 text-text-dim">
-                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                <span className="text-[10.5px] uppercase tracking-[0.14em] font-medium">
-                  {label}
-                </span>
-              </div>
-              {isLoading ? (
-                <Skeleton className="h-7 w-20" />
-              ) : (
-                <div className="text-[22px] font-semibold tabular-nums text-foreground leading-none font-mono">
-                  {value}
-                </div>
-              )}
-              <div className="text-[11px] text-muted-foreground">
-                {latest ? "atualizado agora" : "sem amostras"}
-              </div>
-            </div>
-          ))}
+      {isLoading ? (
+        <Skeleton className="h-6 w-64" />
+      ) : isActive ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+          <span>Coletor ativo · última amostra há {ageSec}s</span>
         </div>
+      ) : (
+        <Alert>
+          <AlertTitle>Sem amostras recentes</AlertTitle>
+          <AlertDescription>
+            {latest
+              ? `A última amostra foi há ${ageSec}s. Verifique o agente na VPS.`
+              : "Nenhuma amostra encontrada em vps_metrics."}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {cards.map(({ label, icon: Icon, value }) => (
+          <Card key={label} className="border-dashed border-border/60">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
+                {label}
+              </CardTitle>
+              <Icon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-9 w-24" />
+              ) : (
+                <div className="text-3xl font-semibold tabular-nums">{value}</div>
+              )}
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {latest ? "atualizado agora" : "sem amostras"}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );

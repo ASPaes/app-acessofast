@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Wrench, Settings } from "lucide-react";
-import { PageHeader, SectionHeader } from "@/components/ui-shell/page-header";
-import { EmptyState } from "@/components/ui-shell/empty-state";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Settings } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({
   head: () => ({
@@ -12,34 +12,36 @@ export const Route = createFileRoute("/_authenticated/configuracoes")({
 
 function ConfiguracoesPage() {
   return (
-    <div className="px-6 py-6 space-y-6">
-      <PageHeader
-        title="Configurações"
-        description="Preferências operacionais do seu tenant (fuso, retenção, alertas)."
-      />
-
-      <div className="flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-3 py-2 text-[12px] text-muted-foreground">
-        <Wrench className="h-3.5 w-3.5 text-warning" strokeWidth={1.75} />
-        <span className="font-medium text-foreground">Em construção.</span>
-        <span>
-          O formulário de edição de <code className="font-mono text-[11.5px]">tenant_settings</code>{" "}
-          chega na próxima iteração. A tabela já está criada com RLS.
-        </span>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+          <Settings className="h-6 w-6 text-primary" />
+          Configurações
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Preferências operacionais do seu tenant (fuso, retenção, alertas).
+        </p>
       </div>
 
-      <section className="space-y-3">
-        <SectionHeader
-          title="Recursos habilitados"
-          hint={
-            <>
-              gestão de <code className="font-mono text-[11.5px]">tenant_features</code> pelo super_admin
-            </>
-          }
-        />
-        <div className="rounded-lg border border-border-subtle bg-surface">
-          <EmptyState icon={Settings} title="Nada a exibir ainda" description="Nenhum recurso configurado neste tenant." compact />
-        </div>
-      </section>
+      <Alert>
+        <AlertTitle>Em construção</AlertTitle>
+        <AlertDescription>
+          O formulário de edição de <code className="font-mono">tenant_settings</code> chega na
+          próxima iteração. A tabela já está criada e pronta com RLS.
+        </AlertDescription>
+      </Alert>
+
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="text-base">Recursos habilitados</CardTitle>
+          <CardDescription>
+            Gestão de <code className="font-mono">tenant_features</code> pelo super_admin.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          Nada a exibir ainda.
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -2,6 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users,
@@ -11,10 +19,8 @@ import {
   Cpu,
   HardDrive,
   Gauge,
+  AlertTriangle,
 } from "lucide-react";
-import { PageHeader, SectionHeader } from "@/components/ui-shell/page-header";
-import { MetricStrip, type MetricItemData } from "@/components/ui-shell/metric-strip";
-import { StatusDot } from "@/components/ui-shell/status-dot";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -138,184 +144,185 @@ function Dashboard() {
       ? "Minhas sessões nas últimas 24h"
       : "Total nas últimas 24 horas";
 
-  const metrics: MetricItemData[] = [];
-  if (!isTech) {
-    metrics.push({
-      label: "Usuários ativos",
-      value: stats.data?.users ?? 0,
-      hint: hintUsuarios,
-      icon: Users,
-      loading: stats.isLoading,
-    });
-  }
-  metrics.push(
-    {
-      label: "Dispositivos",
-      value: stats.data?.devices ?? 0,
-      hint: hintDispositivos,
-      icon: MonitorSmartphone,
-      loading: stats.isLoading,
-    },
-    {
-      label: "Sessões ativas",
-      value: stats.data?.activeSessions ?? 0,
-      hint: hintAtivas,
-      icon: Radio,
-      loading: stats.isLoading,
-    },
-    {
-      label: "Sessões 24h",
-      value: stats.data?.sessions24h ?? 0,
-      hint: hint24h,
-      icon: Activity,
-      loading: stats.isLoading,
-    },
-  );
-
   return (
-    <div className="px-6 py-6 space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description="Visão geral em tempo quase-real do seu ambiente."
-        actions={
-          <>
-            {isSuper && (
-              <span className="rounded border border-border-subtle px-2 py-0.5 text-[11px] uppercase tracking-widest text-text-dim">
-                Plataforma
-              </span>
-            )}
-            <StatusDot tone="active" pulse>
-              ao vivo
-            </StatusDot>
-          </>
-        }
-      />
+    <div className="p-6 space-y-6">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            Dashboard
+            {isSuper && <Badge variant="outline">Plataforma</Badge>}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Visão geral em tempo quase-real do seu ambiente.
+          </p>
+        </div>
+        <Badge variant="outline" className="gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+          ao vivo
+        </Badge>
+      </div>
 
-      <MetricStrip items={metrics} />
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)]">
-        {/* MONITORAMENTO DO RELAY */}
-        <section className="rounded-lg border border-border-subtle bg-surface">
-          <SectionHeaderRow
-            title="Monitoramento do relay"
-            description="Saúde da VPS compartilhada"
-            status={
-              ativo ? (
-                <StatusDot tone="online" pulse>
-                  ao vivo · há {idadeSeg}s
-                </StatusDot>
-              ) : (
-                <StatusDot tone="warning">aguardando coletor</StatusDot>
-              )
-            }
+      <div className={`grid gap-4 grid-cols-2 ${isTech ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
+        {!isTech && (
+          <StatCard
+            title="Usuários ativos"
+            value={stats.data?.users}
+            icon={Users}
+            hint={hintUsuarios}
+            loading={stats.isLoading}
           />
-          <div className="grid grid-cols-3 divide-x divide-border-subtle">
-            <RelayMetric
-              label="CPU"
-              icon={Cpu}
-              value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : undefined}
-              loading={vpsMetrics.isLoading}
-            />
-            <RelayMetric
-              label="Memória"
-              icon={Gauge}
-              value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : undefined}
-              loading={vpsMetrics.isLoading}
-            />
-            <RelayMetric
-              label="Disco"
-              icon={HardDrive}
-              value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : undefined}
-              loading={vpsMetrics.isLoading}
-            />
-          </div>
-        </section>
+        )}
+        <StatCard
+          title="Dispositivos"
+          value={stats.data?.devices}
+          icon={MonitorSmartphone}
+          hint={hintDispositivos}
+          loading={stats.isLoading}
+        />
+        <StatCard
+          title="Sessões ativas"
+          value={stats.data?.activeSessions}
+          icon={Radio}
+          hint={hintAtivas}
+          loading={stats.isLoading}
+        />
+        <StatCard
+          title="Sessões 24h"
+          value={stats.data?.sessions24h}
+          icon={Activity}
+          hint={hint24h}
+          loading={stats.isLoading}
+        />
+      </div>
 
-        {/* STATUS DO SISTEMA */}
-        <section className="rounded-lg border border-border-subtle bg-surface">
-          <SectionHeaderRow title="Status do sistema" description="Componentes essenciais" />
-          <ul className="divide-y divide-border-subtle">
-            <StatusRow label="API do painel" tone="online" />
-            <StatusRow label="Banco (RLS)" tone="online" />
-            <StatusRow
-              label="Coletor VPS"
-              tone={ativo ? "online" : "warning"}
-              note={ativo ? undefined : "sem amostras"}
-            />
-            <StatusRow label="Realtime" tone="online" />
-          </ul>
-        </section>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-border/60">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Monitoramento do relay</CardTitle>
+                <CardDescription>Saúde da VPS compartilhada (super_admin)</CardDescription>
+              </div>
+              {ativo ? (
+                <Badge variant="outline" className="gap-1.5 text-emerald-500 border-emerald-500/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ao vivo · há {idadeSeg}s
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                  <AlertTriangle className="h-3 w-3" />
+                  aguardando coletor
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-3 gap-4">
+            {vpsMetrics.isLoading ? (
+              <>
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </>
+            ) : (
+              <>
+                <MetricPlaceholder
+                  label="CPU"
+                  icon={Cpu}
+                  value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : undefined}
+                />
+                <MetricPlaceholder
+                  label="Memória"
+                  icon={Gauge}
+                  value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : undefined}
+                />
+                <MetricPlaceholder
+                  label="Disco"
+                  icon={HardDrive}
+                  value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : undefined}
+                />
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60">
+          <CardHeader>
+            <CardTitle className="text-base">Status do sistema</CardTitle>
+            <CardDescription>Componentes essenciais</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <StatusRow label="API do painel" ok />
+            <StatusRow label="Banco (RLS)" ok />
+            <StatusRow label="Coletor VPS" ok={ativo} note={ativo ? undefined : "sem amostras"} />
+            <StatusRow label="Realtime" ok />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
 
-function SectionHeaderRow({
+function StatCard({
   title,
-  description,
-  status,
+  value,
+  icon: Icon,
+  hint,
+  loading,
 }: {
   title: string;
-  description?: string;
-  status?: React.ReactNode;
+  value: number | undefined;
+  icon: typeof Users;
+  hint: string;
+  loading: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
-      <div className="min-w-0">
-        <div className="text-[13px] font-semibold text-foreground">{title}</div>
-        {description && (
-          <div className="text-[11px] text-muted-foreground">{description}</div>
+    <Card className="border-border/60">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
+          {title}
+        </CardTitle>
+        <Icon className="h-4 w-4 text-primary" />
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-8 w-16" />
+        ) : (
+          <div className="text-3xl font-semibold tabular-nums">{value ?? 0}</div>
         )}
-      </div>
-      {status}
-    </div>
+        <p className="text-[11px] text-muted-foreground mt-1">{hint}</p>
+      </CardContent>
+    </Card>
   );
 }
 
-function RelayMetric({
+function MetricPlaceholder({
   label,
   icon: Icon,
   value,
-  loading,
 }: {
   label: string;
   icon: typeof Cpu;
   value?: string;
-  loading: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 px-5 py-4 min-w-0">
-      <div className="flex items-center gap-2 text-text-dim">
-        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-        <span className="text-[10.5px] uppercase tracking-[0.14em] font-medium">{label}</span>
-      </div>
-      {loading ? (
-        <Skeleton className="h-7 w-16" />
-      ) : (
-        <div className="text-[22px] font-semibold tabular-nums text-foreground leading-none font-mono">
-          {value ?? "—"}
-        </div>
-      )}
+    <div className="rounded-md border border-dashed border-border/60 p-4 flex flex-col items-center justify-center text-center gap-2">
+      <Icon className="h-5 w-5 text-muted-foreground" />
+      <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-2xl font-semibold text-muted-foreground/60 tabular-nums">{value ?? "—"}</div>
     </div>
   );
 }
 
-function StatusRow({
-  label,
-  tone,
-  note,
-}: {
-  label: string;
-  tone: "online" | "warning" | "danger";
-  note?: string;
-}) {
+function StatusRow({ label, ok, note }: { label: string; ok: boolean; note?: string }) {
   return (
-    <li className="flex items-center justify-between px-4 h-11 text-[13px]">
-      <span className="text-foreground">{label}</span>
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
-        {note && <span className="text-[11px] text-text-dim">{note}</span>}
-        <StatusDot tone={tone} />
+        {note && <span className="text-[11px] text-muted-foreground">{note}</span>}
+        <span
+          className={`h-2 w-2 rounded-full ${ok ? "bg-primary shadow-[0_0_8px_var(--primary)]" : "bg-muted-foreground/40"}`}
+        />
       </div>
-    </li>
+    </div>
   );
 }

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -31,13 +33,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MonitorSmartphone } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
-import { PageHeader } from "@/components/ui-shell/page-header";
-import { Toolbar, SearchField, ToolbarSpacer } from "@/components/ui-shell/toolbar";
-import { StatusDot } from "@/components/ui-shell/status-dot";
-import { EmptyState } from "@/components/ui-shell/empty-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -258,73 +256,81 @@ function DispositivosPage() {
   const colCount = isSuper ? 8 : 7;
 
   return (
-    <div className="px-6 py-6 space-y-6">
-      <PageHeader
-        title="Dispositivos"
-        description="Endpoints RustDesk cadastrados no address book do seu tenant."
-        meta={
-          <span className="font-mono">
-            {data ? `${data.length} cadastrado(s)` : "carregando…"}
-          </span>
-        }
-        actions={
-          podeAdicionar && perfil ? (
-            <AdicionarDispositivoDialog
-              role={perfil.role}
-              tenantId={perfil.tenant_id}
-            />
-          ) : null
-        }
-      />
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dispositivos</h1>
+        <p className="text-sm text-muted-foreground">
+          Endpoints RustDesk cadastrados no address book do seu tenant.
+        </p>
+      </div>
 
-      <section className="rounded-lg border border-border-subtle bg-surface overflow-hidden">
-        <Toolbar>
-          <SearchField
-            value={q}
-            onChange={setQ}
-            placeholder="Buscar por ID, alias, grupo…"
-            className="w-full sm:w-80"
-          />
-          {isSuper && (
-            <Select value={tenantFilter} onValueChange={setTenantFilter}>
-              <SelectTrigger className="w-52 h-9 text-[13px]">
-                <SelectValue placeholder="Empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as empresas</SelectItem>
-                {tenants?.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <ToolbarSpacer />
-          <div className="flex items-center gap-2">
-            <Switch
-              id="show-inativos"
-              checked={showInativos}
-              onCheckedChange={setShowInativos}
-            />
-            <Label htmlFor="show-inativos" className="text-[12px] text-muted-foreground">
-              Mostrar inativos
-            </Label>
+      <Card className="border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MonitorSmartphone className="h-4 w-4 text-primary" />
+              Address book
+            </CardTitle>
+            <CardDescription>
+              {data ? `${data.length} dispositivo(s)` : "Carregando…"}
+            </CardDescription>
           </div>
-        </Toolbar>
-
-        <div className="overflow-x-auto">
+          <div className="flex items-center gap-2">
+            <div className="relative w-72">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Buscar por ID, alias, grupo…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+            {isSuper && (
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as empresas</SelectItem>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex items-center gap-2 px-2">
+              <Switch
+                id="show-inativos"
+                checked={showInativos}
+                onCheckedChange={setShowInativos}
+              />
+              <Label htmlFor="show-inativos" className="text-xs text-muted-foreground">
+                Mostrar inativos
+              </Label>
+            </div>
+            {podeAdicionar && perfil && (
+              <AdicionarDispositivoDialog
+                role={perfil.role}
+                tenantId={perfil.tenant_id}
+              />
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-border/60 overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="border-border-subtle hover:bg-transparent">
-                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">RustDesk ID</TableHead>
-                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Alias</TableHead>
-                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Grupo</TableHead>
-                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">SO</TableHead>
-                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Último acesso</TableHead>
-                  {isSuper && <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Empresa</TableHead>}
-                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Status</TableHead>
-                  <TableHead className="h-9 text-right text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Ações</TableHead>
+                <TableRow>
+                  <TableHead>Rustdesk ID</TableHead>
+                  <TableHead>Alias</TableHead>
+                  <TableHead>Grupo</TableHead>
+                  <TableHead>SO</TableHead>
+                  <TableHead>Últ. online</TableHead>
+                  {isSuper && <TableHead>Empresa</TableHead>}
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -340,41 +346,41 @@ function DispositivosPage() {
                   ))}
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={colCount} className="p-0">
-                      <EmptyState
-                        icon={MonitorSmartphone}
-                        title="Nenhum dispositivo encontrado"
-                        description="Ajuste os filtros ou cadastre um novo endpoint."
-                      />
+                    <TableCell colSpan={colCount} className="text-center text-muted-foreground py-10">
+                      Nenhum dispositivo encontrado.
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading &&
                   filtered.map((d) => (
-                    <TableRow key={d.id} className="border-border-subtle h-[52px] hover:bg-surface-hover/50">
-                      <TableCell className="font-mono text-[12px] text-foreground">{d.rustdesk_id}</TableCell>
-                      <TableCell className="text-[13px]">{d.alias ?? <span className="text-text-dim">—</span>}</TableCell>
-                      <TableCell className="text-[12px] text-muted-foreground">
-                        {d.device_group ?? <span className="text-text-dim">—</span>}
+                    <TableRow key={d.id}>
+                      <TableCell className="font-mono text-xs">{d.rustdesk_id}</TableCell>
+                      <TableCell>{d.alias ?? "—"}</TableCell>
+                      <TableCell>
+                        {d.device_group ? (
+                          <Badge variant="secondary">{d.device_group}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
-                      <TableCell className="text-[12px] text-muted-foreground">
-                        {d.os ?? <span className="text-text-dim">—</span>}
+                      <TableCell className="text-xs text-muted-foreground">
+                        {d.os ?? "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-[11.5px] text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground">
                         {d.last_online
                           ? new Date(d.last_online).toLocaleString("pt-BR")
                           : "nunca"}
                       </TableCell>
                       {isSuper && (
-                        <TableCell className="text-[12px]">
-                          {d.tenants?.name ?? <span className="text-text-dim">—</span>}
+                        <TableCell className="text-xs">
+                          {d.tenants?.name ?? <span className="text-muted-foreground">—</span>}
                         </TableCell>
                       )}
                       <TableCell>
                         {d.is_active ? (
-                          <StatusDot tone="online">Ativo</StatusDot>
+                          <Badge>Ativo</Badge>
                         ) : (
-                          <StatusDot tone="neutral">Inativo</StatusDot>
+                          <Badge variant="secondary">Inativo</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -384,54 +390,52 @@ function DispositivosPage() {
                             variant="default"
                             disabled={connectingId === d.id || d.is_active === false}
                             onClick={() => handleConectar(d.id)}
-                            className="h-8"
                           >
-                            <Monitor className="h-3.5 w-3.5 mr-1.5" />
-                            {connectingId === d.id ? "Conectando…" : "Conectar"}
+                            <Monitor className="h-4 w-4 mr-2" />
+                            {connectingId === d.id ? "Conectando..." : "Conectar"}
                           </Button>
                           <Button
                             size="icon"
                             variant="ghost"
                             title="Editar"
-                            className="h-8 w-8"
                             onClick={() => setEditing(d)}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                          {podeInativar &&
-                            (d.is_active ? (
+                          {podeInativar && (
+                            d.is_active ? (
                               <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 text-danger hover:text-danger"
-                                title="Inativar"
+                                size="sm"
+                                variant="outline"
                                 onClick={() => setConfirmInativarId(d.id)}
                                 disabled={toggleAtivoMutation.isPending}
                               >
-                                <PowerOff className="h-3.5 w-3.5" />
+                                <PowerOff className="h-4 w-4 mr-1" />
+                                Inativar
                               </Button>
                             ) : (
                               <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                title="Reativar"
+                                size="sm"
+                                variant="outline"
                                 onClick={() =>
                                   toggleAtivoMutation.mutate({ id: d.id, ativar: true })
                                 }
                                 disabled={toggleAtivoMutation.isPending}
                               >
-                                <Power className="h-3.5 w-3.5" />
+                                <Power className="h-4 w-4 mr-1" />
+                                Reativar
                               </Button>
-                            ))}
+                            )
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
               </TableBody>
             </Table>
-        </div>
-      </section>
+          </div>
+        </CardContent>
+      </Card>
 
       {editing && (
         <EditarDispositivoDialog
