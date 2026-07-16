@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -14,6 +12,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Building2 } from "lucide-react";
 import { ProvisionTenantDialog } from "@/components/provision-tenant-dialog";
+import { PageHeader, SectionHeader } from "@/components/ui-shell/page-header";
+import { StatusDot } from "@/components/ui-shell/status-dot";
+import { EmptyState } from "@/components/ui-shell/empty-state";
 
 export const Route = createFileRoute("/_authenticated/empresas")({
   head: () => ({
@@ -59,52 +60,38 @@ function EmpresasPage() {
 
   if (me && !isSuper) {
     return (
-      <div className="p-6">
-        <Card className="border-border/60">
-          <CardHeader>
-            <CardTitle className="text-base">Empresas</CardTitle>
-            <CardDescription>Acesso restrito à equipe da plataforma.</CardDescription>
-          </CardHeader>
-        </Card>
+      <div className="px-6 py-6">
+        <PageHeader title="Empresas" description="Acesso restrito à equipe da plataforma." />
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Empresas</h1>
-          <p className="text-sm text-muted-foreground">
-            Empresas que utilizam o sistema.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {isSuper && <ProvisionTenantDialog />}
-        </div>
-      </div>
+    <div className="px-6 py-6 space-y-6">
+      <PageHeader
+        title="Empresas"
+        description="Empresas que utilizam o sistema."
+        actions={isSuper ? <ProvisionTenantDialog /> : null}
+      />
 
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-primary" />
-            Empresas cadastradas
-          </CardTitle>
-          <CardDescription>
-            {data ? `${data.length} empresa(s)` : "Carregando…"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-border/60 overflow-hidden">
+      <section className="space-y-3">
+        <SectionHeader
+          title="Empresas cadastradas"
+          count={data ? `${data.length}` : "…"}
+          hint={data ? "empresa(s)" : "carregando…"}
+        />
+
+        <div className="rounded-lg border border-border-subtle bg-surface overflow-hidden">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Membros</TableHead>
-                  <TableHead>Dispositivos</TableHead>
-                  <TableHead>Assentos</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criada em</TableHead>
+                <TableRow className="border-border-subtle hover:bg-transparent">
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Empresa</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Membros</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Dispositivos</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Assentos</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Status</TableHead>
+                  <TableHead className="h-9 text-[10.5px] uppercase tracking-[0.12em] text-text-dim">Criada em</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -120,8 +107,8 @@ function EmpresasPage() {
                   ))}
                 {!isLoading && (data?.length ?? 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
-                      Nenhuma empresa cadastrada ainda.
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState icon={Building2} title="Nenhuma empresa cadastrada ainda" />
                     </TableCell>
                   </TableRow>
                 )}
@@ -130,17 +117,19 @@ function EmpresasPage() {
                     const membros = t.profiles?.[0]?.count ?? 0;
                     const dispositivos = t.address_book?.[0]?.count ?? 0;
                     return (
-                      <TableRow key={t.id}>
-                        <TableCell className="font-medium">{t.name}</TableCell>
-                        <TableCell>{membros}</TableCell>
-                        <TableCell>{dispositivos}</TableCell>
-                        <TableCell>{t.seat_limit}</TableCell>
+                      <TableRow key={t.id} className="border-border-subtle h-12 hover:bg-surface-hover/50">
+                        <TableCell className="text-[13px] font-medium">{t.name}</TableCell>
+                        <TableCell className="tabular-nums font-mono text-[12px]">{membros}</TableCell>
+                        <TableCell className="tabular-nums font-mono text-[12px]">{dispositivos}</TableCell>
+                        <TableCell className="tabular-nums font-mono text-[12px]">{t.seat_limit}</TableCell>
                         <TableCell>
-                          <Badge variant={t.is_active ? "default" : "secondary"}>
-                            {t.is_active ? "ativa" : "inativa"}
-                          </Badge>
+                          {t.is_active ? (
+                            <StatusDot tone="online">ativa</StatusDot>
+                          ) : (
+                            <StatusDot tone="neutral">inativa</StatusDot>
+                          )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
+                        <TableCell className="font-mono text-[11.5px] text-muted-foreground">
                           {new Date(t.created_at).toLocaleDateString("pt-BR")}
                         </TableCell>
                       </TableRow>
@@ -149,8 +138,8 @@ function EmpresasPage() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }
