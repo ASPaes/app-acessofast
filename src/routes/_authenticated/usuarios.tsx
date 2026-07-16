@@ -3,8 +3,6 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -14,8 +12,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Send, UserX, UserCheck } from "lucide-react";
+import { UserPlus, Send, UserX, UserCheck, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/page-header";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -186,84 +186,68 @@ function UsuariosPage() {
 
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Usuários</h1>
-          <p className="text-sm text-muted-foreground">
-            Membros do painel. Convites e mudança de papel são operações do backend.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {me && (me.role === "super_admin" || (me.role === "admin" && me.tenant_id)) && (
+    <>
+      <PageHeader
+        title="Usuários"
+        subtitle="Membros do painel. Convites e mudança de papel são operações do backend."
+        actions={
+          me && (me.role === "super_admin" || (me.role === "admin" && me.tenant_id)) ? (
             <InviteMemberDialog role={me.role} tenantId={me.tenant_id} />
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            Membros
-          </CardTitle>
-          <CardDescription>
-            {data ? `${filteredData.length} usuário(s)` : "Carregando…"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {me?.role === "super_admin" && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="space-y-1.5 flex-1">
-                <Label htmlFor="filter-tenant" className="text-xs">
-                  Empresa
-                </Label>
-                <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                  <SelectTrigger id="filter-tenant">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as empresas</SelectItem>
-                    {tenants?.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 flex-1">
-                <Label htmlFor="filter-search" className="text-xs">
-                  Buscar por nome ou e-mail
-                </Label>
-                <Input
-                  id="filter-search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar por nome ou e-mail"
-                />
-              </div>
+      <div className="p-6 space-y-3">
+        {me?.role === "super_admin" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-72">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                id="filter-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome ou e-mail"
+                className="h-9 pl-8 text-[13px]"
+              />
             </div>
-          )}
-          <div className="rounded-md border border-border/60 overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Papel</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <Select value={tenantFilter} onValueChange={setTenantFilter}>
+              <SelectTrigger id="filter-tenant" className="w-56 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+                {tenants?.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+              {data ? `${filteredData.length} usuário(s)` : "carregando…"}
+            </span>
+          </div>
+        )}
+
+        <div className="rounded-md border border-border/60 bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-border/60">
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Nome</TableHead>
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">E-mail</TableHead>
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Empresa</TableHead>
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Papel</TableHead>
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground">Criado em</TableHead>
+                <TableHead className="h-9 text-[11px] uppercase tracking-wider text-muted-foreground text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
                 {isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
-                    <TableRow key={i}>
+                    <TableRow key={i} className="border-border/60">
                       {Array.from({ length: 7 }).map((_, j) => (
-                        <TableCell key={j}>
+                        <TableCell key={j} className="h-12">
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
                       ))}
@@ -278,29 +262,26 @@ function UsuariosPage() {
                 )}
                 {!isLoading &&
                   filteredData.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.full_name ?? "—"}</TableCell>
-                      <TableCell className="text-xs">{u.email ?? "—"}</TableCell>
-                      <TableCell>
-                        {u.tenant_id ? (
-                          <span className="text-xs">{u.tenants?.name ?? "—"}</span>
-                        ) : (
-                          <Badge variant="outline">Plataforma</Badge>
+                    <TableRow key={u.id} className="border-border/60 h-12">
+                      <TableCell className="text-[13px] font-medium">{u.full_name ?? "—"}</TableCell>
+                      <TableCell className="text-[12px] text-muted-foreground">{u.email ?? "—"}</TableCell>
+                      <TableCell className="text-[12px]">
+                        {u.tenant_id ? (u.tenants?.name ?? "—") : (
+                          <span className="text-muted-foreground">Plataforma</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-[12px]">{roleLabel[u.role] ?? u.role}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{roleLabel[u.role] ?? u.role}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={u.is_active ? "default" : "secondary"}>
+                        <span className="inline-flex items-center gap-1.5 text-[12px]">
+                          <span className={cn("h-1.5 w-1.5 rounded-full", u.is_active ? "bg-emerald-400" : "bg-muted-foreground/40")} />
                           {u.is_active ? "ativo" : "inativo"}
-                        </Badge>
+                        </span>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="font-mono text-[11px] text-muted-foreground">
                         {new Date(u.created_at).toLocaleDateString("pt-BR")}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           {canResend(u) && u.email && u.tenant_id && (
                             <ResendInviteButton
                               email={u.email}
@@ -313,7 +294,7 @@ function UsuariosPage() {
                             u.is_active ? (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="outline">
+                                  <Button size="sm" variant="ghost" className="h-7 text-[12px]">
                                     <UserX className="h-3.5 w-3.5 mr-1" />
                                     Desativar
                                   </Button>
@@ -338,7 +319,8 @@ function UsuariosPage() {
                             ) : (
                               <Button
                                 size="sm"
-                                variant="outline"
+                                variant="ghost"
+                                className="h-7 text-[12px]"
                                 onClick={() => toggleAtivoMutation.mutate({ id: u.id, ativar: true })}
                               >
                                 <UserCheck className="h-3.5 w-3.5 mr-1" />
@@ -351,12 +333,11 @@ function UsuariosPage() {
 
                     </TableRow>
                   ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -400,6 +381,7 @@ function ResendInviteButton({
     <Button
       size="sm"
       variant="ghost"
+      className="h-7 text-[12px]"
       disabled={mutation.isPending}
       onClick={() => mutation.mutate()}
     >
