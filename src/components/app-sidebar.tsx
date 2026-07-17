@@ -38,7 +38,7 @@ type NavItem = {
 };
 
 const operacao: NavItem[] = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Visão geral", url: "/dashboard", icon: LayoutDashboard },
   { title: "Dispositivos", url: "/dispositivos", icon: MonitorSmartphone },
   { title: "Auditoria", url: "/auditoria", icon: History },
 ];
@@ -83,14 +83,14 @@ export function AppSidebar() {
         <div className="flex items-center gap-2">
           <img
             src={acessofastLogo.url}
-            alt="Acessofast"
+            alt="AcessoFast"
             className="h-8 w-8 object-contain shrink-0"
           />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold">Acessofast</span>
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                ASP Softwares
+              <span className="text-sm font-semibold">AcessoFast</span>
+              <span className="text-[10px] tracking-[0.08em] text-muted-foreground">
+                acesso remoto
               </span>
             </div>
           )}
