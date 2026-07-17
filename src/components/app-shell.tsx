@@ -1,13 +1,28 @@
 import { type ReactNode } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
-import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
+
+const routeLabels: Record<string, string> = {
+  "/dashboard": "Visão geral",
+  "/dispositivos": "Dispositivos",
+  "/auditoria": "Auditoria",
+  "/usuarios": "Usuários",
+  "/monitoramento": "Monitoramento",
+  "/configuracoes": "Configurações",
+  "/empresas": "Empresas",
+};
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const current =
+    Object.entries(routeLabels).find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.[1] ??
+    "";
+
   const { data: me } = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
@@ -25,6 +40,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   });
 
+  const isSuper = me?.role === "super_admin";
+
   const { data: tenant } = useQuery({
     queryKey: ["tenant-name", me?.tenant_id],
     enabled: !!me?.tenant_id,
@@ -39,34 +56,31 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   });
 
-  const isSuper = me?.role === "super_admin";
   const scopeLabel = isSuper ? "Plataforma" : tenant?.name ?? "";
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "4rem" } as React.CSSProperties}>
       <div className="min-h-screen flex w-full bg-background text-foreground">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center gap-3 border-b border-border/60 bg-card/40 px-4 backdrop-blur">
-            <SidebarTrigger />
-            <div className="flex items-center gap-2">
-              <img src={acessofastLogo.url} alt="AcessoFast" className="h-6 w-6 object-contain" />
+          <header className="h-14 flex items-center gap-3 border-b border-border-subtle bg-background px-4">
+            <SidebarTrigger className="h-7 w-7 text-text-dim hover:text-foreground" />
+            <div className="h-4 w-px bg-border-subtle" aria-hidden />
+            <nav aria-label="Local" className="flex items-center gap-2 text-[13px] min-w-0">
               {scopeLabel && (
                 <>
-                  <span className="text-sm font-medium tracking-wide text-foreground">
-                    {scopeLabel}
-                  </span>
-                  <span className="text-xs text-muted-foreground">/</span>
+                  <span className="text-text-dim truncate">{scopeLabel}</span>
+                  <span className="text-text-dim shrink-0">/</span>
                 </>
               )}
-              <span className="text-xs text-muted-foreground">mission control</span>
-            </div>
+              <span className="font-medium text-foreground truncate">{current}</span>
+            </nav>
             <div className="ml-auto flex items-center gap-3">
               <HealthPill enabled={isSuper} />
               <UserMenu />
             </div>
           </header>
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main className="flex-1 overflow-auto bg-background">{children}</main>
         </div>
       </div>
     </SidebarProvider>
