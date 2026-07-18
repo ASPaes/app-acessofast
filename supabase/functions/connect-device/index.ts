@@ -10,8 +10,8 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Dogfood = client STOCK -> "rustdesk". O "acessofast://" nasce com o client branded (Fase 4).
-const DEEP_LINK_SCHEME = "rustdesk";
+// Cliente branded AcessoFast registra o scheme "acessofast://".
+const DEEP_LINK_SCHEME = "acessofast";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function json(body: unknown, status = 200) {
