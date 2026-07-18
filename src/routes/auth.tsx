@@ -84,7 +84,7 @@ function AuthPage() {
         </svg>
 
         <div className="relative flex items-center gap-4">
-          <img src={acessofastLogo.url} alt="Acessofast" className="h-24 w-24 object-contain" />
+          <img src={acessofastLogo.url} alt="Acessofast" className="h-44 w-44 object-contain" />
           <div className="leading-tight">
             <div className="text-2xl font-semibold">AcessoFast</div>
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
