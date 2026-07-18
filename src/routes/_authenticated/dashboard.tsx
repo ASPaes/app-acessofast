@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
@@ -11,6 +12,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Users,
   MonitorSmartphone,
@@ -36,6 +45,17 @@ type VpsMetric = {
   disk_pct: number | string | null;
   net_rx_bytes: number | string | null;
   net_tx_bytes: number | string | null;
+};
+
+type RecentDevice = {
+  id: string;
+  rustdesk_id: string | null;
+  alias: string | null;
+  device_group: string | null;
+  os: string | null;
+  last_online: string | null;
+  is_active: boolean | null;
+  tenants: { name: string | null } | null;
 };
 
 function Dashboard() {
@@ -104,6 +124,28 @@ function Dashboard() {
     },
   });
 
+  const recentDevices = useQuery({
+    queryKey: ["dashboard-recent-devices", me?.role, me?.tenant_id],
+    enabled: !!me,
+    queryFn: async () => {
+      const isSuper = me!.role === "super_admin";
+      if (!isSuper && !me!.tenant_id) {
+        throw new Error("Perfil sem empresa vinculada");
+      }
+      let query = supabase
+        .from("address_book")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, is_active, tenants(name)")
+        .order("created_at", { ascending: false })
+        .limit(6);
+      if (!isSuper) query = query.eq("tenant_id", me!.tenant_id as string);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as unknown as RecentDevice[];
+    },
+  });
+
+  const [realtimeOk, setRealtimeOk] = useState(false);
+
   useEffect(() => {
     const channel = supabase
       .channel("dashboard_vps_rt")
@@ -114,9 +156,12 @@ function Dashboard() {
           vpsMetrics.refetch();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeOk(status === "SUBSCRIBED");
+      });
 
     return () => {
+      setRealtimeOk(false);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -144,6 +189,12 @@ function Dashboard() {
       ? "Minhas sessões nas últimas 24h"
       : "Total nas últimas 24 horas";
 
+  const subtitulo = stats.data
+    ? isSuper
+      ? `Plataforma · ${stats.data.devices} dispositivos · ${stats.data.activeSessions} sessões ativas`
+      : `${stats.data.devices} dispositivos · ${stats.data.activeSessions} sessões ativas`
+    : "Carregando visão geral…";
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-baseline justify-between">
@@ -152,9 +203,7 @@ function Dashboard() {
             Dashboard
             {isSuper && <Badge variant="outline">Plataforma</Badge>}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Visão geral em tempo quase-real do seu ambiente.
-          </p>
+          <p className="text-sm text-muted-foreground">{subtitulo}</p>
         </div>
         <Badge variant="outline" className="gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
@@ -251,13 +300,84 @@ function Dashboard() {
             <CardDescription>Componentes essenciais</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <StatusRow label="API do painel" ok />
-            <StatusRow label="Banco (RLS)" ok />
+            <StatusRow label="API do painel" ok={!stats.isError} />
+            <StatusRow label="Banco (RLS)" ok={!stats.isError} />
             <StatusRow label="Coletor VPS" ok={ativo} note={ativo ? undefined : "sem amostras"} />
-            <StatusRow label="Realtime" ok />
+            <StatusRow label="Realtime" ok={realtimeOk} note={realtimeOk ? undefined : "conectando"} />
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Dispositivos recentes</CardTitle>
+            <CardDescription>
+              {isSuper ? "Últimos endpoints cadastrados na plataforma" : "Últimos endpoints cadastrados na sua empresa"}
+            </CardDescription>
+          </div>
+          <Link
+            to="/dispositivos"
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Ver todos
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {recentDevices.isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : !recentDevices.data || recentDevices.data.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              Nenhum dispositivo cadastrado.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>SO</TableHead>
+                  <TableHead>Grupo</TableHead>
+                  {isSuper && <TableHead>Empresa</TableHead>}
+                  <TableHead>Status</TableHead>
+                  <TableHead>Últ. online</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentDevices.data.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-medium">{d.alias ?? d.rustdesk_id ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{d.os ?? "—"}</TableCell>
+                    <TableCell>
+                      {d.device_group ? (
+                        <Badge variant="secondary">{d.device_group}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    {isSuper && (
+                      <TableCell className="text-muted-foreground">
+                        {d.tenants?.name ?? "—"}
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      <Badge variant={d.is_active ? "outline" : "secondary"}>
+                        {d.is_active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {d.last_online ? new Date(d.last_online).toLocaleString("pt-BR") : "nunca"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -277,19 +397,21 @@ function StatCard({
 }) {
   return (
     <Card className="border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between pb-3 space-y-0">
         <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
           {title}
         </CardTitle>
-        <Icon className="h-4 w-4 text-primary" />
+        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-1">
         {loading ? (
-          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-10 w-20" />
         ) : (
-          <div className="text-3xl font-semibold tabular-nums">{value ?? 0}</div>
+          <div className="text-4xl font-semibold tabular-nums tracking-tight">{value ?? 0}</div>
         )}
-        <p className="text-[11px] text-muted-foreground mt-1">{hint}</p>
+        <p className="text-[11px] text-muted-foreground mt-2">{hint}</p>
       </CardContent>
     </Card>
   );
@@ -305,10 +427,10 @@ function MetricPlaceholder({
   value?: string;
 }) {
   return (
-    <div className="rounded-md border border-dashed border-border/60 p-4 flex flex-col items-center justify-center text-center gap-2">
-      <Icon className="h-5 w-5 text-muted-foreground" />
+    <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
+      <Icon className="h-5 w-5 text-primary" />
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold text-muted-foreground/60 tabular-nums">{value ?? "—"}</div>
+      <div className="text-2xl font-semibold tabular-nums tracking-tight">{value ?? "—"}</div>
     </div>
   );
 }
