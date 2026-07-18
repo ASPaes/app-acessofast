@@ -29,6 +29,7 @@ import {
   HardDrive,
   Gauge,
   AlertTriangle,
+  Network,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -167,6 +168,19 @@ function Dashboard() {
   }, []);
 
   const latest = vpsMetrics.data?.[0] ?? null;
+  const previous = vpsMetrics.data?.[1] ?? null;
+
+  let netMbps: string | undefined = undefined;
+  if (latest && previous) {
+    const dt =
+      (new Date(latest.captured_at).getTime() -
+        new Date(previous.captured_at).getTime()) / 1000;
+    const bytes =
+      Number(latest.net_rx_bytes) - Number(previous.net_rx_bytes) +
+      (Number(latest.net_tx_bytes) - Number(previous.net_tx_bytes));
+    if (dt > 0) netMbps = ((bytes * 8) / dt / 1e6).toFixed(2) + " Mbps";
+  }
+
   const now = Date.now();
   const capturedAt = latest ? new Date(latest.captured_at).getTime() : null;
   const idadeSeg = capturedAt != null ? Math.floor((now - capturedAt) / 1000) : null;
@@ -265,9 +279,10 @@ function Dashboard() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-4">
+          <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {vpsMetrics.isLoading ? (
               <>
+                <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-24 w-full" />
@@ -289,6 +304,7 @@ function Dashboard() {
                   icon={HardDrive}
                   value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : undefined}
                 />
+                <MetricPlaceholder label="Rede" icon={Network} value={netMbps} />
               </>
             )}
           </CardContent>
