@@ -61,46 +61,25 @@ function AuthPage() {
   return (
     <div className="min-h-screen w-full grid lg:grid-cols-2 bg-background">
       <div className="hidden lg:flex relative flex-col justify-between p-12 bg-sidebar text-sidebar-foreground overflow-hidden">
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(1200px 600px at 15% 20%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 60%), radial-gradient(900px 500px at 85% 90%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 65%), linear-gradient(160deg, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%)",
-          }}
-          aria-hidden="true"
-        />
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
           viewBox="0 0 800 800"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <defs>
-            <linearGradient id="curveGrad" x1="0" y1="1" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0" />
-              <stop offset="50%" stopColor="var(--primary)" stopOpacity="0.7" />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
           <path
-            d="M-100 900 Q 150 620 420 740 T 900 460"
+            d="M-100 900 Q 150 650 400 750 T 900 500"
             fill="none"
-            stroke="url(#curveGrad)"
-            strokeWidth="2"
-          />
-          <path
-            d="M-100 780 Q 220 520 480 640 T 900 360"
-            fill="none"
-            stroke="url(#curveGrad)"
+            stroke="currentColor"
             strokeWidth="1.5"
-            opacity="0.6"
+            className="text-primary opacity-[0.15]"
           />
           <path
-            d="M-100 650 Q 260 420 520 540 T 900 260"
+            d="M-100 750 Q 200 550 450 650 T 900 400"
             fill="none"
-            stroke="url(#curveGrad)"
+            stroke="currentColor"
             strokeWidth="1"
-            opacity="0.35"
+            className="text-primary opacity-[0.10]"
           />
         </svg>
 
