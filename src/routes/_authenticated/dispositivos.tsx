@@ -355,7 +355,12 @@ function DispositivosPage() {
                   filtered.map((d) => (
                     <TableRow key={d.id}>
                       <TableCell className="font-mono text-xs">{d.rustdesk_id}</TableCell>
-                      <TableCell>{d.alias ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Monitor className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span>{d.alias ?? "—"}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {d.device_group ? (
                           <Badge variant="secondary">{d.device_group}</Badge>
