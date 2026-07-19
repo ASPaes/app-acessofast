@@ -519,38 +519,74 @@ export type Database = {
         Row: {
           active_sessions: number | null
           captured_at: string
+          cpu_iowait_pct: number | null
           cpu_pct: number | null
+          cpu_steal_pct: number | null
           disk_pct: number | null
+          disk_total_gb: number | null
+          disk_used_gb: number | null
           host: string
           id: string
+          load1: number | null
+          load15: number | null
+          load5: number | null
+          mem_available_mb: number | null
           mem_pct: number | null
+          mem_total_mb: number | null
+          ncpu: number | null
           net_rx_bytes: number | null
           net_tx_bytes: number | null
           relay_mbps: number | null
+          swap_used_mb: number | null
+          uptime_seconds: number | null
         }
         Insert: {
           active_sessions?: number | null
           captured_at?: string
+          cpu_iowait_pct?: number | null
           cpu_pct?: number | null
+          cpu_steal_pct?: number | null
           disk_pct?: number | null
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
           host?: string
           id?: string
+          load1?: number | null
+          load15?: number | null
+          load5?: number | null
+          mem_available_mb?: number | null
           mem_pct?: number | null
+          mem_total_mb?: number | null
+          ncpu?: number | null
           net_rx_bytes?: number | null
           net_tx_bytes?: number | null
           relay_mbps?: number | null
+          swap_used_mb?: number | null
+          uptime_seconds?: number | null
         }
         Update: {
           active_sessions?: number | null
           captured_at?: string
+          cpu_iowait_pct?: number | null
           cpu_pct?: number | null
+          cpu_steal_pct?: number | null
           disk_pct?: number | null
+          disk_total_gb?: number | null
+          disk_used_gb?: number | null
           host?: string
           id?: string
+          load1?: number | null
+          load15?: number | null
+          load5?: number | null
+          mem_available_mb?: number | null
           mem_pct?: number | null
+          mem_total_mb?: number | null
+          ncpu?: number | null
           net_rx_bytes?: number | null
           net_tx_bytes?: number | null
           relay_mbps?: number | null
+          swap_used_mb?: number | null
+          uptime_seconds?: number | null
         }
         Relationships: []
       }
