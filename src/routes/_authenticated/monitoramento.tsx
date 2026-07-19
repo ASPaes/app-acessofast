@@ -430,11 +430,14 @@ function MonitoramentoPage() {
     refetchInterval: 60000,
     queryFn: async () => {
       const { p_since, p_bucket } = rangeParams(range);
-      const { data, error } = await supabase.rpc("vps_metrics_series" as never, {
+      const { data, error } = await (supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>)("vps_metrics_series", {
         p_since,
         p_bucket,
       });
-      if (error) throw error;
+      if (error) throw error as Error;
       const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
       const points: VpsSeriesPoint[] = rows.map((r) => ({
         bucket: String(r.bucket),
