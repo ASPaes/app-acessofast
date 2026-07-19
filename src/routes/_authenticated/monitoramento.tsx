@@ -423,6 +423,45 @@ function MonitoramentoPage() {
   const memPctN = latest ? Number(latest.mem_pct) : NaN;
   const diskPctN = latest ? Number(latest.disk_pct) : NaN;
 
+  const [range, setRange] = useState<Range>("24h");
+  const series = useQuery({
+    queryKey: ["vps-series", range],
+    enabled: isSuper,
+    refetchInterval: 60000,
+    queryFn: async () => {
+      const { p_since, p_bucket } = rangeParams(range);
+      const { data, error } = await supabase.rpc("vps_metrics_series" as never, {
+        p_since,
+        p_bucket,
+      });
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+      const points: VpsSeriesPoint[] = rows.map((r) => ({
+        bucket: String(r.bucket),
+        amostras: Number(r.amostras),
+        cpu_avg: Number(r.cpu_avg),
+        cpu_max: Number(r.cpu_max),
+        load1_avg: Number(r.load1_avg),
+        load1_max: Number(r.load1_max),
+        steal_avg: Number(r.steal_avg),
+        steal_max: Number(r.steal_max),
+        mem_pct_max: Number(r.mem_pct_max),
+        mem_avail_min_mb: Number(r.mem_avail_min_mb),
+        disk_pct_max: Number(r.disk_pct_max),
+        net_avg_mbps: Number(r.net_avg_mbps),
+      }));
+      points.sort((a, b) => a.bucket.localeCompare(b.bucket));
+      return points;
+    },
+  });
+
+  const fmtTick = (iso: string) => {
+    const d = new Date(iso);
+    if (range === "24h")
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
