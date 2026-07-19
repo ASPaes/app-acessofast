@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
+import { ParticleBackground } from "@/components/ParticleBackground";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
