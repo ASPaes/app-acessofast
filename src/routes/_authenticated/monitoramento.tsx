@@ -12,7 +12,6 @@ import {
   Cpu,
   Gauge,
   HardDrive,
-  LineChart as LineChartIcon,
   MemoryStick,
   Network,
   Server,
