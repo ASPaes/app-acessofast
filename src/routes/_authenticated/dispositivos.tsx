@@ -62,6 +62,18 @@ type ProvisionResult = {
   error?: string;
 };
 
+type AdoptResult = {
+  device_id?: string;
+  rustdesk_id?: string;
+  password?: string;
+  was_inserted?: boolean;
+  password_provisioned?: boolean;
+  note?: string;
+  hostname?: string;
+  os?: string;
+  error?: string;
+};
+
 type ConnectResult = {
   rustdesk_id?: string;
   password?: string;
@@ -886,8 +898,6 @@ function AdicionarDispositivoDialog({
   const [open, setOpen] = useState(false);
   const [rustdeskId, setRustdeskId] = useState("");
   const [alias, setAlias] = useState("");
-  const [grupo, setGrupo] = useState("");
-  const [so, setSo] = useState("");
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -910,8 +920,6 @@ function AdicionarDispositivoDialog({
   const resetForm = () => {
     setRustdeskId("");
     setAlias("");
-    setGrupo("");
-    setSo("");
     setTenantSelecionado("");
     setSenhaGerada(null);
     setCopiado(false);
@@ -925,35 +933,44 @@ function AdicionarDispositivoDialog({
       const body: Record<string, unknown> = {
         rustdesk_id: normalizado,
         alias: alias.trim() || null,
-        device_group: grupo.trim() || null,
-        os: so.trim() || null,
       };
       if (isSuper) {
         if (!tenantSelecionado) throw new Error("Selecione um tenant");
         body.tenant_id = tenantSelecionado;
       }
 
-      const { data, error } = await supabase.functions.invoke<ProvisionResult>(
-        "register-device",
+      const { data, error } = await supabase.functions.invoke<AdoptResult>(
+        "adopt-device",
         { body },
       );
 
       if (error || data?.error) {
         const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
-        if (raw.includes("device_already_registered")) {
-          throw new Error("Este dispositivo (Rustdesk ID) já está cadastrado neste tenant.");
+        if (raw.includes("no_pending_claim")) {
+          throw new Error(
+            "Esse computador ainda não apareceu aqui. Confirme que o cliente instalou o AcessoFast e está online, depois leia o ID de novo.",
+          );
         }
         if (raw.includes("rustdesk_id_invalido")) {
           throw new Error("Rustdesk ID inválido — informe de 6 a 12 dígitos.");
         }
-        throw new Error(raw || "Falha ao cadastrar dispositivo");
+        throw new Error(raw || "Falha ao adotar dispositivo");
       }
-      return { password: data?.password ?? "" };
+      return data ?? {};
     },
-    onSuccess: (result) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
-      toast.success("Dispositivo cadastrado");
-      setSenhaGerada(result.password);
+      if (data.was_inserted && data.password_provisioned && data.password) {
+        setSenhaGerada(data.password);
+        return;
+      }
+      if (data.was_inserted) {
+        toast.success(data.note ?? "Computador adotado");
+      } else {
+        toast.success("Computador reconectado — já estava cadastrado, agente atualizado.");
+      }
+      setOpen(false);
+      resetForm();
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1019,7 +1036,9 @@ function AdicionarDispositivoDialog({
             <DialogHeader>
               <DialogTitle>Adicionar dispositivo</DialogTitle>
               <DialogDescription>
-                Cadastre um endpoint RustDesk. Uma senha permanente será gerada automaticamente.
+                Digite o ID que aparece no AcessoFast do computador do cliente. O computador
+                precisa ter o AcessoFast instalado e estar online — o ID aparece na tela do
+                programa.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -1039,18 +1058,6 @@ function AdicionarDispositivoDialog({
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dev-grupo">Grupo</Label>
-                <Input
-                  id="dev-grupo"
-                  value={grupo}
-                  onChange={(e) => setGrupo(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dev-so">SO</Label>
-                <Input id="dev-so" value={so} onChange={(e) => setSo(e.target.value)} />
               </div>
               {isSuper && (
                 <div className="space-y-2">
