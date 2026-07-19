@@ -900,7 +900,8 @@ function MonitoramentoPage() {
               </div>
 
               {series.isLoading ? (
-                <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                  <Skeleton className="h-[240px] w-full" />
                   <Skeleton className="h-[240px] w-full" />
                   <Skeleton className="h-[240px] w-full" />
                   <Skeleton className="h-[240px] w-full" />
@@ -1052,6 +1053,39 @@ function MonitoramentoPage() {
                         stroke="hsl(160 84% 45%)"
                         strokeWidth={2}
                         dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Disco (%)"
+                    icon={<HardDrive className="h-4 w-4 text-amber-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="disk_pct_max"
+                        name="Disco %"
+                        stroke="hsl(38 92% 55%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <ReferenceLine
+                        y={85}
+                        strokeDasharray="4 4"
+                        stroke="hsl(0 84% 60%)"
+                        label={{ value: "atenção", fontSize: 10, fill: "hsl(0 84% 60%)" }}
                       />
                     </LineChart>
                   </TrendCard>
