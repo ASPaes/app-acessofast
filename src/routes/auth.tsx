@@ -199,6 +199,7 @@ function AuthPage() {
         </Card>
       </div>
     </div>
+  </div>
   );
 }
 
