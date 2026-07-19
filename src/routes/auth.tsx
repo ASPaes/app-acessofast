@@ -64,34 +64,34 @@ function AuthPage() {
     <div className="relative min-h-screen w-full bg-background">
       <ParticleBackground />
       <div className="relative z-10 grid min-h-screen w-full lg:grid-cols-2">
-
-        <div className="relative flex items-center gap-4">
-          <img src={acessofastLogo.url} alt="Acessofast" className="h-44 w-44 object-contain" />
-          <div className="leading-tight">
-            <div className="text-2xl font-semibold">AcessoFast</div>
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">
-              ASP SOFTWARES
+        <div className="hidden lg:flex relative flex-col justify-between p-12 text-sidebar-foreground overflow-hidden">
+          <div className="relative flex items-center gap-4">
+            <img src={acessofastLogo.url} alt="Acessofast" className="h-44 w-44 object-contain" />
+            <div className="leading-tight">
+              <div className="text-2xl font-semibold">AcessoFast</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">
+                ASP SOFTWARES
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="relative space-y-4 max-w-md">
-          <h1 className="text-4xl lg:text-5xl font-semibold tracking-tight text-white">
-            Acesso remoto. Simples e seguro.
-          </h1>
-          <p className="text-muted-foreground">
-            Gerencie dispositivos e acompanhe sessões em um único lugar.
-          </p>
-          <div className="flex items-center gap-2 pt-6">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-sm text-muted-foreground">Sistema operacional</span>
+          <div className="relative space-y-4 max-w-md">
+            <h1 className="text-4xl lg:text-5xl font-semibold tracking-tight text-white">
+              Acesso remoto. Simples e seguro.
+            </h1>
+            <p className="text-muted-foreground">
+              Gerencie dispositivos e acompanhe sessões em um único lugar.
+            </p>
+            <div className="flex items-center gap-2 pt-6">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-sm text-muted-foreground">Sistema operacional</span>
+            </div>
+          </div>
+
+          <div className="relative text-[11px] text-muted-foreground">
+            © {new Date().getFullYear()} ASP Softwares
           </div>
         </div>
-
-        <div className="relative text-[11px] text-muted-foreground">
-          © {new Date().getFullYear()} ASP Softwares
-        </div>
-      </div>
 
       <div className="flex items-center justify-center p-6">
         <Card className="w-full max-w-md border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
