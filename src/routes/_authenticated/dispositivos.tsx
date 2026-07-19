@@ -263,6 +263,24 @@ function DispositivosPage() {
     });
   }, [data, q, showInativos, isSuper, tenantFilter]);
 
+  const escopoContagem = useMemo(() => {
+    const base = data ?? [];
+    return isSuper && tenantFilter !== "all"
+      ? base.filter((d) => d.tenant_id === tenantFilter)
+      : base;
+  }, [data, isSuper, tenantFilter]);
+
+  const contagem = useMemo(() => {
+    let online = 0, offline = 0, atendimento = 0;
+    for (const d of escopoContagem) {
+      if (d.is_active === false) continue;
+      if (sessoesAtivas?.has(d.id)) atendimento++;
+      else if (dispositivosOnline?.has(d.id)) online++;
+      else offline++;
+    }
+    return { online, offline, atendimento };
+  }, [escopoContagem, sessoesAtivas, dispositivosOnline]);
+
   const toggleAtivoMutation = useMutation({
     mutationFn: async (vars: { id: string; ativar: boolean }) => {
       const { error } = await supabase.rpc("set_device_active", {
@@ -290,6 +308,26 @@ function DispositivosPage() {
           Endpoints RustDesk cadastrados no address book do seu tenant.
         </p>
       </div>
+
+      <Card className="border-border/60">
+        <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-lg font-semibold tabular-nums">{contagem.online}</span>
+            <span className="text-sm text-muted-foreground">online</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            <span className="text-lg font-semibold tabular-nums">{contagem.atendimento}</span>
+            <span className="text-sm text-muted-foreground">em atendimento</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+            <span className="text-lg font-semibold tabular-nums">{contagem.offline}</span>
+            <span className="text-sm text-muted-foreground">offline</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
