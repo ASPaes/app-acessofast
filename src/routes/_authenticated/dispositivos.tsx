@@ -263,6 +263,24 @@ function DispositivosPage() {
     });
   }, [data, q, showInativos, isSuper, tenantFilter]);
 
+  const escopoContagem = useMemo(() => {
+    const base = data ?? [];
+    return isSuper && tenantFilter !== "all"
+      ? base.filter((d) => d.tenant_id === tenantFilter)
+      : base;
+  }, [data, isSuper, tenantFilter]);
+
+  const contagem = useMemo(() => {
+    let online = 0, offline = 0, atendimento = 0;
+    for (const d of escopoContagem) {
+      if (d.is_active === false) continue;
+      if (sessoesAtivas?.has(d.id)) atendimento++;
+      else if (dispositivosOnline?.has(d.id)) online++;
+      else offline++;
+    }
+    return { online, offline, atendimento };
+  }, [escopoContagem, sessoesAtivas, dispositivosOnline]);
+
   const toggleAtivoMutation = useMutation({
     mutationFn: async (vars: { id: string; ativar: boolean }) => {
       const { error } = await supabase.rpc("set_device_active", {
