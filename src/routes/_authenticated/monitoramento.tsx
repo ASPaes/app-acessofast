@@ -865,9 +865,224 @@ function MonitoramentoPage() {
               </CardContent>
             </Card>
           )}
+
+          {show("vps_trend") && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold tracking-tight flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Tendência de capacidade
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Séries agregadas do relay compartilhado.
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  {(["24h", "7d", "30d"] as Range[]).map((r) => (
+                    <Button
+                      key={r}
+                      size="sm"
+                      variant={range === r ? "secondary" : "outline"}
+                      onClick={() => setRange(r)}
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {series.isLoading ? (
+                <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                  <Skeleton className="h-[240px] w-full" />
+                  <Skeleton className="h-[240px] w-full" />
+                  <Skeleton className="h-[240px] w-full" />
+                  <Skeleton className="h-[240px] w-full" />
+                </div>
+              ) : !series.data || series.data.length === 0 ? (
+                <Card className="border-border/60">
+                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                    Sem dados no período.
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                  <TrendCard
+                    title="CPU & Steal (%)"
+                    icon={<Cpu className="h-4 w-4 text-sky-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, "auto"]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cpu_avg"
+                        name="CPU méd"
+                        stroke="hsl(200 90% 55%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cpu_max"
+                        name="CPU máx"
+                        stroke="hsl(200 90% 70%)"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="steal_avg"
+                        name="Steal"
+                        stroke="hsl(38 92% 55%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Load average"
+                    icon={<Gauge className="h-4 w-4 text-violet-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, "auto"]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="load1_avg"
+                        name="méd"
+                        stroke="hsl(262 83% 65%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="load1_max"
+                        name="máx"
+                        stroke="hsl(262 83% 78%)"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                      {isFinite(ncpuN) && ncpuN > 0 && (
+                        <ReferenceLine
+                          y={ncpuN}
+                          stroke="hsl(38 92% 55%)"
+                          strokeDasharray="4 4"
+                          label={{ value: "saturação", fontSize: 10, fill: "hsl(38 92% 55%)" }}
+                        />
+                      )}
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Memória (%)"
+                    icon={<MemoryStick className="h-4 w-4 text-violet-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="mem_pct_max"
+                        name="RAM %"
+                        stroke="hsl(262 83% 65%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Rede/Relay (Mbps)"
+                    icon={<Network className="h-4 w-4 text-emerald-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, "auto"]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="net_avg_mbps"
+                        name="Mbps"
+                        stroke="hsl(160 84% 45%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
+  );
+}
+
+function TrendCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactElement;
+}) {
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            {children}
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
