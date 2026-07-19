@@ -449,18 +449,27 @@ function StatCard({
   );
 }
 
+const METRIC_COLORS = {
+  sky: "text-sky-400",
+  violet: "text-violet-400",
+  amber: "text-amber-400",
+  emerald: "text-emerald-400",
+} as const;
+
 function MetricPlaceholder({
   label,
   icon: Icon,
   value,
+  color = "sky",
 }: {
   label: string;
   icon: typeof Cpu;
   value?: string;
+  color?: keyof typeof METRIC_COLORS;
 }) {
   return (
     <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
-      <Icon className="h-5 w-5 text-primary" />
+      <Icon className={`h-5 w-5 animate-pulse ${METRIC_COLORS[color]}`} />
       <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="text-2xl font-semibold tabular-nums tracking-tight">{value ?? "—"}</div>
     </div>
