@@ -455,6 +455,7 @@ function DispositivosPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {viewMode === "list" ? (
           <div className="rounded-md border border-border/60 overflow-hidden">
             <Table>
               <TableHeader>
