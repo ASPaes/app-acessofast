@@ -625,6 +625,11 @@ function DispositivosPage() {
               </TableBody>
             </Table>
           </div>
+          ) : (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Modo grade — em construção
+            </div>
+          )}
         </CardContent>
       </Card>
 
