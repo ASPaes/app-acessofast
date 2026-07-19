@@ -72,7 +72,7 @@ function AuthPage() {
         }}
       />
       <ParticleBackground />
-      <div className="relative z-10 mx-auto grid min-h-screen w-full max-w-7xl lg:grid-cols-2">
+      <div className="relative z-10 grid min-h-screen w-full lg:grid-cols-2">
         <div className="hidden lg:flex relative flex-col justify-between p-12 text-sidebar-foreground overflow-hidden">
           <div className="relative flex items-center gap-5">
             <img src={acessofastLogo.url} alt="Acessofast" className="h-24 w-24 object-contain" />
@@ -84,7 +84,7 @@ function AuthPage() {
             </div>
           </div>
 
-          <div className="relative space-y-4 max-w-md">
+          <div className="relative space-y-6 max-w-2xl">
             <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight text-white">
               Acesso remoto. Simples e seguro.
             </h1>
