@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import {
   Activity,
+  Boxes,
   Clock,
   Cpu,
   Gauge,
@@ -75,6 +76,8 @@ type VpsMetric = {
   disk_total_gb: number | string | null;
   uptime_seconds: number | string | null;
   active_sessions: number | string | null;
+  hbbs_up: boolean | null;
+  hbbr_up: boolean | null;
 };
 
 type AgentHealth = {
@@ -179,6 +182,7 @@ const PANEL_GROUPS = [
   { id: "agentes", label: "Agentes", scope: "secao" as const },
   { id: "sessoes", label: "Sessões", scope: "secao" as const },
   { id: "externos", label: "Acessos externos", scope: "secao" as const },
+  { id: "vps_containers", label: "Containers", scope: "vps" as const },
   { id: "vps_cpu", label: "CPU & Load", scope: "vps" as const },
   { id: "vps_mem", label: "Memória", scope: "vps" as const },
   { id: "vps_disco", label: "Disco", scope: "vps" as const },
@@ -216,7 +220,7 @@ function MonitoramentoPage() {
       const { data, error } = await supabase
         .from("vps_metrics")
         .select(
-          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds,active_sessions",
+          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds,active_sessions,hbbs_up,hbbr_up",
         )
         .order("captured_at", { ascending: false })
         .limit(2);
