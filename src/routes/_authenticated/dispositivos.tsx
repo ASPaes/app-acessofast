@@ -105,6 +105,7 @@ function DispositivosPage() {
   const [q, setQ] = useState("");
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [showInativos, setShowInativos] = useState(false);
+  const [soFavoritos, setSoFavoritos] = useState(false);
   const [editing, setEditing] = useState<AddressBookRow | null>(null);
   const [confirmInativarId, setConfirmInativarId] = useState<string | null>(null);
   const queryClient = useQueryClient();
