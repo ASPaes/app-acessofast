@@ -625,9 +625,149 @@ function DispositivosPage() {
               </TableBody>
             </Table>
           </div>
+          ) : isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-56 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-10 text-center">
+              Nenhum dispositivo encontrado.
+            </p>
           ) : (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              Modo grade — em construção
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filtered.map((d) => {
+                const status =
+                  d.is_active === false
+                    ? "inativo"
+                    : sessoesAtivas?.has(d.id)
+                      ? "atendimento"
+                      : dispositivosOnline?.has(d.id)
+                        ? "online"
+                        : "offline";
+                const iconColor =
+                  status === "atendimento"
+                    ? "text-amber-500"
+                    : status === "online"
+                      ? "text-emerald-500"
+                      : "text-muted-foreground/40";
+                return (
+                  <div key={d.id} className="rounded-lg border border-border/60 bg-muted/20 p-4 flex flex-col gap-3">
+                    <div className="flex items-start justify-between">
+                      <div className={`h-9 w-9 rounded-lg bg-muted/40 flex items-center justify-center ${iconColor}`}>
+                        <Monitor className="h-5 w-5" />
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title={favoritos?.has(d.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                        onClick={() => toggleFavoritoMutation.mutate({ deviceId: d.id, favoritar: !favoritos?.has(d.id) })}
+                      >
+                        <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                      </Button>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium truncate">{d.alias ?? "—"}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      {status === "inativo" ? (
+                        <Badge variant="secondary">Inativo</Badge>
+                      ) : status === "atendimento" ? (
+                        <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          Em atendimento
+                        </Badge>
+                      ) : status === "online" ? (
+                        <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Online
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                          Offline
+                        </Badge>
+                      )}
+                      {d.device_group && <Badge variant="secondary">{d.device_group}</Badge>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs border-t border-border/60 pt-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">SO</span>
+                        <span className="text-muted-foreground">{d.os ?? "—"}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Últ. online</span>
+                        <span className="text-muted-foreground tabular-nums">
+                          {d.last_online ? new Date(d.last_online).toLocaleString("pt-BR") : "nunca"}
+                        </span>
+                      </div>
+                      {isSuper && (
+                        <div className="flex flex-col col-span-2">
+                          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Empresa</span>
+                          <span className="text-muted-foreground">{d.tenants?.name ?? "—"}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 pt-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="flex-1"
+                        disabled={connectingId === d.id || d.is_active === false}
+                        onClick={() => handleConectar(d.id)}
+                      >
+                        <Monitor className="h-4 w-4 mr-2" />
+                        {connectingId === d.id ? "Conectando..." : "Conectar"}
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" title="Mais ações">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              navigator.clipboard.writeText(d.rustdesk_id);
+                              toast.success("ID copiado");
+                            }}
+                          >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copiar ID
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditing(d)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          {podeInativar && <DropdownMenuSeparator />}
+                          {podeInativar &&
+                            (d.is_active ? (
+                              <DropdownMenuItem
+                                onClick={() => setConfirmInativarId(d.id)}
+                                disabled={toggleAtivoMutation.isPending}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <PowerOff className="h-4 w-4 mr-2" />
+                                Inativar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => toggleAtivoMutation.mutate({ id: d.id, ativar: true })}
+                                disabled={toggleAtivoMutation.isPending}
+                              >
+                                <Power className="h-4 w-4 mr-2" />
+                                Reativar
+                              </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
