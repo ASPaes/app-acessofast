@@ -396,8 +396,28 @@ function MonitoramentoPage() {
         </p>
       </div>
 
+      {availableGroups.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {availableGroups.map((g) => {
+            const on = show(g.id);
+            return (
+              <Button
+                key={g.id}
+                size="sm"
+                variant={on ? "secondary" : "outline"}
+                className={on ? undefined : "opacity-60"}
+                onClick={() => toggleHidden(g.id)}
+              >
+                {g.label}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
       {canSecao && (
         <div className="space-y-6">
+          {show("agentes") && (
           <Card className="border-border/60">
             <CardHeader>
               <CardTitle className="text-base">Saúde dos agentes</CardTitle>
@@ -480,7 +500,9 @@ function MonitoramentoPage() {
               )}
             </CardContent>
           </Card>
+          )}
 
+          {show("sessoes") && (
           <Card className="border-border/60">
             <CardHeader>
               <CardTitle className="text-base">Resumo de sessões (por dia)</CardTitle>
@@ -537,7 +559,9 @@ function MonitoramentoPage() {
               )}
             </CardContent>
           </Card>
+          )}
 
+          {show("externos") && (
           <Card className="border-amber-500/40 bg-amber-500/[0.02]">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -596,6 +620,7 @@ function MonitoramentoPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       )}
 
