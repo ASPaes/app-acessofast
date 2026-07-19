@@ -6,10 +6,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Activity, Cpu, Gauge, HardDrive, Network, ShieldAlert } from "lucide-react";
+import {
+  Activity,
+  Clock,
+  Cpu,
+  Gauge,
+  HardDrive,
+  MemoryStick,
+  Network,
+  Server,
+  ShieldAlert,
+  Zap,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -36,6 +49,19 @@ type VpsMetric = {
   disk_pct: number | string;
   net_rx_bytes: number | string;
   net_tx_bytes: number | string;
+  host: string | null;
+  ncpu: number | string | null;
+  cpu_iowait_pct: number | string | null;
+  cpu_steal_pct: number | string | null;
+  load1: number | string | null;
+  load5: number | string | null;
+  load15: number | string | null;
+  mem_total_mb: number | string | null;
+  mem_available_mb: number | string | null;
+  swap_used_mb: number | string | null;
+  disk_used_gb: number | string | null;
+  disk_total_gb: number | string | null;
+  uptime_seconds: number | string | null;
 };
 
 type AgentHealth = {
