@@ -86,7 +86,9 @@ function AuthPage() {
 
           <div className="relative space-y-6 max-w-2xl">
             <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight text-white">
-              Acesso remoto. Simples e seguro.
+              Acesso remoto.
+              <br />
+              Simples e seguro.
             </h1>
             <p className="text-lg text-muted-foreground">
               Gerencie dispositivos e acompanhe sessões em um único lugar.
@@ -103,13 +105,13 @@ function AuthPage() {
         </div>
 
       <div className="flex items-center justify-center p-6">
-        <Card className="w-full max-w-md border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
-          <CardContent className="space-y-6 p-6">
+        <Card className="w-full max-w-lg border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
+          <CardContent className="space-y-6 p-8">
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-widest text-primary">
               ÁREA ADMINISTRATIVA
             </div>
-            <h2 className="text-3xl font-semibold">Bem-vindo de volta</h2>
+            <h2 className="text-4xl font-semibold">Bem-vindo de volta</h2>
             <p className="text-sm text-muted-foreground">
               Entre com suas credenciais para acessar o painel.
             </p>
@@ -132,7 +134,7 @@ function AuthPage() {
                 placeholder="nome@empresa.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-11"
+                className="h-12"
               />
             </div>
 
@@ -147,7 +149,7 @@ function AuthPage() {
                   placeholder="Digite sua senha"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 pr-10"
+                  className="h-12 pr-12"
                 />
                 <button
                   type="button"
@@ -188,7 +190,7 @@ function AuthPage() {
               </button>
             </div>
 
-            <Button type="submit" className="w-full h-11" disabled={loading}>
+            <Button type="submit" className="w-full h-12" disabled={loading}>
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
