@@ -631,48 +631,191 @@ function MonitoramentoPage() {
             <p className="text-sm text-muted-foreground">Relay compartilhado.</p>
           </div>
 
-          {isLoading ? (
-        <Skeleton className="h-6 w-64" />
-      ) : isActive ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
-          <span>Coletor ativo · última amostra há {ageSec}s</span>
-        </div>
-      ) : (
-        <Alert>
-          <AlertTitle>Sem amostras recentes</AlertTitle>
-          <AlertDescription>
-            {latest
-              ? `A última amostra foi há ${ageSec}s. Verifique o agente na VPS.`
-              : "Nenhuma amostra encontrada em vps_metrics."}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {cards.map(({ label, icon: Icon, value }) => (
-          <Card key={label} className="border-dashed border-border/60">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
-                {label}
-              </CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-9 w-24" />
-              ) : (
-                <div className="text-3xl font-semibold tabular-nums">{value}</div>
-              )}
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {latest ? "atualizado agora" : "sem amostras"}
-              </p>
+          <Card className="border-border/60">
+            <CardContent className="py-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Server className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{latest?.host ?? "—"}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span className="tabular-nums">uptime {fmtUptime(latest?.uptime_seconds)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Cpu className="h-4 w-4" />
+                <span className="tabular-nums">
+                  {isFinite(ncpuN) ? `${ncpuN} vCPU` : "— vCPU"}
+                </span>
+              </div>
+              <div className="ml-auto">
+                {isLoading ? (
+                  <Skeleton className="h-5 w-48" />
+                ) : isActive ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+                      aria-hidden
+                    />
+                    <span>Coletor ativo · há {ageSec}s</span>
+                  </div>
+                ) : (
+                  <Badge variant="outline" className="text-amber-500 border-amber-500/40">
+                    coletor parado
+                  </Badge>
+                )}
+              </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+
+          {!isActive && !isLoading && (
+            <Alert>
+              <AlertTitle>Sem amostras recentes</AlertTitle>
+              <AlertDescription>
+                {latest
+                  ? `A última amostra foi há ${ageSec}s. Verifique o agente na VPS.`
+                  : "Nenhuma amostra encontrada em vps_metrics."}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {show("vps_cpu") && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-sky-500" /> CPU & Load
+                </CardTitle>
+                <CardDescription>Uso de CPU, I/O wait, steal e load average.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                <VpsStat label="CPU" value={latest ? num(latest.cpu_pct, 1) + "%" : "—"} />
+                <VpsStat
+                  label="I/O wait"
+                  value={latest ? num(latest.cpu_iowait_pct, 1) + "%" : "—"}
+                />
+                <VpsStat
+                  label="Steal"
+                  value={latest ? num(latest.cpu_steal_pct, 1) + "%" : "—"}
+                  warn={isFinite(stealN) && stealN > 5}
+                />
+                <VpsStat
+                  label="Load 1 / 5 / 15"
+                  value={
+                    latest
+                      ? `${num(latest.load1, 2)} / ${num(latest.load5, 2)} / ${num(latest.load15, 2)}`
+                      : "—"
+                  }
+                  sub={isFinite(ncpuN) ? `de ${ncpuN} vCPU` : undefined}
+                  warn={isFinite(load1N) && isFinite(ncpuN) && load1N > ncpuN}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {show("vps_mem") && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MemoryStick className="h-4 w-4 text-violet-500" /> Memória
+                </CardTitle>
+                <CardDescription>RAM em uso e swap.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">RAM</span>
+                    <span className="text-sm tabular-nums font-medium">
+                      {isFinite(memUsedGb) && isFinite(memTotalGb)
+                        ? `${memUsedGb.toFixed(2)} / ${memTotalGb.toFixed(2)} GB`
+                        : "—"}{" "}
+                      · {latest ? num(latest.mem_pct, 1) + "%" : "—"}
+                    </span>
+                  </div>
+                  <Progress value={isFinite(memPctN) ? memPctN : 0} />
+                </div>
+                <div className="grid gap-4 grid-cols-2">
+                  <VpsStat
+                    label="Disponível"
+                    value={isFinite(memAvailGb) ? `${memAvailGb.toFixed(2)} GB` : "—"}
+                  />
+                  <VpsStat
+                    label="Swap em uso"
+                    value={latest?.swap_used_mb != null ? `${num(latest.swap_used_mb, 0)} MB` : "—"}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {show("vps_disco") && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <HardDrive className="h-4 w-4 text-amber-500" /> Disco
+                </CardTitle>
+                <CardDescription>Uso do volume principal.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Volume</span>
+                  <span className="text-sm tabular-nums font-medium">
+                    {latest?.disk_used_gb != null && latest?.disk_total_gb != null
+                      ? `${num(latest.disk_used_gb, 1)} / ${num(latest.disk_total_gb, 1)} GB`
+                      : "—"}{" "}
+                    · {latest ? num(latest.disk_pct, 0) + "%" : "—"}
+                  </span>
+                </div>
+                <Progress value={isFinite(diskPctN) ? diskPctN : 0} />
+              </CardContent>
+            </Card>
+          )}
+
+          {show("vps_rede") && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Network className="h-4 w-4 text-emerald-500" /> Rede (eth0 = relay)
+                </CardTitle>
+                <CardDescription>Taxa derivada das duas últimas amostras.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 grid-cols-3">
+                <VpsStat label="Total" value={netMbps} icon={Zap} />
+                <VpsStat label="RX" value={netRxMbps} />
+                <VpsStat label="TX" value={netTxMbps} />
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+function VpsStat({
+  label,
+  value,
+  sub,
+  warn,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  warn?: boolean;
+  icon?: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div
+      className={
+        "rounded-md border p-3 " +
+        (warn ? "border-amber-500/40 bg-amber-500/[0.04]" : "border-border/60")
+      }
+    >
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
+        {Icon ? <Icon className="h-3 w-3" /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+      {sub ? <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div> : null}
     </div>
   );
 }
