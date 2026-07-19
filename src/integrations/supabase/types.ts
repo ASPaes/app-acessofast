@@ -525,6 +525,8 @@ export type Database = {
           disk_pct: number | null
           disk_total_gb: number | null
           disk_used_gb: number | null
+          hbbr_up: boolean | null
+          hbbs_up: boolean | null
           host: string
           id: string
           load1: number | null
@@ -549,6 +551,8 @@ export type Database = {
           disk_pct?: number | null
           disk_total_gb?: number | null
           disk_used_gb?: number | null
+          hbbr_up?: boolean | null
+          hbbs_up?: boolean | null
           host?: string
           id?: string
           load1?: number | null
@@ -573,6 +577,8 @@ export type Database = {
           disk_pct?: number | null
           disk_total_gb?: number | null
           disk_used_gb?: number | null
+          hbbr_up?: boolean | null
+          hbbs_up?: boolean | null
           host?: string
           id?: string
           load1?: number | null
