@@ -14,6 +14,7 @@ import {
   HardDrive,
   MemoryStick,
   Network,
+  Radio,
   Server,
   ShieldAlert,
   TrendingUp,
@@ -73,6 +74,7 @@ type VpsMetric = {
   disk_used_gb: number | string | null;
   disk_total_gb: number | string | null;
   uptime_seconds: number | string | null;
+  active_sessions: number | string | null;
 };
 
 type AgentHealth = {
@@ -214,7 +216,7 @@ function MonitoramentoPage() {
       const { data, error } = await supabase
         .from("vps_metrics")
         .select(
-          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds",
+          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds,active_sessions",
         )
         .order("captured_at", { ascending: false })
         .limit(2);
@@ -725,6 +727,12 @@ function MonitoramentoPage() {
                 <Cpu className="h-4 w-4" />
                 <span className="tabular-nums">
                   {isFinite(ncpuN) ? `${ncpuN} vCPU` : "— vCPU"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Radio className="h-4 w-4" />
+                <span className="tabular-nums">
+                  {Number(latest?.active_sessions ?? 0)} sessões ativas
                 </span>
               </div>
               <div className="ml-auto">
