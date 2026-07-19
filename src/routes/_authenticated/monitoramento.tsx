@@ -12,10 +12,12 @@ import {
   Cpu,
   Gauge,
   HardDrive,
+  LineChart as LineChartIcon,
   MemoryStick,
   Network,
   Server,
   ShieldAlert,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +36,16 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 export const Route = createFileRoute("/_authenticated/monitoramento")({
   head: () => ({
@@ -108,6 +120,32 @@ type DeviceRef = {
   tenants?: { name: string | null } | null;
 };
 
+type VpsSeriesPoint = {
+  bucket: string;
+  amostras: number;
+  cpu_avg: number;
+  cpu_max: number;
+  load1_avg: number;
+  load1_max: number;
+  steal_avg: number;
+  steal_max: number;
+  mem_pct_max: number;
+  mem_avail_min_mb: number;
+  disk_pct_max: number;
+  net_avg_mbps: number;
+};
+
+type Range = "24h" | "7d" | "30d";
+
+function rangeParams(r: Range): { p_since: string; p_bucket: string } {
+  const now = Date.now();
+  if (r === "24h")
+    return { p_since: new Date(now - 24 * 3600 * 1000).toISOString(), p_bucket: "15 minutes" };
+  if (r === "7d")
+    return { p_since: new Date(now - 7 * 86400 * 1000).toISOString(), p_bucket: "1 hour" };
+  return { p_since: new Date(now - 30 * 86400 * 1000).toISOString(), p_bucket: "3 hours" };
+}
+
 function fmtDur(s: number | null | undefined): string {
   if (s == null || !isFinite(Number(s))) return "—";
   const n = Math.max(0, Math.floor(Number(s)));
@@ -144,6 +182,7 @@ const PANEL_GROUPS = [
   { id: "vps_mem", label: "Memória", scope: "vps" as const },
   { id: "vps_disco", label: "Disco", scope: "vps" as const },
   { id: "vps_rede", label: "Rede/Relay", scope: "vps" as const },
+  { id: "vps_trend", label: "Tendência", scope: "vps" as const },
 ];
 const HIDDEN_LS_KEY = "acessofast:monitor:hidden";
 
