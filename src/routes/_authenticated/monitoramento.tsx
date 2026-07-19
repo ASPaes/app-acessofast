@@ -175,7 +175,9 @@ function MonitoramentoPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vps_metrics")
-        .select("captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes")
+        .select(
+          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds",
+        )
         .order("captured_at", { ascending: false })
         .limit(2);
       if (error) throw error;
