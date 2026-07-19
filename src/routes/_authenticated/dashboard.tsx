@@ -236,6 +236,7 @@ function Dashboard() {
             icon={Users}
             hint={hintUsuarios}
             loading={stats.isLoading}
+            color="blue"
           />
         )}
         <StatCard
@@ -244,6 +245,7 @@ function Dashboard() {
           icon={MonitorSmartphone}
           hint={hintDispositivos}
           loading={stats.isLoading}
+          color="emerald"
         />
         <StatCard
           title="Sessões ativas"
@@ -251,6 +253,7 @@ function Dashboard() {
           icon={Radio}
           hint={hintAtivas}
           loading={stats.isLoading}
+          color="amber"
         />
         <StatCard
           title="Sessões 24h"
@@ -258,6 +261,7 @@ function Dashboard() {
           icon={Activity}
           hint={hint24h}
           loading={stats.isLoading}
+          color="violet"
         />
       </div>
 
