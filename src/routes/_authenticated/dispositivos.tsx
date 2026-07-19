@@ -32,6 +32,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power } from "lucide-react";
 import { useMemo, useState } from "react";
