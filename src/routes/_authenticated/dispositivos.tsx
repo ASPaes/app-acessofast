@@ -379,12 +379,28 @@ function DispositivosPage() {
                   </TableRow>
                 )}
                 {!isLoading &&
-                  filtered.map((d) => (
+                  filtered.map((d) => {
+                    const status =
+                      d.is_active === false
+                        ? "inativo"
+                        : sessoesAtivas?.has(d.id)
+                          ? "atendimento"
+                          : dispositivosOnline?.has(d.id)
+                            ? "online"
+                            : "offline";
+                    const iconColor =
+                      status === "atendimento"
+                        ? "text-amber-500"
+                        : status === "online"
+                          ? "text-emerald-500"
+                          : "text-muted-foreground/40";
+
+                    return (
                     <TableRow key={d.id}>
                       <TableCell className="font-mono text-xs">{d.rustdesk_id}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Monitor className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
                           <span>{d.alias ?? "—"}</span>
                         </div>
                       </TableCell>
@@ -409,14 +425,14 @@ function DispositivosPage() {
                         </TableCell>
                       )}
                       <TableCell>
-                        {d.is_active === false ? (
+                        {status === "inativo" ? (
                           <Badge variant="secondary">Inativo</Badge>
-                        ) : sessoesAtivas?.has(d.id) ? (
+                        ) : status === "atendimento" ? (
                           <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Em atendimento
                           </Badge>
-                        ) : dispositivosOnline?.has(d.id) ? (
+                        ) : status === "online" ? (
                           <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             Online
@@ -475,7 +491,8 @@ function DispositivosPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
               </TableBody>
             </Table>
           </div>
