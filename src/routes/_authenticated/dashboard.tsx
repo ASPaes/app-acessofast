@@ -405,18 +405,27 @@ function Dashboard() {
   );
 }
 
+const STAT_COLORS = {
+  blue: { icon: "text-blue-500", wrap: "bg-blue-500/10" },
+  emerald: { icon: "text-emerald-500", wrap: "bg-emerald-500/10" },
+  amber: { icon: "text-amber-500", wrap: "bg-amber-500/10" },
+  violet: { icon: "text-violet-500", wrap: "bg-violet-500/10" },
+} as const;
+
 function StatCard({
   title,
   value,
   icon: Icon,
   hint,
   loading,
+  color = "blue",
 }: {
   title: string;
   value: number | undefined;
   icon: typeof Users;
   hint: string;
   loading: boolean;
+  color?: keyof typeof STAT_COLORS;
 }) {
   return (
     <Card className="border-border/60">
@@ -424,8 +433,8 @@ function StatCard({
         <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
           {title}
         </CardTitle>
-        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Icon className="h-4 w-4 text-primary" />
+        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${STAT_COLORS[color].wrap}`}>
+          <Icon className={`h-4 w-4 ${STAT_COLORS[color].icon}`} />
         </div>
       </CardHeader>
       <CardContent className="pt-1">
