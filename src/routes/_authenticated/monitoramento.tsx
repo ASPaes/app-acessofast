@@ -14,6 +14,7 @@ import {
   HardDrive,
   MemoryStick,
   Network,
+  Radio,
   Server,
   ShieldAlert,
   TrendingUp,
@@ -73,6 +74,7 @@ type VpsMetric = {
   disk_used_gb: number | string | null;
   disk_total_gb: number | string | null;
   uptime_seconds: number | string | null;
+  active_sessions: number | string | null;
 };
 
 type AgentHealth = {
@@ -214,7 +216,7 @@ function MonitoramentoPage() {
       const { data, error } = await supabase
         .from("vps_metrics")
         .select(
-          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds",
+          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds,active_sessions",
         )
         .order("captured_at", { ascending: false })
         .limit(2);
@@ -727,6 +729,12 @@ function MonitoramentoPage() {
                   {isFinite(ncpuN) ? `${ncpuN} vCPU` : "— vCPU"}
                 </span>
               </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Radio className="h-4 w-4" />
+                <span className="tabular-nums">
+                  {Number(latest?.active_sessions ?? 0)} sessões ativas
+                </span>
+              </div>
               <div className="ml-auto">
                 {isLoading ? (
                   <Skeleton className="h-5 w-48" />
@@ -892,7 +900,8 @@ function MonitoramentoPage() {
               </div>
 
               {series.isLoading ? (
-                <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                  <Skeleton className="h-[240px] w-full" />
                   <Skeleton className="h-[240px] w-full" />
                   <Skeleton className="h-[240px] w-full" />
                   <Skeleton className="h-[240px] w-full" />
@@ -1044,6 +1053,39 @@ function MonitoramentoPage() {
                         stroke="hsl(160 84% 45%)"
                         strokeWidth={2}
                         dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Disco (%)"
+                    icon={<HardDrive className="h-4 w-4 text-amber-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="disk_pct_max"
+                        name="Disco %"
+                        stroke="hsl(38 92% 55%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <ReferenceLine
+                        y={85}
+                        strokeDasharray="4 4"
+                        stroke="hsl(0 84% 60%)"
+                        label={{ value: "atenção", fontSize: 10, fill: "hsl(0 84% 60%)" }}
                       />
                     </LineChart>
                   </TrendCard>
