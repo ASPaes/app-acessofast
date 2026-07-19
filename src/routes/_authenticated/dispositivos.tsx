@@ -298,7 +298,7 @@ function DispositivosPage() {
     },
   });
 
-  const colCount = isSuper ? 8 : 7;
+  const colCount = isSuper ? 7 : 6;
 
   return (
     <div className="p-6 space-y-6">
@@ -388,8 +388,7 @@ function DispositivosPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Rustdesk ID</TableHead>
-                  <TableHead>Alias</TableHead>
+                  <TableHead>Computador</TableHead>
                   <TableHead>Grupo</TableHead>
                   <TableHead>SO</TableHead>
                   <TableHead>Últ. online</TableHead>
@@ -435,11 +434,13 @@ function DispositivosPage() {
 
                     return (
                     <TableRow key={d.id}>
-                      <TableCell className="font-mono text-xs">{d.rustdesk_id}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
-                          <span>{d.alias ?? "—"}</span>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{d.alias ?? "—"}</span>
+                            <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
