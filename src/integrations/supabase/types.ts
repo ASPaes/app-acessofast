@@ -771,6 +771,23 @@ export type Database = {
         Args: { p_feature_key: string; p_tenant_id: string }
         Returns: boolean
       }
+      vps_metrics_series: {
+        Args: { p_bucket?: string; p_since?: string }
+        Returns: {
+          amostras: number
+          bucket: string
+          cpu_avg: number
+          cpu_max: number
+          disk_pct_max: number
+          load1_avg: number
+          load1_max: number
+          mem_avail_min_mb: number
+          mem_pct_max: number
+          net_avg_mbps: number
+          steal_avg: number
+          steal_max: number
+        }[]
+      }
     }
     Enums: {
       enrollment_status: "pending" | "approved" | "rejected"
