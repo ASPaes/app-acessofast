@@ -232,6 +232,20 @@ function DispositivosPage() {
     },
   });
 
+  const { data: dispositivosOnline } = useQuery({
+    queryKey: ["dispositivos_online"],
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const limite = new Date(Date.now() - 120000).toISOString();
+      const { data, error } = await supabase
+        .from("address_book")
+        .select("id")
+        .gt("last_online", limite);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.id as string));
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
@@ -402,8 +416,16 @@ function DispositivosPage() {
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Em atendimento
                           </Badge>
+                        ) : dispositivosOnline?.has(d.id) ? (
+                          <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            Online
+                          </Badge>
                         ) : (
-                          <Badge>Ativo</Badge>
+                          <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                            Offline
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
