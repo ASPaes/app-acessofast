@@ -181,7 +181,11 @@ function Dashboard() {
     if (dt > 0) netMbps = ((bytes * 8) / dt / 1e6).toFixed(2) + " Mbps";
   }
 
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
   const capturedAt = latest ? new Date(latest.captured_at).getTime() : null;
   const idadeSeg = capturedAt != null ? Math.floor((now - capturedAt) / 1000) : null;
   const ativo = latest != null && idadeSeg != null && idadeSeg <= 60;
@@ -215,12 +219,11 @@ function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             Dashboard
-            {isSuper && <Badge variant="outline">Plataforma</Badge>}
           </h1>
           <p className="text-sm text-muted-foreground">{subtitulo}</p>
         </div>
-        <Badge variant="outline" className="gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+          <Badge variant="outline" className="gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           ao vivo
         </Badge>
       </div>
