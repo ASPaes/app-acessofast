@@ -219,6 +219,19 @@ function DispositivosPage() {
     },
   });
 
+  const { data: sessoesAtivas } = useQuery({
+    queryKey: ["sessoes_ativas"],
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("connection_logs")
+        .select("address_book_id")
+        .eq("status", "active");
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.address_book_id as string));
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
@@ -382,10 +395,15 @@ function DispositivosPage() {
                         </TableCell>
                       )}
                       <TableCell>
-                        {d.is_active ? (
-                          <Badge>Ativo</Badge>
-                        ) : (
+                        {d.is_active === false ? (
                           <Badge variant="secondary">Inativo</Badge>
+                        ) : sessoesAtivas?.has(d.id) ? (
+                          <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Em atendimento
+                          </Badge>
+                        ) : (
+                          <Badge>Ativo</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
