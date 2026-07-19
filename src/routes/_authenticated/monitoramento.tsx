@@ -470,6 +470,32 @@ function MonitoramentoPage() {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   };
 
+  function ContainerStatus({ label, up }: { label: string; up: boolean | null | undefined }) {
+    const isUp = up === true;
+    const isDown = up === false;
+    return (
+      <div
+        className={`
+          flex-1 rounded-xl border px-4 py-5 text-center
+          ${isUp ? "border-emerald-500/40 bg-emerald-500/10" : ""}
+          ${isDown ? "border-red-500/40 bg-red-500/10" : ""}
+          ${!isUp && !isDown ? "border-muted bg-muted/40" : ""}
+        `}
+      >
+        <div
+          className={`
+            text-2xl font-semibold tracking-tight tabular-nums
+            ${isUp ? "text-emerald-500" : ""}
+            ${isDown ? "text-red-500" : ""}
+            ${!isUp && !isDown ? "text-muted-foreground" : ""}
+          `}
+        >
+          {label} · {isUp ? "UP" : isDown ? "DOWN" : "—"}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -768,6 +794,24 @@ function MonitoramentoPage() {
                   : "Nenhuma amostra encontrada em vps_metrics."}
               </AlertDescription>
             </Alert>
+          )}
+
+          {show("vps_containers") && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Boxes className="h-4 w-4 text-primary" />
+                  Containers (relay)
+                </CardTitle>
+                <CardDescription>hbbs (sinalização) · hbbr (relay)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <ContainerStatus label="hbbs" up={latest?.hbbs_up} />
+                  <ContainerStatus label="hbbr" up={latest?.hbbr_up} />
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {show("vps_cpu") && (
