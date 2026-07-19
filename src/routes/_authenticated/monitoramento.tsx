@@ -116,6 +116,37 @@ function fmtDur(s: number | null | undefined): string {
   return `${m}:${ss.toString().padStart(2, "0")}`;
 }
 
+function fmtUptime(seconds: number | string | null | undefined): string {
+  if (seconds == null || !isFinite(Number(seconds))) return "—";
+  let n = Math.max(0, Math.floor(Number(seconds)));
+  const d = Math.floor(n / 86400);
+  n -= d * 86400;
+  const h = Math.floor(n / 3600);
+  n -= h * 3600;
+  const m = Math.floor(n / 60);
+  const parts: string[] = [];
+  if (d) parts.push(`${d}d`);
+  if (h || d) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  return parts.join(" ");
+}
+
+function num(v: number | string | null | undefined, digits = 1): string {
+  if (v == null || !isFinite(Number(v))) return "—";
+  return Number(v).toFixed(digits);
+}
+
+const PANEL_GROUPS = [
+  { id: "agentes", label: "Agentes", scope: "secao" as const },
+  { id: "sessoes", label: "Sessões", scope: "secao" as const },
+  { id: "externos", label: "Acessos externos", scope: "secao" as const },
+  { id: "vps_cpu", label: "CPU & Load", scope: "vps" as const },
+  { id: "vps_mem", label: "Memória", scope: "vps" as const },
+  { id: "vps_disco", label: "Disco", scope: "vps" as const },
+  { id: "vps_rede", label: "Rede/Relay", scope: "vps" as const },
+];
+const HIDDEN_LS_KEY = "acessofast:monitor:hidden";
+
 function MonitoramentoPage() {
   const { data: me } = useQuery({
     queryKey: ["me"],
