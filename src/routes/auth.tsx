@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, ShieldCheck, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
@@ -60,9 +61,9 @@ function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen w-full grid lg:grid-cols-2 bg-background">
-      <div className="hidden lg:flex relative flex-col justify-between p-12 bg-sidebar text-sidebar-foreground overflow-hidden">
-        <ParticleBackground />
+    <div className="relative min-h-screen w-full bg-background">
+      <ParticleBackground />
+      <div className="relative z-10 grid min-h-screen w-full lg:grid-cols-2">
 
         <div className="relative flex items-center gap-4">
           <img src={acessofastLogo.url} alt="Acessofast" className="h-44 w-44 object-contain" />
@@ -93,7 +94,8 @@ function AuthPage() {
       </div>
 
       <div className="flex items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-6">
+        <Card className="w-full max-w-md border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
+          <CardContent className="space-y-6 p-6">
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-widest text-primary">
               ÁREA ADMINISTRATIVA
@@ -193,7 +195,8 @@ function AuthPage() {
               Ambiente protegido e monitorado
             </div>
           </form>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
