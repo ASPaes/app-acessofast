@@ -270,6 +270,7 @@ function DispositivosPage() {
     const t = q.trim().toLowerCase();
     return data.filter((d) => {
       if (!showInativos && d.is_active === false) return false;
+      if (soFavoritos && !favoritos?.has(d.id)) return false;
       if (isSuper && tenantFilter !== "all" && d.tenant_id !== tenantFilter) return false;
       if (t) {
         const match =
@@ -280,7 +281,7 @@ function DispositivosPage() {
       }
       return true;
     });
-  }, [data, q, showInativos, isSuper, tenantFilter]);
+  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos]);
 
   const escopoContagem = useMemo(() => {
     const base = data ?? [];
