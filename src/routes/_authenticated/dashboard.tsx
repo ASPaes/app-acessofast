@@ -300,18 +300,21 @@ function Dashboard() {
                   label="CPU"
                   icon={Cpu}
                   value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : undefined}
+                  color="sky"
                 />
                 <MetricPlaceholder
                   label="Memória"
                   icon={Gauge}
                   value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : undefined}
+                  color="violet"
                 />
                 <MetricPlaceholder
                   label="Disco"
                   icon={HardDrive}
                   value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : undefined}
+                  color="amber"
                 />
-                <MetricPlaceholder label="Rede" icon={Network} value={netMbps} />
+                <MetricPlaceholder label="Rede" icon={Network} value={netMbps} color="emerald" />
               </>
             )}
           </CardContent>
