@@ -319,6 +319,37 @@ function MonitoramentoPage() {
     return () => clearInterval(id);
   }, []);
 
+  const [hidden, setHidden] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem(HIDDEN_LS_KEY);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      return new Set(Array.isArray(arr) ? (arr as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(HIDDEN_LS_KEY, JSON.stringify(Array.from(hidden)));
+    } catch {
+      /* ignore */
+    }
+  }, [hidden]);
+  const toggleHidden = (id: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const availableGroups = PANEL_GROUPS.filter((g) =>
+    g.scope === "vps" ? isSuper : canSecao,
+  );
+  const show = (id: string) => !hidden.has(id);
+
   const latest = data?.[0];
   const previous = data?.[1];
   const ageMs = latest ? now - new Date(latest.captured_at).getTime() : null;
@@ -326,40 +357,32 @@ function MonitoramentoPage() {
   const isActive = ageSec != null && ageSec <= 60;
 
   let netMbps: string = "—";
+  let netRxMbps: string = "—";
+  let netTxMbps: string = "—";
   if (latest && previous) {
     const dt =
       (new Date(latest.captured_at).getTime() - new Date(previous.captured_at).getTime()) / 1000;
-    const bytes =
-      Number(latest.net_rx_bytes) -
-      Number(previous.net_rx_bytes) +
-      (Number(latest.net_tx_bytes) - Number(previous.net_tx_bytes));
-    if (dt > 0) {
-      netMbps = ((bytes * 8) / dt / 1e6).toFixed(2) + " Mbps";
+    const drx = Number(latest.net_rx_bytes) - Number(previous.net_rx_bytes);
+    const dtx = Number(latest.net_tx_bytes) - Number(previous.net_tx_bytes);
+    if (dt > 0 && drx >= 0 && dtx >= 0) {
+      netMbps = (((drx + dtx) * 8) / dt / 1e6).toFixed(2) + " Mbps";
+      netRxMbps = ((drx * 8) / dt / 1e6).toFixed(2) + " Mbps";
+      netTxMbps = ((dtx * 8) / dt / 1e6).toFixed(2) + " Mbps";
     }
   }
 
-  const cards = [
-    {
-      label: "CPU",
-      icon: Cpu,
-      value: latest ? Number(latest.cpu_pct).toFixed(1) + "%" : "—",
-    },
-    {
-      label: "Memória",
-      icon: Gauge,
-      value: latest ? Number(latest.mem_pct).toFixed(1) + "%" : "—",
-    },
-    {
-      label: "Disco",
-      icon: HardDrive,
-      value: latest ? Number(latest.disk_pct).toFixed(0) + "%" : "—",
-    },
-    {
-      label: "Rede",
-      icon: Network,
-      value: netMbps,
-    },
-  ];
+  const ncpuN = latest ? Number(latest.ncpu) : NaN;
+  const load1N = latest ? Number(latest.load1) : NaN;
+  const stealN = latest ? Number(latest.cpu_steal_pct) : NaN;
+  const memTotalGb = latest && latest.mem_total_mb != null
+    ? Number(latest.mem_total_mb) / 1024
+    : NaN;
+  const memAvailGb = latest && latest.mem_available_mb != null
+    ? Number(latest.mem_available_mb) / 1024
+    : NaN;
+  const memUsedGb = isFinite(memTotalGb) && isFinite(memAvailGb) ? memTotalGb - memAvailGb : NaN;
+  const memPctN = latest ? Number(latest.mem_pct) : NaN;
+  const diskPctN = latest ? Number(latest.disk_pct) : NaN;
 
   return (
     <div className="p-6 space-y-6">
