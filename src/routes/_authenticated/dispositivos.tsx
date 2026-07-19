@@ -32,8 +32,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -494,39 +501,48 @@ function DispositivosPage() {
                             <Monitor className="h-4 w-4 mr-2" />
                             {connectingId === d.id ? "Conectando..." : "Conectar"}
                           </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="Editar"
-                            onClick={() => setEditing(d)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {podeInativar && (
-                            d.is_active ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setConfirmInativarId(d.id)}
-                                disabled={toggleAtivoMutation.isPending}
-                              >
-                                <PowerOff className="h-4 w-4 mr-1" />
-                                Inativar
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" title="Mais ações">
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  toggleAtivoMutation.mutate({ id: d.id, ativar: true })
-                                }
-                                disabled={toggleAtivoMutation.isPending}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  navigator.clipboard.writeText(d.rustdesk_id);
+                                  toast.success("ID copiado");
+                                }}
                               >
-                                <Power className="h-4 w-4 mr-1" />
-                                Reativar
-                              </Button>
-                            )
-                          )}
+                                <Copy className="h-4 w-4 mr-2" />
+                                Copiar ID
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setEditing(d)}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              {podeInativar && <DropdownMenuSeparator />}
+                              {podeInativar &&
+                                (d.is_active ? (
+                                  <DropdownMenuItem
+                                    onClick={() => setConfirmInativarId(d.id)}
+                                    disabled={toggleAtivoMutation.isPending}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <PowerOff className="h-4 w-4 mr-2" />
+                                    Inativar
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    onClick={() => toggleAtivoMutation.mutate({ id: d.id, ativar: true })}
+                                    disabled={toggleAtivoMutation.isPending}
+                                  >
+                                    <Power className="h-4 w-4 mr-2" />
+                                    Reativar
+                                  </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
