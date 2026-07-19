@@ -1,8 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Cpu, Gauge, HardDrive, Network } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Activity, Cpu, Gauge, HardDrive, Network, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,9 +38,83 @@ type VpsMetric = {
   net_tx_bytes: number | string;
 };
 
+type AgentHealth = {
+  tenant_id: string;
+  rustdesk_id: string | null;
+  address_book_id: string | null;
+  tentativas_totais: number | null;
+  sessoes_reais: number | null;
+  falhas: number | null;
+  abertas_agora: number | null;
+  ultimo_heartbeat: string | null;
+  ultima_atividade: string | null;
+  agente_vivo_24h: boolean | null;
+};
+
+type SessionsSummary = {
+  tenant_id: string;
+  dia: string;
+  sessoes: number | null;
+  fim_limpo: number | null;
+  quedas: number | null;
+  acessos_externos: number | null;
+  dur_media_s: number | null;
+  dur_p50_s: number | null;
+  dur_p95_s: number | null;
+};
+
+type ExternalAccess = {
+  tenant_id: string;
+  rustdesk_id: string | null;
+  address_book_id: string | null;
+  session_start: string | null;
+  session_end: string | null;
+  duration_seconds: number | null;
+  last_heartbeat_at: string | null;
+  technician_ip: string | null;
+  created_at: string | null;
+};
+
+type DeviceRef = {
+  id: string;
+  alias: string | null;
+  rustdesk_id: string | null;
+  tenants?: { name: string | null } | null;
+};
+
+function fmtDur(s: number | null | undefined): string {
+  if (s == null || !isFinite(Number(s))) return "—";
+  const n = Math.max(0, Math.floor(Number(s)));
+  const m = Math.floor(n / 60);
+  const ss = n % 60;
+  return `${m}:${ss.toString().padStart(2, "0")}`;
+}
+
 function MonitoramentoPage() {
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const uid = userData.user?.id;
+      if (!uid) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, role, tenant_id")
+        .eq("id", uid)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const isSuper = me?.role === "super_admin";
+  const isTech = me?.role === "tech";
+  const canSecao = !!me && !isTech;
+
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["vps-metrics-latest"],
+    enabled: isSuper,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vps_metrics")
@@ -36,6 +125,98 @@ function MonitoramentoPage() {
       return (data ?? []) as VpsMetric[];
     },
   });
+
+  const agentHealth = useQuery({
+    queryKey: ["mon-agent-health", me?.role, me?.tenant_id],
+    enabled: canSecao,
+    queryFn: async () => {
+      let q = supabase
+        .from("v_agent_health" as never)
+        .select(
+          "tenant_id,rustdesk_id,address_book_id,tentativas_totais,sessoes_reais,falhas,abertas_agora,ultimo_heartbeat,ultima_atividade,agente_vivo_24h",
+        )
+        .order("ultima_atividade", { ascending: false });
+      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as AgentHealth[];
+    },
+  });
+
+  const sessionsSummary = useQuery({
+    queryKey: ["mon-sessions-summary", me?.role, me?.tenant_id],
+    enabled: canSecao,
+    queryFn: async () => {
+      let q = supabase
+        .from("v_sessions_summary" as never)
+        .select(
+          "tenant_id,dia,sessoes,fim_limpo,quedas,acessos_externos,dur_media_s,dur_p50_s,dur_p95_s",
+        )
+        .order("dia", { ascending: false })
+        .limit(14);
+      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as SessionsSummary[];
+    },
+  });
+
+  const externalAccess = useQuery({
+    queryKey: ["mon-external-access", me?.role, me?.tenant_id],
+    enabled: canSecao,
+    queryFn: async () => {
+      let q = supabase
+        .from("v_external_access" as never)
+        .select(
+          "tenant_id,rustdesk_id,address_book_id,session_start,session_end,duration_seconds,last_heartbeat_at,technician_ip,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as ExternalAccess[];
+    },
+  });
+
+  const devices = useQuery({
+    queryKey: ["mon-devices-ref", me?.role, me?.tenant_id],
+    enabled: canSecao,
+    queryFn: async () => {
+      let q = supabase.from("address_book").select("id, alias, rustdesk_id, tenants(name)");
+      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as DeviceRef[];
+    },
+  });
+
+  const deviceById = new Map<string, DeviceRef>();
+  (devices.data ?? []).forEach((d) => deviceById.set(d.id, d));
+
+  const nomeDispositivo = (address_book_id: string | null, rustdesk_id: string | null) => {
+    if (address_book_id) {
+      const d = deviceById.get(address_book_id);
+      if (d) return d.alias ?? d.rustdesk_id ?? "—";
+    }
+    return rustdesk_id ?? "—";
+  };
+
+  const empresaDe = (tenant_id: string, address_book_id: string | null) => {
+    if (address_book_id) {
+      const d = deviceById.get(address_book_id);
+      if (d?.tenants?.name) return d.tenants.name;
+    }
+    // fallback: qualquer device desse tenant já carregado
+    for (const d of deviceById.values()) {
+      if (d.tenants?.name) {
+        // não sabemos tenant_id em DeviceRef; melhor retornar "—"
+        break;
+      }
+    }
+    return "—";
+    void tenant_id;
+  };
 
   useEffect(() => {
     const channel = supabase
@@ -52,6 +233,26 @@ function MonitoramentoPage() {
       supabase.removeChannel(channel);
     };
   }, [refetch]);
+
+  useEffect(() => {
+    if (!canSecao) return;
+    const channel = supabase
+      .channel("mon_conn_logs_rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "connection_logs" },
+        () => {
+          agentHealth.refetch();
+          sessionsSummary.refetch();
+          externalAccess.refetch();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSecao]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -106,14 +307,224 @@ function MonitoramentoPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
           <Activity className="h-6 w-6 text-primary" />
-          Monitoramento da VPS
+          Monitoramento
         </h1>
         <p className="text-sm text-muted-foreground">
-          Saúde do relay compartilhado (visível apenas para super_admin).
+          Sessões, agentes {isSuper ? "e saúde do relay compartilhado." : "e acessos externos."}
         </p>
       </div>
 
-      {isLoading ? (
+      {canSecao && (
+        <div className="space-y-6">
+          <Card className="border-border/60">
+            <CardHeader>
+              <CardTitle className="text-base">Saúde dos agentes</CardTitle>
+              <CardDescription>
+                Últimos heartbeats e contadores por dispositivo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {agentHealth.isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : !agentHealth.data || agentHealth.data.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Nenhum agente registrado.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dispositivo</TableHead>
+                      {isSuper && <TableHead>Empresa</TableHead>}
+                      <TableHead className="text-right">Sessões reais</TableHead>
+                      <TableHead className="text-right">Falhas</TableHead>
+                      <TableHead>Agente</TableHead>
+                      <TableHead>Últ. heartbeat</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {agentHealth.data.map((r, i) => {
+                      const vivo = !!r.agente_vivo_24h;
+                      return (
+                        <TableRow
+                          key={`${r.address_book_id ?? r.rustdesk_id ?? i}`}
+                          className={vivo ? undefined : "bg-amber-500/5"}
+                        >
+                          <TableCell className="font-medium">
+                            {nomeDispositivo(r.address_book_id, r.rustdesk_id)}
+                          </TableCell>
+                          {isSuper && (
+                            <TableCell className="text-muted-foreground">
+                              {empresaDe(r.tenant_id, r.address_book_id)}
+                            </TableCell>
+                          )}
+                          <TableCell className="text-right tabular-nums">
+                            {r.sessoes_reais ?? 0}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {r.falhas ?? 0}
+                          </TableCell>
+                          <TableCell>
+                            {vivo ? (
+                              <Badge
+                                variant="outline"
+                                className="text-emerald-500 border-emerald-500/30"
+                              >
+                                vivo
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="text-amber-500 border-amber-500/40"
+                              >
+                                sem sinal
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground tabular-nums">
+                            {r.ultimo_heartbeat
+                              ? new Date(r.ultimo_heartbeat).toLocaleString("pt-BR")
+                              : "nunca"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60">
+            <CardHeader>
+              <CardTitle className="text-base">Resumo de sessões (por dia)</CardTitle>
+              <CardDescription>Últimos 14 dias.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {sessionsSummary.isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : !sessionsSummary.data || sessionsSummary.data.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Sem sessões nos últimos dias.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dia</TableHead>
+                      <TableHead className="text-right">Sessões</TableHead>
+                      <TableHead className="text-right">Quedas</TableHead>
+                      <TableHead className="text-right">Acessos externos</TableHead>
+                      <TableHead className="text-right">Dur. média</TableHead>
+                      <TableHead className="text-right">p95</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sessionsSummary.data.map((r) => (
+                      <TableRow key={`${r.tenant_id}-${r.dia}`}>
+                        <TableCell className="tabular-nums">
+                          {new Date(r.dia).toLocaleDateString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.sessoes ?? 0}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.quedas ?? 0}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.acessos_externos ?? 0}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtDur(r.dur_media_s)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtDur(r.dur_p95_s)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-amber-500/40 bg-amber-500/[0.02]">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-amber-500" />
+                Acessos externos
+              </CardTitle>
+              <CardDescription>Conexões não iniciadas pelo painel.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {externalAccess.isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : !externalAccess.data || externalAccess.data.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Nenhum acesso externo registrado.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dispositivo</TableHead>
+                      {isSuper && <TableHead>Empresa</TableHead>}
+                      <TableHead>Início</TableHead>
+                      <TableHead className="text-right">Duração</TableHead>
+                      <TableHead>IP</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {externalAccess.data.map((r, i) => (
+                      <TableRow key={`${r.address_book_id ?? r.rustdesk_id ?? i}-${r.session_start ?? i}`}>
+                        <TableCell className="font-medium">
+                          {nomeDispositivo(r.address_book_id, r.rustdesk_id)}
+                        </TableCell>
+                        {isSuper && (
+                          <TableCell className="text-muted-foreground">
+                            {empresaDe(r.tenant_id, r.address_book_id)}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-muted-foreground tabular-nums">
+                          {r.session_start
+                            ? new Date(r.session_start).toLocaleString("pt-BR")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtDur(r.duration_seconds)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground tabular-nums">
+                          {r.technician_ip ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {isSuper && (
+        <>
+          <div className="pt-2">
+            <h2 className="text-lg font-semibold tracking-tight">Saúde da VPS</h2>
+            <p className="text-sm text-muted-foreground">Relay compartilhado.</p>
+          </div>
+
+          {isLoading ? (
         <Skeleton className="h-6 w-64" />
       ) : isActive ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -153,6 +564,8 @@ function MonitoramentoPage() {
           </Card>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }
