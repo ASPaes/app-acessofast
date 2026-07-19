@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -253,6 +253,17 @@ function DispositivosPage() {
     },
   });
 
+  const { data: favoritos } = useQuery({
+    queryKey: ["favoritos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_favorites")
+        .select("device_id");
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.device_id as string));
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
@@ -303,6 +314,25 @@ function DispositivosPage() {
     onError: (err: Error) => {
       toast.error(err.message);
     },
+  });
+
+  const toggleFavoritoMutation = useMutation({
+    mutationFn: async (vars: { deviceId: string; favoritar: boolean }) => {
+      if (vars.favoritar) {
+        const { error } = await supabase
+          .from("device_favorites")
+          .upsert({ device_id: vars.deviceId }, { onConflict: "user_id,device_id", ignoreDuplicates: true });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("device_favorites")
+          .delete()
+          .eq("device_id", vars.deviceId);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["favoritos"] }),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const colCount = isSuper ? 7 : 6;
@@ -443,6 +473,15 @@ function DispositivosPage() {
                     <TableRow key={d.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 shrink-0"
+                            title={favoritos?.has(d.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                            onClick={() => toggleFavoritoMutation.mutate({ deviceId: d.id, favoritar: !favoritos?.has(d.id) })}
+                          >
+                            <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                          </Button>
                           <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
                           <div className="flex flex-col">
                             <span className="font-medium">{d.alias ?? "—"}</span>

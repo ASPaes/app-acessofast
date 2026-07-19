@@ -172,6 +172,32 @@ export type Database = {
           },
         ]
       }
+      device_favorites: {
+        Row: {
+          created_at: string
+          device_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_favorites_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_secret_shares: {
         Row: {
           device_id: string | null
