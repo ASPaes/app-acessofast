@@ -426,6 +426,26 @@ function DispositivosPage() {
                 Mostrar inativos
               </Label>
             </div>
+            <div className="flex items-center rounded-md border border-border/60">
+              <Button
+                size="icon"
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                className="h-8 w-8 rounded-r-none"
+                title="Lista"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                className="h-8 w-8 rounded-l-none"
+                title="Grade"
+                onClick={() => setViewMode("grid")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
             {podeAdicionar && perfil && (
               <AdicionarDispositivoDialog
                 role={perfil.role}
