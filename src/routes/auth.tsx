@@ -84,14 +84,14 @@ function AuthPage() {
             </div>
           </div>
 
-          <div className="relative space-y-6 max-w-2xl">
-            <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight text-white">
+          <div className="relative space-y-6 max-w-3xl">
+            <h1 className="text-6xl lg:text-7xl font-semibold tracking-tight text-white">
               Acesso remoto.
               <br />
-              Simples e seguro.
+              Sem perder o controle.
             </h1>
             <p className="text-lg text-muted-foreground">
-              Gerencie dispositivos e acompanhe sessões em um único lugar.
+              Acesse, acompanhe e proteja cada sessão de suporte em um só ambiente. Feito para equipes que precisam resolver rápido — com segurança.
             </p>
             <div className="flex items-center gap-2 pt-6">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
