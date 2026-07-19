@@ -712,6 +712,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      claim_poll: {
+        Args: { p_nonce_hash: string; p_rustdesk_id: string }
+        Returns: string
+      }
+      claim_register: {
+        Args: {
+          p_agent_token_hash: string
+          p_hostname?: string
+          p_nonce_hash: string
+          p_os?: string
+          p_rustdesk_id: string
+        }
+        Returns: string
+      }
       close_stale_sessions: { Args: never; Returns: number }
       create_enrollment_secret: {
         Args: { p_label?: string; p_tenant_id: string }
@@ -735,6 +749,20 @@ export type Database = {
       provision_tenant: {
         Args: { p_admin_user_id: string; p_name: string; p_seat_limit?: number }
         Returns: string
+      }
+      redeem_claim: {
+        Args: {
+          p_actor: string
+          p_alias?: string
+          p_rustdesk_id: string
+          p_tenant_id: string
+        }
+        Returns: {
+          r_device_id: string
+          r_hostname: string
+          r_os: string
+          r_was_inserted: boolean
+        }[]
       }
       redeem_enrollment: {
         Args: {
