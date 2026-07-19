@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
+import { ParticleBackground } from "@/components/ParticleBackground";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -61,27 +62,7 @@ function AuthPage() {
   return (
     <div className="min-h-screen w-full grid lg:grid-cols-2 bg-background">
       <div className="hidden lg:flex relative flex-col justify-between p-12 bg-sidebar text-sidebar-foreground overflow-hidden">
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 800 800"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M-100 900 Q 150 650 400 750 T 900 500"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            className="text-primary opacity-[0.15]"
-          />
-          <path
-            d="M-100 750 Q 200 550 450 650 T 900 400"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1"
-            className="text-primary opacity-[0.10]"
-          />
-        </svg>
+        <ParticleBackground />
 
         <div className="relative flex items-center gap-4">
           <img src={acessofastLogo.url} alt="Acessofast" className="h-44 w-44 object-contain" />
