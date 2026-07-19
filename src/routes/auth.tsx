@@ -62,6 +62,15 @@ function AuthPage() {
 
   return (
     <div className="relative min-h-screen w-full bg-background">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px), radial-gradient(circle at 20% 20%, rgba(59,130,246,0.15), transparent 40%), radial-gradient(circle at 85% 80%, rgba(37,99,235,0.10), transparent 45%)",
+          backgroundSize: "46px 46px, 46px 46px, 100% 100%, 100% 100%",
+        }}
+      />
       <ParticleBackground />
       <div className="relative z-10 grid min-h-screen w-full lg:grid-cols-2">
         <div className="hidden lg:flex relative flex-col justify-between p-12 text-sidebar-foreground overflow-hidden">
