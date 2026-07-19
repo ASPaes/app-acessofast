@@ -556,7 +556,109 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_agent_health: {
+        Row: {
+          abertas_agora: number | null
+          address_book_id: string | null
+          agente_vivo_24h: boolean | null
+          falhas: number | null
+          rustdesk_id: string | null
+          sessoes_reais: number | null
+          tenant_id: string | null
+          tentativas_totais: number | null
+          ultima_atividade: string | null
+          ultimo_heartbeat: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_logs_address_book_id_fkey"
+            columns: ["address_book_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_external_access: {
+        Row: {
+          address_book_id: string | null
+          created_at: string | null
+          duration_seconds: number | null
+          last_heartbeat_at: string | null
+          rustdesk_id: string | null
+          session_end: string | null
+          session_start: string | null
+          technician_ip: unknown
+          tenant_id: string | null
+        }
+        Insert: {
+          address_book_id?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          last_heartbeat_at?: string | null
+          rustdesk_id?: string | null
+          session_end?: string | null
+          session_start?: string | null
+          technician_ip?: unknown
+          tenant_id?: string | null
+        }
+        Update: {
+          address_book_id?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          last_heartbeat_at?: string | null
+          rustdesk_id?: string | null
+          session_end?: string | null
+          session_start?: string | null
+          technician_ip?: unknown
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_logs_address_book_id_fkey"
+            columns: ["address_book_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_sessions_summary: {
+        Row: {
+          acessos_externos: number | null
+          dia: string | null
+          dur_media_s: number | null
+          dur_p50_s: number | null
+          dur_p95_s: number | null
+          fim_limpo: number | null
+          quedas: number | null
+          sessoes: number | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       approve_device: { Args: { p_device_id: string }; Returns: undefined }
