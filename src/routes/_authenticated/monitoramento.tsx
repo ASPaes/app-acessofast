@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import {
   Activity,
+  Boxes,
   Clock,
   Cpu,
   Gauge,
@@ -75,6 +76,8 @@ type VpsMetric = {
   disk_total_gb: number | string | null;
   uptime_seconds: number | string | null;
   active_sessions: number | string | null;
+  hbbs_up: boolean | null;
+  hbbr_up: boolean | null;
 };
 
 type AgentHealth = {
@@ -179,6 +182,7 @@ const PANEL_GROUPS = [
   { id: "agentes", label: "Agentes", scope: "secao" as const },
   { id: "sessoes", label: "Sessões", scope: "secao" as const },
   { id: "externos", label: "Acessos externos", scope: "secao" as const },
+  { id: "vps_containers", label: "Containers", scope: "vps" as const },
   { id: "vps_cpu", label: "CPU & Load", scope: "vps" as const },
   { id: "vps_mem", label: "Memória", scope: "vps" as const },
   { id: "vps_disco", label: "Disco", scope: "vps" as const },
@@ -216,7 +220,7 @@ function MonitoramentoPage() {
       const { data, error } = await supabase
         .from("vps_metrics")
         .select(
-          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds,active_sessions",
+          "captured_at,cpu_pct,mem_pct,disk_pct,net_rx_bytes,net_tx_bytes,host,ncpu,cpu_iowait_pct,cpu_steal_pct,load1,load5,load15,mem_total_mb,mem_available_mb,swap_used_mb,disk_used_gb,disk_total_gb,uptime_seconds,active_sessions,hbbs_up,hbbr_up",
         )
         .order("captured_at", { ascending: false })
         .limit(2);
@@ -465,6 +469,32 @@ function MonitoramentoPage() {
       return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   };
+
+  function ContainerStatus({ label, up }: { label: string; up: boolean | null | undefined }) {
+    const isUp = up === true;
+    const isDown = up === false;
+    return (
+      <div
+        className={`
+          flex-1 rounded-xl border px-4 py-5 text-center
+          ${isUp ? "border-emerald-500/40 bg-emerald-500/10" : ""}
+          ${isDown ? "border-red-500/40 bg-red-500/10" : ""}
+          ${!isUp && !isDown ? "border-muted bg-muted/40" : ""}
+        `}
+      >
+        <div
+          className={`
+            text-2xl font-semibold tracking-tight tabular-nums
+            ${isUp ? "text-emerald-500" : ""}
+            ${isDown ? "text-red-500" : ""}
+            ${!isUp && !isDown ? "text-muted-foreground" : ""}
+          `}
+        >
+          {label} · {isUp ? "UP" : isDown ? "DOWN" : "—"}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -764,6 +794,24 @@ function MonitoramentoPage() {
                   : "Nenhuma amostra encontrada em vps_metrics."}
               </AlertDescription>
             </Alert>
+          )}
+
+          {show("vps_containers") && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Boxes className="h-4 w-4 text-primary" />
+                  Containers (relay)
+                </CardTitle>
+                <CardDescription>hbbs (sinalização) · hbbr (relay)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <ContainerStatus label="hbbs" up={latest?.hbbs_up} />
+                  <ContainerStatus label="hbbr" up={latest?.hbbr_up} />
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {show("vps_cpu") && (
