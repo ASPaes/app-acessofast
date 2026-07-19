@@ -16,6 +16,7 @@ import {
   Network,
   Server,
   ShieldAlert,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +35,16 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 export const Route = createFileRoute("/_authenticated/monitoramento")({
   head: () => ({
@@ -108,6 +119,32 @@ type DeviceRef = {
   tenants?: { name: string | null } | null;
 };
 
+type VpsSeriesPoint = {
+  bucket: string;
+  amostras: number;
+  cpu_avg: number;
+  cpu_max: number;
+  load1_avg: number;
+  load1_max: number;
+  steal_avg: number;
+  steal_max: number;
+  mem_pct_max: number;
+  mem_avail_min_mb: number;
+  disk_pct_max: number;
+  net_avg_mbps: number;
+};
+
+type Range = "24h" | "7d" | "30d";
+
+function rangeParams(r: Range): { p_since: string; p_bucket: string } {
+  const now = Date.now();
+  if (r === "24h")
+    return { p_since: new Date(now - 24 * 3600 * 1000).toISOString(), p_bucket: "15 minutes" };
+  if (r === "7d")
+    return { p_since: new Date(now - 7 * 86400 * 1000).toISOString(), p_bucket: "1 hour" };
+  return { p_since: new Date(now - 30 * 86400 * 1000).toISOString(), p_bucket: "3 hours" };
+}
+
 function fmtDur(s: number | null | undefined): string {
   if (s == null || !isFinite(Number(s))) return "—";
   const n = Math.max(0, Math.floor(Number(s)));
@@ -144,6 +181,7 @@ const PANEL_GROUPS = [
   { id: "vps_mem", label: "Memória", scope: "vps" as const },
   { id: "vps_disco", label: "Disco", scope: "vps" as const },
   { id: "vps_rede", label: "Rede/Relay", scope: "vps" as const },
+  { id: "vps_trend", label: "Tendência", scope: "vps" as const },
 ];
 const HIDDEN_LS_KEY = "acessofast:monitor:hidden";
 
@@ -383,6 +421,48 @@ function MonitoramentoPage() {
   const memUsedGb = isFinite(memTotalGb) && isFinite(memAvailGb) ? memTotalGb - memAvailGb : NaN;
   const memPctN = latest ? Number(latest.mem_pct) : NaN;
   const diskPctN = latest ? Number(latest.disk_pct) : NaN;
+
+  const [range, setRange] = useState<Range>("24h");
+  const series = useQuery({
+    queryKey: ["vps-series", range],
+    enabled: isSuper,
+    refetchInterval: 60000,
+    queryFn: async () => {
+      const { p_since, p_bucket } = rangeParams(range);
+      const { data, error } = await (supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>)("vps_metrics_series", {
+        p_since,
+        p_bucket,
+      });
+      if (error) throw error as Error;
+      const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+      const points: VpsSeriesPoint[] = rows.map((r) => ({
+        bucket: String(r.bucket),
+        amostras: Number(r.amostras),
+        cpu_avg: Number(r.cpu_avg),
+        cpu_max: Number(r.cpu_max),
+        load1_avg: Number(r.load1_avg),
+        load1_max: Number(r.load1_max),
+        steal_avg: Number(r.steal_avg),
+        steal_max: Number(r.steal_max),
+        mem_pct_max: Number(r.mem_pct_max),
+        mem_avail_min_mb: Number(r.mem_avail_min_mb),
+        disk_pct_max: Number(r.disk_pct_max),
+        net_avg_mbps: Number(r.net_avg_mbps),
+      }));
+      points.sort((a, b) => a.bucket.localeCompare(b.bucket));
+      return points;
+    },
+  });
+
+  const fmtTick = (iso: string) => {
+    const d = new Date(iso);
+    if (range === "24h")
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -784,9 +864,224 @@ function MonitoramentoPage() {
               </CardContent>
             </Card>
           )}
+
+          {show("vps_trend") && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold tracking-tight flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Tendência de capacidade
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Séries agregadas do relay compartilhado.
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  {(["24h", "7d", "30d"] as Range[]).map((r) => (
+                    <Button
+                      key={r}
+                      size="sm"
+                      variant={range === r ? "secondary" : "outline"}
+                      onClick={() => setRange(r)}
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {series.isLoading ? (
+                <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                  <Skeleton className="h-[240px] w-full" />
+                  <Skeleton className="h-[240px] w-full" />
+                  <Skeleton className="h-[240px] w-full" />
+                  <Skeleton className="h-[240px] w-full" />
+                </div>
+              ) : !series.data || series.data.length === 0 ? (
+                <Card className="border-border/60">
+                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                    Sem dados no período.
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                  <TrendCard
+                    title="CPU & Steal (%)"
+                    icon={<Cpu className="h-4 w-4 text-sky-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, "auto"]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cpu_avg"
+                        name="CPU méd"
+                        stroke="hsl(200 90% 55%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cpu_max"
+                        name="CPU máx"
+                        stroke="hsl(200 90% 70%)"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="steal_avg"
+                        name="Steal"
+                        stroke="hsl(38 92% 55%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Load average"
+                    icon={<Gauge className="h-4 w-4 text-violet-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, "auto"]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="load1_avg"
+                        name="méd"
+                        stroke="hsl(262 83% 65%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="load1_max"
+                        name="máx"
+                        stroke="hsl(262 83% 78%)"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                      {isFinite(ncpuN) && ncpuN > 0 && (
+                        <ReferenceLine
+                          y={ncpuN}
+                          stroke="hsl(38 92% 55%)"
+                          strokeDasharray="4 4"
+                          label={{ value: "saturação", fontSize: 10, fill: "hsl(38 92% 55%)" }}
+                        />
+                      )}
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Memória (%)"
+                    icon={<MemoryStick className="h-4 w-4 text-violet-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="mem_pct_max"
+                        name="RAM %"
+                        stroke="hsl(262 83% 65%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+
+                  <TrendCard
+                    title="Rede/Relay (Mbps)"
+                    icon={<Network className="h-4 w-4 text-emerald-500" />}
+                  >
+                    <LineChart data={series.data}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis
+                        dataKey="bucket"
+                        tickFormatter={fmtTick}
+                        minTickGap={40}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis domain={[0, "auto"]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        labelFormatter={(v) => new Date(String(v)).toLocaleString("pt-BR")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="net_avg_mbps"
+                        name="Mbps"
+                        stroke="hsl(160 84% 45%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </TrendCard>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
+  );
+}
+
+function TrendCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactElement;
+}) {
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            {children}
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
