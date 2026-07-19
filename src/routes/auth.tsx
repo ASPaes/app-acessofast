@@ -72,10 +72,10 @@ function AuthPage() {
         }}
       />
       <ParticleBackground />
-      <div className="relative z-10 grid min-h-screen w-full lg:grid-cols-2">
+      <div className="relative z-10 mx-auto grid min-h-screen w-full max-w-7xl lg:grid-cols-2">
         <div className="hidden lg:flex relative flex-col justify-between p-12 text-sidebar-foreground overflow-hidden">
-          <div className="relative flex items-center gap-4">
-            <img src={acessofastLogo.url} alt="Acessofast" className="h-44 w-44 object-contain" />
+          <div className="relative flex items-center gap-3">
+            <img src={acessofastLogo.url} alt="Acessofast" className="h-16 w-16 object-contain" />
             <div className="leading-tight">
               <div className="text-2xl font-semibold">AcessoFast</div>
               <div className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -85,15 +85,15 @@ function AuthPage() {
           </div>
 
           <div className="relative space-y-4 max-w-md">
-            <h1 className="text-4xl lg:text-5xl font-semibold tracking-tight text-white">
+            <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight text-white">
               Acesso remoto. Simples e seguro.
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-lg text-muted-foreground">
               Gerencie dispositivos e acompanhe sessões em um único lugar.
             </p>
             <div className="flex items-center gap-2 pt-6">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-sm text-muted-foreground">Sistema operacional</span>
+              <span className="text-base text-muted-foreground">Sistema operacional</span>
             </div>
           </div>
 
