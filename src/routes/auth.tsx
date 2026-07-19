@@ -84,7 +84,7 @@ function AuthPage() {
             </div>
           </div>
 
-          <div className="relative space-y-4 max-w-md">
+          <div className="relative space-y-6 max-w-2xl">
             <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight text-white">
               Acesso remoto. Simples e seguro.
             </h1>
