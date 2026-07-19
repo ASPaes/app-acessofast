@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -106,6 +106,7 @@ function DispositivosPage() {
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [showInativos, setShowInativos] = useState(false);
   const [soFavoritos, setSoFavoritos] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [editing, setEditing] = useState<AddressBookRow | null>(null);
   const [confirmInativarId, setConfirmInativarId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -425,6 +426,26 @@ function DispositivosPage() {
                 Mostrar inativos
               </Label>
             </div>
+            <div className="flex items-center rounded-md border border-border/60">
+              <Button
+                size="icon"
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                className="h-8 w-8 rounded-r-none"
+                title="Lista"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                className="h-8 w-8 rounded-l-none"
+                title="Grade"
+                onClick={() => setViewMode("grid")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
             {podeAdicionar && perfil && (
               <AdicionarDispositivoDialog
                 role={perfil.role}
@@ -434,6 +455,7 @@ function DispositivosPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {viewMode === "list" ? (
           <div className="rounded-md border border-border/60 overflow-hidden">
             <Table>
               <TableHeader>
@@ -603,6 +625,11 @@ function DispositivosPage() {
               </TableBody>
             </Table>
           </div>
+          ) : (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Modo grade — em construção
+            </div>
+          )}
         </CardContent>
       </Card>
 
