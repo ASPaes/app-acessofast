@@ -74,11 +74,11 @@ function AuthPage() {
       <ParticleBackground />
       <div className="relative z-10 mx-auto grid min-h-screen w-full max-w-7xl lg:grid-cols-2">
         <div className="hidden lg:flex relative flex-col justify-between p-12 text-sidebar-foreground overflow-hidden">
-          <div className="relative flex items-center gap-3">
-            <img src={acessofastLogo.url} alt="Acessofast" className="h-16 w-16 object-contain" />
+          <div className="relative flex items-center gap-4">
+            <img src={acessofastLogo.url} alt="Acessofast" className="h-20 w-20 object-contain" />
             <div className="leading-tight">
-              <div className="text-2xl font-semibold">AcessoFast</div>
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">
+              <div className="text-3xl font-semibold">AcessoFast</div>
+              <div className="text-sm uppercase tracking-widest text-muted-foreground">
                 ASP SOFTWARES
               </div>
             </div>
