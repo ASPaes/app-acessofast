@@ -406,6 +406,17 @@ function DispositivosPage() {
             )}
             <div className="flex items-center gap-2 px-2">
               <Switch
+                id="so-favoritos"
+                checked={soFavoritos}
+                onCheckedChange={setSoFavoritos}
+              />
+              <Label htmlFor="so-favoritos" className="text-xs text-muted-foreground flex items-center gap-1">
+                <Star className="h-3 w-3" />
+                Só favoritos
+              </Label>
+            </div>
+            <div className="flex items-center gap-2 px-2">
+              <Switch
                 id="show-inativos"
                 checked={showInativos}
                 onCheckedChange={setShowInativos}
