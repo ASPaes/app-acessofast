@@ -310,6 +310,26 @@ function DispositivosPage() {
       </div>
 
       <Card className="border-border/60">
+        <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-lg font-semibold tabular-nums">{contagem.online}</span>
+            <span className="text-sm text-muted-foreground">online</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            <span className="text-lg font-semibold tabular-nums">{contagem.atendimento}</span>
+            <span className="text-sm text-muted-foreground">em atendimento</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+            <span className="text-lg font-semibold tabular-nums">{contagem.offline}</span>
+            <span className="text-sm text-muted-foreground">offline</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
