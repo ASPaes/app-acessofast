@@ -105,6 +105,7 @@ function DispositivosPage() {
   const [q, setQ] = useState("");
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [showInativos, setShowInativos] = useState(false);
+  const [soFavoritos, setSoFavoritos] = useState(false);
   const [editing, setEditing] = useState<AddressBookRow | null>(null);
   const [confirmInativarId, setConfirmInativarId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -269,6 +270,7 @@ function DispositivosPage() {
     const t = q.trim().toLowerCase();
     return data.filter((d) => {
       if (!showInativos && d.is_active === false) return false;
+      if (soFavoritos && !favoritos?.has(d.id)) return false;
       if (isSuper && tenantFilter !== "all" && d.tenant_id !== tenantFilter) return false;
       if (t) {
         const match =
@@ -279,7 +281,7 @@ function DispositivosPage() {
       }
       return true;
     });
-  }, [data, q, showInativos, isSuper, tenantFilter]);
+  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos]);
 
   const escopoContagem = useMemo(() => {
     const base = data ?? [];
@@ -402,6 +404,17 @@ function DispositivosPage() {
                 </SelectContent>
               </Select>
             )}
+            <div className="flex items-center gap-2 px-2">
+              <Switch
+                id="so-favoritos"
+                checked={soFavoritos}
+                onCheckedChange={setSoFavoritos}
+              />
+              <Label htmlFor="so-favoritos" className="text-xs text-muted-foreground flex items-center gap-1">
+                <Star className="h-3 w-3" />
+                Só favoritos
+              </Label>
+            </div>
             <div className="flex items-center gap-2 px-2">
               <Switch
                 id="show-inativos"
