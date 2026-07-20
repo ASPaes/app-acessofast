@@ -198,6 +198,83 @@ export type Database = {
           },
         ]
       }
+      device_marker_assignments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          device_id: string
+          marker_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          device_id: string
+          marker_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          device_id?: string
+          marker_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_marker_assignments_tenant_id_device_id_fkey"
+            columns: ["tenant_id", "device_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "device_marker_assignments_tenant_id_marker_id_fkey"
+            columns: ["tenant_id", "marker_id"]
+            isOneToOne: false
+            referencedRelation: "device_markers"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
+      device_markers: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_markers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_secret_shares: {
         Row: {
           device_id: string | null

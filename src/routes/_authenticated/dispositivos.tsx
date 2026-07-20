@@ -40,9 +40,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,6 +102,64 @@ type AddressBookRow = {
   is_active: boolean;
   tenants: { name: string } | null;
 };
+
+type DeviceMarker = {
+  id: string;
+  label: string;
+  color: string | null;
+};
+
+const MARKER_COLOR_TOKENS = [
+  "slate",
+  "red",
+  "amber",
+  "green",
+  "blue",
+  "violet",
+  "pink",
+  "gray",
+] as const;
+
+const MARKER_COLOR_CLASSES: Record<string, string> = {
+  slate: "bg-slate-500/15 text-slate-500 border-slate-500/30",
+  red: "bg-red-500/15 text-red-500 border-red-500/30",
+  amber: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+  green: "bg-green-500/15 text-green-500 border-green-500/30",
+  blue: "bg-blue-500/15 text-blue-500 border-blue-500/30",
+  violet: "bg-violet-500/15 text-violet-500 border-violet-500/30",
+  pink: "bg-pink-500/15 text-pink-500 border-pink-500/30",
+  gray: "bg-gray-500/15 text-gray-500 border-gray-500/30",
+};
+
+const MARKER_DOT_CLASSES: Record<string, string> = {
+  slate: "bg-slate-500",
+  red: "bg-red-500",
+  amber: "bg-amber-500",
+  green: "bg-green-500",
+  blue: "bg-blue-500",
+  violet: "bg-violet-500",
+  pink: "bg-pink-500",
+  gray: "bg-gray-500",
+};
+
+const MARKER_FALLBACK_CLASS =
+  "bg-secondary text-secondary-foreground border-transparent";
+
+function markerClasses(color: string | null | undefined): string {
+  if (!color) return MARKER_FALLBACK_CLASS;
+  return MARKER_COLOR_CLASSES[color] ?? MARKER_FALLBACK_CLASS;
+}
+
+function markerDotClass(color: string | null | undefined): string {
+  if (!color) return "bg-muted-foreground/40";
+  return MARKER_DOT_CLASSES[color] ?? "bg-muted-foreground/40";
+}
+
+function pickMarkerColor(label: string): string {
+  let sum = 0;
+  for (let i = 0; i < label.length; i++) sum += label.charCodeAt(i);
+  return MARKER_COLOR_TOKENS[sum % MARKER_COLOR_TOKENS.length];
+}
 
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
@@ -328,6 +395,41 @@ function DispositivosPage() {
     },
   });
 
+  const { data: markersList } = useQuery({
+    queryKey: ["device_markers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color")
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as DeviceMarker[];
+    },
+  });
+
+  const markersById = useMemo(() => {
+    const map = new Map<string, DeviceMarker>();
+    for (const m of markersList ?? []) map.set(m.id, m);
+    return map;
+  }, [markersList]);
+
+  const { data: markersByDevice } = useQuery({
+    queryKey: ["device_marker_assignments"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_marker_assignments")
+        .select("device_id, marker_id");
+      if (error) throw error;
+      const map = new Map<string, string[]>();
+      for (const row of data ?? []) {
+        const list = map.get(row.device_id as string) ?? [];
+        list.push(row.marker_id as string);
+        map.set(row.device_id as string, list);
+      }
+      return map;
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
@@ -435,6 +537,27 @@ function DispositivosPage() {
             <div className="flex flex-col">
               <span className="font-medium">{d.alias ?? "—"}</span>
               <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
+              {(() => {
+                const ids = markersByDevice?.get(d.id) ?? [];
+                if (ids.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {ids.map((mid) => {
+                      const m = markersById.get(mid);
+                      if (!m) return null;
+                      return (
+                        <Badge
+                          key={mid}
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                        >
+                          {m.label}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </TableCell>
@@ -788,7 +911,7 @@ function DispositivosPage() {
                       <span className="font-medium truncate">{d.alias ?? "—"}</span>
                       <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {status === "inativo" ? (
                         <Badge variant="secondary">Inativo</Badge>
                       ) : status === "atendimento" ? (
@@ -808,6 +931,19 @@ function DispositivosPage() {
                         </Badge>
                       )}
                       {d.device_group && <Badge variant="secondary">{d.device_group}</Badge>}
+                      {(markersByDevice?.get(d.id) ?? []).map((mid) => {
+                        const m = markersById.get(mid);
+                        if (!m) return null;
+                        return (
+                          <Badge
+                            key={mid}
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                          >
+                            {m.label}
+                          </Badge>
+                        );
+                      })}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs border-t border-border/60 pt-3">
                       <div className="flex flex-col">
@@ -1434,6 +1570,7 @@ function EditarDispositivoDialog({
               onChange={(e) => setGrupo(e.target.value)}
             />
           </div>
+          <MarcadoresField device={device} />
           <div className="space-y-2">
             <Label htmlFor="edit-so">SO</Label>
             <Input id="edit-so" value={so} onChange={(e) => setSo(e.target.value)} />
@@ -1449,5 +1586,212 @@ function EditarDispositivoDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function MarcadoresField({ device }: { device: AddressBookRow }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+
+  const { data: markersList } = useQuery({
+    queryKey: ["device_markers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color")
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as DeviceMarker[];
+    },
+  });
+
+  const { data: assignedIds } = useQuery({
+    queryKey: ["assignments", device.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_marker_assignments")
+        .select("marker_id")
+        .eq("device_id", device.id);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.marker_id as string));
+    },
+  });
+
+  const invalidarTudo = () => {
+    queryClient.invalidateQueries({ queryKey: ["device_markers"] });
+    queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
+    queryClient.invalidateQueries({ queryKey: ["assignments", device.id] });
+  };
+
+  const removerMutation = useMutation({
+    mutationFn: async (markerId: string) => {
+      const { error } = await supabase
+        .from("device_marker_assignments")
+        .delete()
+        .eq("device_id", device.id)
+        .eq("marker_id", markerId);
+      if (error) throw error;
+    },
+    onSuccess: invalidarTudo,
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const atribuirMutation = useMutation({
+    mutationFn: async (markerId: string) => {
+      if (!device.tenant_id) throw new Error("Dispositivo sem tenant vinculado");
+      const { error } = await supabase
+        .from("device_marker_assignments")
+        .insert({
+          tenant_id: device.tenant_id,
+          device_id: device.id,
+          marker_id: markerId,
+        });
+      if (error) throw error;
+    },
+    onSuccess: invalidarTudo,
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const criarMutation = useMutation({
+    mutationFn: async (label: string) => {
+      if (!device.tenant_id) throw new Error("Dispositivo sem tenant vinculado");
+      const trimmed = label.trim();
+      const color = pickMarkerColor(trimmed);
+      const ins = await supabase
+        .from("device_markers")
+        .insert({ tenant_id: device.tenant_id, label: trimmed, color })
+        .select("id")
+        .single();
+      let markerId = ins.data?.id as string | undefined;
+      if (ins.error) {
+        // provavelmente violação de unicidade — busca o existente
+        const { data: existing, error: findErr } = await supabase
+          .from("device_markers")
+          .select("id")
+          .eq("tenant_id", device.tenant_id)
+          .ilike("label", trimmed)
+          .maybeSingle();
+        if (findErr || !existing) throw ins.error;
+        markerId = existing.id as string;
+      }
+      if (!markerId) throw new Error("Falha ao criar marcador");
+      const { error: aErr } = await supabase
+        .from("device_marker_assignments")
+        .insert({
+          tenant_id: device.tenant_id,
+          device_id: device.id,
+          marker_id: markerId,
+        });
+      if (aErr) throw aErr;
+    },
+    onSuccess: () => {
+      setBusca("");
+      invalidarTudo();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const buscaTrim = busca.trim();
+  const buscaLower = buscaTrim.toLowerCase();
+  const filtrados = (markersList ?? []).filter((m) =>
+    m.label.toLowerCase().includes(buscaLower),
+  );
+  const jaExiste = (markersList ?? []).some(
+    (m) => m.label.toLowerCase() === buscaLower,
+  );
+  const podeCriar = buscaTrim.length > 0 && !jaExiste;
+
+  const atribuidos = (markersList ?? []).filter((m) => assignedIds?.has(m.id));
+
+  return (
+    <div className="space-y-2">
+      <Label>Marcadores</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-3 py-1.5 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {atribuidos.length === 0 ? (
+              <span className="text-muted-foreground flex items-center gap-2">
+                <Tag className="h-3.5 w-3.5" />
+                Adicionar marcadores
+              </span>
+            ) : (
+              atribuidos.map((m) => (
+                <Badge
+                  key={m.id}
+                  variant="outline"
+                  className={`gap-1 text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                >
+                  {m.label}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removerMutation.mutate(m.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        removerMutation.mutate(m.id);
+                      }
+                    }}
+                    className="inline-flex cursor-pointer opacity-70 hover:opacity-100"
+                    aria-label={`Remover ${m.label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </span>
+                </Badge>
+              ))
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Buscar ou criar marcador…"
+              value={busca}
+              onValueChange={setBusca}
+            />
+            <CommandList>
+              <CommandEmpty>Nenhum marcador.</CommandEmpty>
+              <CommandGroup>
+                {filtrados.map((m) => {
+                  const ativo = assignedIds?.has(m.id) ?? false;
+                  return (
+                    <CommandItem
+                      key={m.id}
+                      value={m.id}
+                      onSelect={() => {
+                        if (ativo) removerMutation.mutate(m.id);
+                        else atribuirMutation.mutate(m.id);
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
+                      <span className="flex-1">{m.label}</span>
+                      {ativo && <Check className="h-4 w-4 text-primary" />}
+                    </CommandItem>
+                  );
+                })}
+                {podeCriar && (
+                  <CommandItem
+                    value={`__criar__${buscaTrim}`}
+                    onSelect={() => criarMutation.mutate(buscaTrim)}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Criar «{buscaTrim}»</span>
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
