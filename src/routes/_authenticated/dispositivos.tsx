@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -129,6 +129,13 @@ function DispositivosPage() {
     deep_link: string;
   } | null>(null);
   const [copiadoConn, setCopiadoConn] = useState(false);
+  const [confirmRedefinirId, setConfirmRedefinirId] = useState<string | null>(null);
+  const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
+  const [senhaRedefinida, setSenhaRedefinida] = useState<{
+    rustdesk_id: string;
+    password: string;
+  } | null>(null);
+  const [copiadoRedef, setCopiadoRedef] = useState(false);
 
   const handleConectar = async (deviceId: string) => {
     setConnectingId(deviceId);
@@ -171,6 +178,40 @@ function DispositivosPage() {
       await navigator.clipboard.writeText(connectData.password);
       setCopiadoConn(true);
       setTimeout(() => setCopiadoConn(false), 2000);
+    } catch {
+      toast.error("Não foi possível copiar a senha");
+    }
+  };
+
+  const handleRedefinirSenha = async (deviceId: string) => {
+    setRedefinindoId(deviceId);
+    try {
+      const { data, error } = await supabase.functions.invoke<ProvisionResult>(
+        "provision-device-secret",
+        { body: { device_id: deviceId } },
+      );
+      if (error || data?.error) {
+        const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+        toast.error(raw || "Falha ao redefinir a senha");
+        return;
+      }
+      if (!data?.rustdesk_id || !data?.password) {
+        toast.error("Resposta inválida do servidor");
+        return;
+      }
+      setSenhaRedefinida({ rustdesk_id: data.rustdesk_id, password: data.password });
+      setCopiadoRedef(false);
+    } finally {
+      setRedefinindoId(null);
+    }
+  };
+
+  const copiarSenhaRedef = async () => {
+    if (!senhaRedefinida) return;
+    try {
+      await navigator.clipboard.writeText(senhaRedefinida.password);
+      setCopiadoRedef(true);
+      setTimeout(() => setCopiadoRedef(false), 2000);
     } catch {
       toast.error("Não foi possível copiar a senha");
     }
@@ -609,6 +650,16 @@ function DispositivosPage() {
                               </DropdownMenuItem>
                               {podeInativar && <DropdownMenuSeparator />}
                               {podeInativar &&
+                                (
+                                  <DropdownMenuItem
+                                    onClick={() => setConfirmRedefinirId(d.id)}
+                                    disabled={redefinindoId === d.id}
+                                  >
+                                    <KeyRound className="h-4 w-4 mr-2" />
+                                    {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                                  </DropdownMenuItem>
+                                )}
+                              {podeInativar &&
                                 (d.is_active ? (
                                   <DropdownMenuItem
                                     onClick={() => setConfirmInativarId(d.id)}
@@ -756,6 +807,16 @@ function DispositivosPage() {
                           </DropdownMenuItem>
                           {podeInativar && <DropdownMenuSeparator />}
                           {podeInativar &&
+                            (
+                              <DropdownMenuItem
+                                onClick={() => setConfirmRedefinirId(d.id)}
+                                disabled={redefinindoId === d.id}
+                              >
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                              </DropdownMenuItem>
+                            )}
+                          {podeInativar &&
                             (d.is_active ? (
                               <DropdownMenuItem
                                 onClick={() => setConfirmInativarId(d.id)}
@@ -879,6 +940,95 @@ function DispositivosPage() {
             >
               <Monitor className="h-4 w-4 mr-2" />
               Abrir conexão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={confirmRedefinirId !== null}
+        onOpenChange={(v) => {
+          if (!v) setConfirmRedefinirId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Redefinir senha de acesso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Uma nova senha permanente será gerada. A senha atual deixará de funcionar
+              até você aplicá-la como senha permanente no computador. Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmRedefinirId) {
+                  const id = confirmRedefinirId;
+                  setConfirmRedefinirId(null);
+                  void handleRedefinirSenha(id);
+                }
+              }}
+            >
+              Redefinir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={senhaRedefinida !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setSenhaRedefinida(null);
+            setCopiadoRedef(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova senha gerada</DialogTitle>
+            <DialogDescription>
+              Aplique esta senha como senha permanente (unattended) no client AcessoFast
+              deste computador. A senha anterior não funciona mais.
+            </DialogDescription>
+          </DialogHeader>
+          {senhaRedefinida && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>ID AcessoFast</Label>
+                <Input readOnly value={senhaRedefinida.rustdesk_id} className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label>Nova senha</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={senhaRedefinida.password}
+                    className="font-mono text-xs"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={copiarSenhaRedef}>
+                    {copiadoRedef ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    <span className="ml-1">{copiadoRedef ? "Copiado" : "Copiar"}</span>
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                Aplique esta senha como senha permanente (unattended) no client AcessoFast
+                deste computador. A senha anterior não funciona mais.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSenhaRedefinida(null);
+                setCopiadoRedef(false);
+              }}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
