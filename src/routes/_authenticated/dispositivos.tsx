@@ -1570,6 +1570,7 @@ function EditarDispositivoDialog({
               onChange={(e) => setGrupo(e.target.value)}
             />
           </div>
+          <MarcadoresField device={device} />
           <div className="space-y-2">
             <Label htmlFor="edit-so">SO</Label>
             <Input id="edit-so" value={so} onChange={(e) => setSo(e.target.value)} />
