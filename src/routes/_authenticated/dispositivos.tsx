@@ -678,11 +678,20 @@ function DispositivosPage() {
               <Button
                 size="icon"
                 variant={viewMode === "grid" ? "secondary" : "ghost"}
-                className="h-8 w-8 rounded-l-none"
+                className="h-8 w-8 rounded-none"
                 title="Grade"
                 onClick={() => setViewMode("grid")}
               >
                 <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant={viewMode === "grouped" ? "secondary" : "ghost"}
+                className="h-8 w-8 rounded-l-none"
+                title="Agrupar por grupo"
+                onClick={() => setViewMode("grouped")}
+              >
+                <FolderTree className="h-4 w-4" />
               </Button>
             </div>
             {podeAdicionar && perfil && (
