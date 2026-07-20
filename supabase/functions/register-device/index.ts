@@ -13,7 +13,11 @@ const CORS = {
 };
 const RUSTID_RE = /^[0-9]{6,12}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PW_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0 O 1 l I
+// Alfabeto sem ambiguos (0 O 1 l I), separado por classe para garantir a politica.
+const PW_LOWER  = "abcdefghijkmnpqrstuvwxyz"; // sem l o
+const PW_UPPER  = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sem I O
+const PW_DIGITS = "23456789";                 // sem 0 1
+const PW_ALPHABET = PW_LOWER + PW_UPPER + PW_DIGITS;
 const PW_LEN = 20;
 
 function json(body: unknown, status = 200) {
@@ -30,14 +34,23 @@ function bytesToB64(bytes: Uint8Array): string {
   let s = ""; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return btoa(s);
 }
+// indice uniforme em [0,n) via rejection sampling de 1 byte (n <= 256) -> sem vies de modulo
+function randIndex(n: number): number {
+  const max = 256 - (256 % n);
+  const buf = new Uint8Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= max);
+  return buf[0] % n;
+}
+function pick(pool: string): string { return pool[randIndex(pool.length)]; }
 function genPassword(len: number): string {
-  const N = PW_ALPHABET.length; const max = 256 - (256 % N); // rejection sampling -> sem vies
-  const out: string[] = []; const buf = new Uint8Array(1);
-  while (out.length < len) {
-    crypto.getRandomValues(buf);
-    if (buf[0] < max) out.push(PW_ALPHABET[buf[0] % N]);
+  // garante 1 de cada classe exigida (digito, maiuscula, minuscula) + preenche + embaralha (Fisher-Yates)
+  const chars: string[] = [pick(PW_LOWER), pick(PW_UPPER), pick(PW_DIGITS)];
+  while (chars.length < len) chars.push(pick(PW_ALPHABET));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randIndex(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
   }
-  return out.join("");
+  return chars.join("");
 }
 
 Deno.serve(async (req) => {
