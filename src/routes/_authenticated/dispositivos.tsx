@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -118,7 +118,16 @@ function DispositivosPage() {
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [showInativos, setShowInativos] = useState(false);
   const [soFavoritos, setSoFavoritos] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [viewMode, setViewMode] = useState<"list" | "grid" | "grouped">("list");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroupExpanded = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   const [editing, setEditing] = useState<AddressBookRow | null>(null);
   const [confirmInativarId, setConfirmInativarId] = useState<string | null>(null);
   const queryClient = useQueryClient();
