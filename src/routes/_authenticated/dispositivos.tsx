@@ -1367,6 +1367,8 @@ function AdicionarDispositivoDialog({
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [grupo, setGrupo] = useState("");
+  const [grupoOpen, setGrupoOpen] = useState(false);
 
   const isSuper = role === "super_admin";
 
@@ -1383,12 +1385,30 @@ function AdicionarDispositivoDialog({
     },
   });
 
+  const { data: gruposExistentes } = useQuery({
+    queryKey: ["device_groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("address_book")
+        .select("device_group");
+      if (error) throw error;
+      const set = new Set<string>();
+      for (const row of data ?? []) {
+        const g = row.device_group?.trim();
+        if (g) set.add(g);
+      }
+      return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    },
+  });
+
   const resetForm = () => {
     setRustdeskId("");
     setAlias("");
     setTenantSelecionado("");
     setSenhaGerada(null);
     setCopiado(false);
+    setGrupo("");
+    setGrupoOpen(false);
   };
 
   const mutation = useMutation({
@@ -1422,10 +1442,26 @@ function AdicionarDispositivoDialog({
         }
         throw new Error(raw || "Falha ao adotar dispositivo");
       }
-      return data ?? {};
+      const adopted = data ?? {};
+      let grupoFalhou = false;
+      const grupoTrim = grupo.trim();
+      if (adopted.was_inserted && grupoTrim && adopted.device_id) {
+        const { error: gErr } = await supabase
+          .from("address_book")
+          .update({ device_group: grupoTrim })
+          .eq("id", adopted.device_id);
+        if (gErr) grupoFalhou = true;
+      }
+      return { ...adopted, grupoFalhou };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
+      queryClient.invalidateQueries({ queryKey: ["device_groups"] });
+      if (data.grupoFalhou) {
+        toast.warning(
+          "Dispositivo adotado, mas não consegui definir o grupo — ajuste pelo Editar.",
+        );
+      }
       if (data.was_inserted && data.password_provisioned && data.password) {
         setSenhaGerada(data.password);
         return;
@@ -1524,6 +1560,84 @@ function AdicionarDispositivoDialog({
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Grupo</Label>
+                <Popover open={grupoOpen} onOpenChange={setGrupoOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className={grupo ? "" : "text-muted-foreground"}>
+                        {grupo || "Sem grupo — selecionar ou digitar"}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Selecionar ou digitar grupo…"
+                        value={grupo}
+                        onValueChange={setGrupo}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhum grupo encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="__sem_grupo__"
+                            onSelect={() => {
+                              setGrupo("");
+                              setGrupoOpen(false);
+                            }}
+                          >
+                            <span className="text-muted-foreground">Sem grupo</span>
+                            {grupo === "" && <Check className="ml-auto h-4 w-4" />}
+                          </CommandItem>
+                          {(() => {
+                            const q = grupo.trim().toLowerCase();
+                            const lista = (gruposExistentes ?? []).filter((g) =>
+                              q ? g.toLowerCase().includes(q) : true,
+                            );
+                            const trimmed = grupo.trim();
+                            const existeIgual =
+                              trimmed &&
+                              (gruposExistentes ?? []).some(
+                                (g) => g.toLowerCase() === trimmed.toLowerCase(),
+                              );
+                            return (
+                              <>
+                                {lista.map((g) => (
+                                  <CommandItem
+                                    key={g}
+                                    value={g}
+                                    onSelect={() => {
+                                      setGrupo(g);
+                                      setGrupoOpen(false);
+                                    }}
+                                  >
+                                    {g}
+                                    {g === grupo && <Check className="ml-auto h-4 w-4" />}
+                                  </CommandItem>
+                                ))}
+                                {trimmed && !existeIgual && (
+                                  <CommandItem
+                                    value={`__novo__${trimmed}`}
+                                    onSelect={() => setGrupoOpen(false)}
+                                  >
+                                    Usar «{trimmed}»
+                                  </CommandItem>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               {isSuper && (
                 <div className="space-y-2">
