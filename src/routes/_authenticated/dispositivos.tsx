@@ -357,7 +357,7 @@ function DispositivosPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dispositivos</h1>
         <p className="text-sm text-muted-foreground">
-          Endpoints RustDesk cadastrados no address book do seu tenant.
+          Endpoints AcessoFast cadastrados no address book do seu tenant.
         </p>
       </div>
 
@@ -835,13 +835,13 @@ function DispositivosPage() {
           <DialogHeader>
             <DialogTitle>Conectar</DialogTitle>
             <DialogDescription>
-              Ao abrir a conexão, o RustDesk vai pedir a senha acima. Cole-a para conectar.
+              Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar.
             </DialogDescription>
           </DialogHeader>
           {connectData && (
             <div className="space-y-3">
               <div className="space-y-1">
-                <Label>Rustdesk ID</Label>
+                <Label>ID AcessoFast</Label>
                 <Input readOnly value={connectData.rustdesk_id} className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
@@ -1013,7 +1013,7 @@ function AdicionarDispositivoDialog({
             <DialogHeader>
               <DialogTitle>Senha gerada</DialogTitle>
               <DialogDescription>
-                Configure esta senha como senha permanente (unattended) no client RustDesk deste
+                Configure esta senha como senha permanente (unattended) no client AcessoFast deste
                 endpoint. Ela fica guardada cifrada e pode ser recuperada depois pelo botão
                 Conectar.
               </DialogDescription>
