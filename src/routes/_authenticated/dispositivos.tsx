@@ -446,7 +446,7 @@ function DispositivosPage() {
       }
       if (t) {
         const match =
-          d.rust  .toLowerCase().includes(t) ||
+          d.rustdesk_id.toLowerCase().includes(t) ||
           (d.alias ?? "").toLowerCase().includes(t) ||
           (d.device_group ?? "").toLowerCase().includes(t);
         if (!match) return false;
