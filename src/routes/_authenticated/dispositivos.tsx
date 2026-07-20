@@ -944,6 +944,95 @@ function DispositivosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={confirmRedefinirId !== null}
+        onOpenChange={(v) => {
+          if (!v) setConfirmRedefinirId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Redefinir senha de acesso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Uma nova senha permanente será gerada. A senha atual deixará de funcionar
+              até você aplicá-la como senha permanente no computador. Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmRedefinirId) {
+                  const id = confirmRedefinirId;
+                  setConfirmRedefinirId(null);
+                  void handleRedefinirSenha(id);
+                }
+              }}
+            >
+              Redefinir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={senhaRedefinida !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setSenhaRedefinida(null);
+            setCopiadoRedef(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova senha gerada</DialogTitle>
+            <DialogDescription>
+              Aplique esta senha como senha permanente (unattended) no client AcessoFast
+              deste computador. A senha anterior não funciona mais.
+            </DialogDescription>
+          </DialogHeader>
+          {senhaRedefinida && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>ID AcessoFast</Label>
+                <Input readOnly value={senhaRedefinida.rustdesk_id} className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label>Nova senha</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={senhaRedefinida.password}
+                    className="font-mono text-xs"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={copiarSenhaRedef}>
+                    {copiadoRedef ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    <span className="ml-1">{copiadoRedef ? "Copiado" : "Copiar"}</span>
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                Aplique esta senha como senha permanente (unattended) no client AcessoFast
+                deste computador. A senha anterior não funciona mais.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSenhaRedefinida(null);
+                setCopiadoRedef(false);
+              }}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
