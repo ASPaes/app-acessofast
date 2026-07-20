@@ -1561,6 +1561,84 @@ function AdicionarDispositivoDialog({
                   onChange={(e) => setAlias(e.target.value)}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Grupo</Label>
+                <Popover open={grupoOpen} onOpenChange={setGrupoOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className={grupo ? "" : "text-muted-foreground"}>
+                        {grupo || "Sem grupo — selecionar ou digitar"}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Selecionar ou digitar grupo…"
+                        value={grupo}
+                        onValueChange={setGrupo}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhum grupo encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="__sem_grupo__"
+                            onSelect={() => {
+                              setGrupo("");
+                              setGrupoOpen(false);
+                            }}
+                          >
+                            <span className="text-muted-foreground">Sem grupo</span>
+                            {grupo === "" && <Check className="ml-auto h-4 w-4" />}
+                          </CommandItem>
+                          {(() => {
+                            const q = grupo.trim().toLowerCase();
+                            const lista = (gruposExistentes ?? []).filter((g) =>
+                              q ? g.toLowerCase().includes(q) : true,
+                            );
+                            const trimmed = grupo.trim();
+                            const existeIgual =
+                              trimmed &&
+                              (gruposExistentes ?? []).some(
+                                (g) => g.toLowerCase() === trimmed.toLowerCase(),
+                              );
+                            return (
+                              <>
+                                {lista.map((g) => (
+                                  <CommandItem
+                                    key={g}
+                                    value={g}
+                                    onSelect={() => {
+                                      setGrupo(g);
+                                      setGrupoOpen(false);
+                                    }}
+                                  >
+                                    {g}
+                                    {g === grupo && <Check className="ml-auto h-4 w-4" />}
+                                  </CommandItem>
+                                ))}
+                                {trimmed && !existeIgual && (
+                                  <CommandItem
+                                    value={`__novo__${trimmed}`}
+                                    onSelect={() => setGrupoOpen(false)}
+                                  >
+                                    Usar «{trimmed}»
+                                  </CommandItem>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               {isSuper && (
                 <div className="space-y-2">
                   <Label htmlFor="dev-tenant">Tenant *</Label>
