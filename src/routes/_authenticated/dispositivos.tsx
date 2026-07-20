@@ -40,9 +40,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,6 +102,64 @@ type AddressBookRow = {
   is_active: boolean;
   tenants: { name: string } | null;
 };
+
+type DeviceMarker = {
+  id: string;
+  label: string;
+  color: string | null;
+};
+
+const MARKER_COLOR_TOKENS = [
+  "slate",
+  "red",
+  "amber",
+  "green",
+  "blue",
+  "violet",
+  "pink",
+  "gray",
+] as const;
+
+const MARKER_COLOR_CLASSES: Record<string, string> = {
+  slate: "bg-slate-500/15 text-slate-500 border-slate-500/30",
+  red: "bg-red-500/15 text-red-500 border-red-500/30",
+  amber: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+  green: "bg-green-500/15 text-green-500 border-green-500/30",
+  blue: "bg-blue-500/15 text-blue-500 border-blue-500/30",
+  violet: "bg-violet-500/15 text-violet-500 border-violet-500/30",
+  pink: "bg-pink-500/15 text-pink-500 border-pink-500/30",
+  gray: "bg-gray-500/15 text-gray-500 border-gray-500/30",
+};
+
+const MARKER_DOT_CLASSES: Record<string, string> = {
+  slate: "bg-slate-500",
+  red: "bg-red-500",
+  amber: "bg-amber-500",
+  green: "bg-green-500",
+  blue: "bg-blue-500",
+  violet: "bg-violet-500",
+  pink: "bg-pink-500",
+  gray: "bg-gray-500",
+};
+
+const MARKER_FALLBACK_CLASS =
+  "bg-secondary text-secondary-foreground border-transparent";
+
+function markerClasses(color: string | null | undefined): string {
+  if (!color) return MARKER_FALLBACK_CLASS;
+  return MARKER_COLOR_CLASSES[color] ?? MARKER_FALLBACK_CLASS;
+}
+
+function markerDotClass(color: string | null | undefined): string {
+  if (!color) return "bg-muted-foreground/40";
+  return MARKER_DOT_CLASSES[color] ?? "bg-muted-foreground/40";
+}
+
+function pickMarkerColor(label: string): string {
+  let sum = 0;
+  for (let i = 0; i < label.length; i++) sum += label.charCodeAt(i);
+  return MARKER_COLOR_TOKENS[sum % MARKER_COLOR_TOKENS.length];
+}
 
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
