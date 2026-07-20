@@ -1588,3 +1588,210 @@ function EditarDispositivoDialog({
     </Dialog>
   );
 }
+
+function MarcadoresField({ device }: { device: AddressBookRow }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+
+  const { data: markersList } = useQuery({
+    queryKey: ["device_markers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color")
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as DeviceMarker[];
+    },
+  });
+
+  const { data: assignedIds } = useQuery({
+    queryKey: ["assignments", device.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_marker_assignments")
+        .select("marker_id")
+        .eq("device_id", device.id);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.marker_id as string));
+    },
+  });
+
+  const invalidarTudo = () => {
+    queryClient.invalidateQueries({ queryKey: ["device_markers"] });
+    queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
+    queryClient.invalidateQueries({ queryKey: ["assignments", device.id] });
+  };
+
+  const removerMutation = useMutation({
+    mutationFn: async (markerId: string) => {
+      const { error } = await supabase
+        .from("device_marker_assignments")
+        .delete()
+        .eq("device_id", device.id)
+        .eq("marker_id", markerId);
+      if (error) throw error;
+    },
+    onSuccess: invalidarTudo,
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const atribuirMutation = useMutation({
+    mutationFn: async (markerId: string) => {
+      if (!device.tenant_id) throw new Error("Dispositivo sem tenant vinculado");
+      const { error } = await supabase
+        .from("device_marker_assignments")
+        .insert({
+          tenant_id: device.tenant_id,
+          device_id: device.id,
+          marker_id: markerId,
+        });
+      if (error) throw error;
+    },
+    onSuccess: invalidarTudo,
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const criarMutation = useMutation({
+    mutationFn: async (label: string) => {
+      if (!device.tenant_id) throw new Error("Dispositivo sem tenant vinculado");
+      const trimmed = label.trim();
+      const color = pickMarkerColor(trimmed);
+      const ins = await supabase
+        .from("device_markers")
+        .insert({ tenant_id: device.tenant_id, label: trimmed, color })
+        .select("id")
+        .single();
+      let markerId = ins.data?.id as string | undefined;
+      if (ins.error) {
+        // provavelmente violação de unicidade — busca o existente
+        const { data: existing, error: findErr } = await supabase
+          .from("device_markers")
+          .select("id")
+          .eq("tenant_id", device.tenant_id)
+          .ilike("label", trimmed)
+          .maybeSingle();
+        if (findErr || !existing) throw ins.error;
+        markerId = existing.id as string;
+      }
+      if (!markerId) throw new Error("Falha ao criar marcador");
+      const { error: aErr } = await supabase
+        .from("device_marker_assignments")
+        .insert({
+          tenant_id: device.tenant_id,
+          device_id: device.id,
+          marker_id: markerId,
+        });
+      if (aErr) throw aErr;
+    },
+    onSuccess: () => {
+      setBusca("");
+      invalidarTudo();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const buscaTrim = busca.trim();
+  const buscaLower = buscaTrim.toLowerCase();
+  const filtrados = (markersList ?? []).filter((m) =>
+    m.label.toLowerCase().includes(buscaLower),
+  );
+  const jaExiste = (markersList ?? []).some(
+    (m) => m.label.toLowerCase() === buscaLower,
+  );
+  const podeCriar = buscaTrim.length > 0 && !jaExiste;
+
+  const atribuidos = (markersList ?? []).filter((m) => assignedIds?.has(m.id));
+
+  return (
+    <div className="space-y-2">
+      <Label>Marcadores</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-3 py-1.5 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {atribuidos.length === 0 ? (
+              <span className="text-muted-foreground flex items-center gap-2">
+                <Tag className="h-3.5 w-3.5" />
+                Adicionar marcadores
+              </span>
+            ) : (
+              atribuidos.map((m) => (
+                <Badge
+                  key={m.id}
+                  variant="outline"
+                  className={`gap-1 text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                >
+                  {m.label}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removerMutation.mutate(m.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        removerMutation.mutate(m.id);
+                      }
+                    }}
+                    className="inline-flex cursor-pointer opacity-70 hover:opacity-100"
+                    aria-label={`Remover ${m.label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </span>
+                </Badge>
+              ))
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Buscar ou criar marcador…"
+              value={busca}
+              onValueChange={setBusca}
+            />
+            <CommandList>
+              <CommandEmpty>Nenhum marcador.</CommandEmpty>
+              <CommandGroup>
+                {filtrados.map((m) => {
+                  const ativo = assignedIds?.has(m.id) ?? false;
+                  return (
+                    <CommandItem
+                      key={m.id}
+                      value={m.id}
+                      onSelect={() => {
+                        if (ativo) removerMutation.mutate(m.id);
+                        else atribuirMutation.mutate(m.id);
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
+                      <span className="flex-1">{m.label}</span>
+                      {ativo && <Check className="h-4 w-4 text-primary" />}
+                    </CommandItem>
+                  );
+                })}
+                {podeCriar && (
+                  <CommandItem
+                    value={`__criar__${buscaTrim}`}
+                    onSelect={() => criarMutation.mutate(buscaTrim)}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Criar «{buscaTrim}»</span>
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
