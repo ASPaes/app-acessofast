@@ -395,6 +395,41 @@ function DispositivosPage() {
     },
   });
 
+  const { data: markersList } = useQuery({
+    queryKey: ["device_markers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color")
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as DeviceMarker[];
+    },
+  });
+
+  const markersById = useMemo(() => {
+    const map = new Map<string, DeviceMarker>();
+    for (const m of markersList ?? []) map.set(m.id, m);
+    return map;
+  }, [markersList]);
+
+  const { data: markersByDevice } = useQuery({
+    queryKey: ["device_marker_assignments"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_marker_assignments")
+        .select("device_id, marker_id");
+      if (error) throw error;
+      const map = new Map<string, string[]>();
+      for (const row of data ?? []) {
+        const list = map.get(row.device_id as string) ?? [];
+        list.push(row.marker_id as string);
+        map.set(row.device_id as string, list);
+      }
+      return map;
+    },
+  });
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
