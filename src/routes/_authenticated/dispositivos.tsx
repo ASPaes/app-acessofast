@@ -911,7 +911,7 @@ function DispositivosPage() {
                       <span className="font-medium truncate">{d.alias ?? "—"}</span>
                       <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {status === "inativo" ? (
                         <Badge variant="secondary">Inativo</Badge>
                       ) : status === "atendimento" ? (
@@ -931,6 +931,19 @@ function DispositivosPage() {
                         </Badge>
                       )}
                       {d.device_group && <Badge variant="secondary">{d.device_group}</Badge>}
+                      {(markersByDevice?.get(d.id) ?? []).map((mid) => {
+                        const m = markersById.get(mid);
+                        if (!m) return null;
+                        return (
+                          <Badge
+                            key={mid}
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                          >
+                            {m.label}
+                          </Badge>
+                        );
+                      })}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs border-t border-border/60 pt-3">
                       <div className="flex flex-col">
