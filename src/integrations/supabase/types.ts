@@ -783,6 +783,10 @@ export type Database = {
         Args: { p_secret_id: string }
         Returns: undefined
       }
+      rl_hit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number }
+        Returns: boolean
+      }
       set_device_active: {
         Args: { p_active: boolean; p_device_id: string }
         Returns: undefined
