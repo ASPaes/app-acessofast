@@ -186,6 +186,8 @@ function DispositivosPage() {
   const [showInativos, setShowInativos] = useState(false);
   const [soFavoritos, setSoFavoritos] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid" | "grouped">("list");
+  const [markerFilter, setMarkerFilter] = useState<Set<string>>(new Set());
+  const [markerFilterOpen, setMarkerFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroupExpanded = (key: string) => {
     setExpandedGroups((prev) => {
