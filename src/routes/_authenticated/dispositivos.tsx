@@ -736,154 +736,12 @@ function DispositivosPage() {
                   </TableRow>
                 )}
                 {!isLoading &&
-                  filtered.map((d) => {
-                    const status =
-                      d.is_active === false
-                        ? "inativo"
-                        : sessoesAtivas?.has(d.id)
-                          ? "atendimento"
-                          : dispositivosOnline?.has(d.id)
-                            ? "online"
-                            : "offline";
-                    const iconColor =
-                      status === "atendimento"
-                        ? "text-amber-500"
-                        : status === "online"
-                          ? "text-emerald-500"
-                          : "text-muted-foreground/40";
-
-                    return (
-                    <TableRow key={d.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 shrink-0"
-                            title={favoritos?.has(d.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-                            onClick={() => toggleFavoritoMutation.mutate({ deviceId: d.id, favoritar: !favoritos?.has(d.id) })}
-                          >
-                            <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
-                          </Button>
-                          <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
-                          <div className="flex flex-col">
-                            <span className="font-medium">{d.alias ?? "—"}</span>
-                            <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {d.device_group ? (
-                          <Badge variant="secondary">{d.device_group}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {d.os ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {d.last_online
-                          ? new Date(d.last_online).toLocaleString("pt-BR")
-                          : "nunca"}
-                      </TableCell>
-                      {isSuper && (
-                        <TableCell className="text-xs">
-                          {d.tenants?.name ?? <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                      )}
-                      <TableCell>
-                        {status === "inativo" ? (
-                          <Badge variant="secondary">Inativo</Badge>
-                        ) : status === "atendimento" ? (
-                          <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                            Em atendimento
-                          </Badge>
-                        ) : status === "online" ? (
-                          <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Online
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-                            Offline
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            disabled={connectingId === d.id || d.is_active === false}
-                            onClick={() => handleConectar(d.id)}
-                          >
-                            <Monitor className="h-4 w-4 mr-2" />
-                            {connectingId === d.id ? "Conectando..." : "Conectar"}
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" title="Mais ações">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  navigator.clipboard.writeText(d.rustdesk_id);
-                                  toast.success("ID copiado");
-                                }}
-                              >
-                                <Copy className="h-4 w-4 mr-2" />
-                                Copiar ID
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setEditing(d)}>
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Editar
-                              </DropdownMenuItem>
-                              {podeInativar && <DropdownMenuSeparator />}
-                              {podeInativar &&
-                                (
-                                  <DropdownMenuItem
-                                    onClick={() => setConfirmRedefinirId(d.id)}
-                                    disabled={redefinindoId === d.id}
-                                  >
-                                    <KeyRound className="h-4 w-4 mr-2" />
-                                    {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
-                                  </DropdownMenuItem>
-                                )}
-                              {podeInativar &&
-                                (d.is_active ? (
-                                  <DropdownMenuItem
-                                    onClick={() => setConfirmInativarId(d.id)}
-                                    disabled={toggleAtivoMutation.isPending}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <PowerOff className="h-4 w-4 mr-2" />
-                                    Inativar
-                                  </DropdownMenuItem>
-                                ) : (
-                                  <DropdownMenuItem
-                                    onClick={() => toggleAtivoMutation.mutate({ id: d.id, ativar: true })}
-                                    disabled={toggleAtivoMutation.isPending}
-                                  >
-                                    <Power className="h-4 w-4 mr-2" />
-                                    Reativar
-                                  </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
+                  filtered.map((d) => renderDeviceRow(d, true))}
               </TableBody>
             </Table>
           </div>
-          ) : isLoading ? (
+          ) : viewMode === "grid" ? (
+            isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Skeleton key={i} className="h-56 w-full rounded-lg" />
@@ -1037,6 +895,70 @@ function DispositivosPage() {
                 );
               })}
             </div>
+          )
+          ) : (
+            isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-56 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">
+                Nenhum dispositivo encontrado.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {grupos.map((g) => {
+                  const aberto = expandedGroups.has(g.key);
+                  return (
+                    <div key={g.key} className="rounded-lg border border-border/60 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroupExpanded(g.key)}
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                      >
+                        {aberto ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="font-medium">{g.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {g.total} dispositivo{g.total === 1 ? "" : "s"}
+                        </span>
+                        <div className="flex items-center gap-3 ml-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                            <span className="text-sm tabular-nums">{g.online}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-amber-500" />
+                            <span className="text-sm tabular-nums">{g.atendimento}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+                            <span className="text-sm tabular-nums">{g.offline}</span>
+                          </div>
+                        </div>
+                        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                          últ. acesso: {g.ultimo ? new Date(g.ultimo).toLocaleString("pt-BR") : "nunca"}
+                        </span>
+                      </button>
+                      {aberto && (
+                        <div className="border-t border-border/60">
+                          <Table>
+                            <TableBody>
+                              {g.devices.map((d) => renderDeviceRow(d, false))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
           )}
         </CardContent>
       </Card>
