@@ -1367,6 +1367,8 @@ function AdicionarDispositivoDialog({
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [grupo, setGrupo] = useState("");
+  const [grupoOpen, setGrupoOpen] = useState(false);
 
   const isSuper = role === "super_admin";
 
@@ -1383,12 +1385,30 @@ function AdicionarDispositivoDialog({
     },
   });
 
+  const { data: gruposExistentes } = useQuery({
+    queryKey: ["device_groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("address_book")
+        .select("device_group");
+      if (error) throw error;
+      const set = new Set<string>();
+      for (const row of data ?? []) {
+        const g = row.device_group?.trim();
+        if (g) set.add(g);
+      }
+      return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    },
+  });
+
   const resetForm = () => {
     setRustdeskId("");
     setAlias("");
     setTenantSelecionado("");
     setSenhaGerada(null);
     setCopiado(false);
+    setGrupo("");
+    setGrupoOpen(false);
   };
 
   const mutation = useMutation({
@@ -1422,10 +1442,26 @@ function AdicionarDispositivoDialog({
         }
         throw new Error(raw || "Falha ao adotar dispositivo");
       }
-      return data ?? {};
+      const adopted = data ?? {};
+      let grupoFalhou = false;
+      const grupoTrim = grupo.trim();
+      if (adopted.was_inserted && grupoTrim && adopted.device_id) {
+        const { error: gErr } = await supabase
+          .from("address_book")
+          .update({ device_group: grupoTrim })
+          .eq("id", adopted.device_id);
+        if (gErr) grupoFalhou = true;
+      }
+      return { ...adopted, grupoFalhou };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
+      queryClient.invalidateQueries({ queryKey: ["device_groups"] });
+      if (data.grupoFalhou) {
+        toast.warning(
+          "Dispositivo adotado, mas não consegui definir o grupo — ajuste pelo Editar.",
+        );
+      }
       if (data.was_inserted && data.password_provisioned && data.password) {
         setSenhaGerada(data.password);
         return;
