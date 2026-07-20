@@ -650,6 +650,16 @@ function DispositivosPage() {
                               </DropdownMenuItem>
                               {podeInativar && <DropdownMenuSeparator />}
                               {podeInativar &&
+                                (
+                                  <DropdownMenuItem
+                                    onClick={() => setConfirmRedefinirId(d.id)}
+                                    disabled={redefinindoId === d.id}
+                                  >
+                                    <KeyRound className="h-4 w-4 mr-2" />
+                                    {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                                  </DropdownMenuItem>
+                                )}
+                              {podeInativar &&
                                 (d.is_active ? (
                                   <DropdownMenuItem
                                     onClick={() => setConfirmInativarId(d.id)}
@@ -796,6 +806,16 @@ function DispositivosPage() {
                             Editar
                           </DropdownMenuItem>
                           {podeInativar && <DropdownMenuSeparator />}
+                          {podeInativar &&
+                            (
+                              <DropdownMenuItem
+                                onClick={() => setConfirmRedefinirId(d.id)}
+                                disabled={redefinindoId === d.id}
+                              >
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                              </DropdownMenuItem>
+                            )}
                           {podeInativar &&
                             (d.is_active ? (
                               <DropdownMenuItem
