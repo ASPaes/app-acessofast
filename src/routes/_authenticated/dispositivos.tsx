@@ -537,6 +537,27 @@ function DispositivosPage() {
             <div className="flex flex-col">
               <span className="font-medium">{d.alias ?? "—"}</span>
               <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
+              {(() => {
+                const ids = markersByDevice?.get(d.id) ?? [];
+                if (ids.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {ids.map((mid) => {
+                      const m = markersById.get(mid);
+                      if (!m) return null;
+                      return (
+                        <Badge
+                          key={mid}
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                        >
+                          {m.label}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </TableCell>
