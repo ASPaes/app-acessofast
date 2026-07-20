@@ -439,16 +439,21 @@ function DispositivosPage() {
       if (!showInativos && d.is_active === false) return false;
       if (soFavoritos && !favoritos?.has(d.id)) return false;
       if (isSuper && tenantFilter !== "all" && d.tenant_id !== tenantFilter) return false;
+      if (markerFilter.size > 0) {
+        const assigned = markersByDevice?.get(d.id) ?? [];
+        const hasAny = assigned.some((mid) => markerFilter.has(mid));
+        if (!hasAny) return false;
+      }
       if (t) {
         const match =
-          d.rustdesk_id.toLowerCase().includes(t) ||
+          d.rust  .toLowerCase().includes(t) ||
           (d.alias ?? "").toLowerCase().includes(t) ||
           (d.device_group ?? "").toLowerCase().includes(t);
         if (!match) return false;
       }
       return true;
     });
-  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos]);
+  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos, markerFilter, markersByDevice]);
 
   const escopoContagem = useMemo(() => {
     const base = data ?? [];
