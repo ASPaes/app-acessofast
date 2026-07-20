@@ -186,6 +186,8 @@ function DispositivosPage() {
   const [showInativos, setShowInativos] = useState(false);
   const [soFavoritos, setSoFavoritos] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid" | "grouped">("list");
+  const [markerFilter, setMarkerFilter] = useState<Set<string>>(new Set());
+  const [markerFilterOpen, setMarkerFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroupExpanded = (key: string) => {
     setExpandedGroups((prev) => {
@@ -437,6 +439,11 @@ function DispositivosPage() {
       if (!showInativos && d.is_active === false) return false;
       if (soFavoritos && !favoritos?.has(d.id)) return false;
       if (isSuper && tenantFilter !== "all" && d.tenant_id !== tenantFilter) return false;
+      if (markerFilter.size > 0) {
+        const assigned = markersByDevice?.get(d.id) ?? [];
+        const hasAny = assigned.some((mid) => markerFilter.has(mid));
+        if (!hasAny) return false;
+      }
       if (t) {
         const match =
           d.rustdesk_id.toLowerCase().includes(t) ||
@@ -446,7 +453,7 @@ function DispositivosPage() {
       }
       return true;
     });
-  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos]);
+  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos, markerFilter, markersByDevice]);
 
   const escopoContagem = useMemo(() => {
     const base = data ?? [];
@@ -788,6 +795,62 @@ function DispositivosPage() {
                 Mostrar inativos
               </Label>
             </div>
+            <Popover open={markerFilterOpen} onOpenChange={setMarkerFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Tag className="h-4 w-4" />
+                  Marcadores
+                  {markerFilter.size > 0 && (
+                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] tabular-nums">
+                      {markerFilter.size}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="end">
+                <Command>
+                  <CommandInput placeholder="Buscar marcador…" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum marcador encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {markersList?.map((m) => {
+                        const selected = markerFilter.has(m.id);
+                        return (
+                          <CommandItem
+                            key={m.id}
+                            value={m.label}
+                            onSelect={() => {
+                              setMarkerFilter((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(m.id)) next.delete(m.id);
+                                else next.add(m.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            <span className={`mr-2 h-2 w-2 rounded-full ${markerDotClass(m.color)}`} />
+                            <span className="flex-1 truncate">{m.label}</span>
+                            {selected && <Check className="h-4 w-4" />}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                    {markerFilter.size > 0 && (
+                      <CommandGroup>
+                        <CommandItem
+                          value="__limpar__"
+                          onSelect={() => setMarkerFilter(new Set())}
+                          className="text-muted-foreground"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Limpar filtro
+                        </CommandItem>
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <div className="flex items-center rounded-md border border-border/60">
               <Button
                 size="icon"
