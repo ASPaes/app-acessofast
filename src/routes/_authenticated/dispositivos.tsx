@@ -1545,7 +1545,7 @@ function AdicionarDispositivoDialog({
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="dev-rustdesk-id">Rustdesk ID *</Label>
+                <Label htmlFor="dev-rustdesk-id">AcessoFast ID *</Label>
                 <Input
                   id="dev-rustdesk-id"
                   value={rustdeskId}
