@@ -1023,10 +1023,13 @@ function DispositivosPage() {
                       ) : (
                         <Badge variant="outline" className="gap-1.5 text-muted-foreground">
                           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-                          Offline
+                          {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
                         </Badge>
                       )}
-                      {d.device_group && <Badge variant="secondary">{d.device_group}</Badge>}
+                      {(() => {
+                        const nome = d.clients?.name ?? d.device_group;
+                        return nome ? <Badge variant="secondary">{nome}</Badge> : null;
+                      })()}
                       {(markersByDevice?.get(d.id) ?? []).map((mid) => {
                         const m = markersById.get(mid);
                         if (!m) return null;
@@ -1047,9 +1050,9 @@ function DispositivosPage() {
                         <span className="text-muted-foreground">{d.os ?? "—"}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Últ. online</span>
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">CNPJ</span>
                         <span className="text-muted-foreground tabular-nums">
-                          {d.last_online ? new Date(d.last_online).toLocaleString("pt-BR") : "nunca"}
+                          {formatarDocumento(d.clients?.document, d.clients?.document_type) ?? "—"}
                         </span>
                       </div>
                       {isSuper && (
