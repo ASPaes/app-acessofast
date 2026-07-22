@@ -1831,6 +1831,89 @@ function AdicionarDispositivoDialog({
                   </PopoverContent>
                 </Popover>
               </div>
+              <div className="space-y-2">
+                <Label>Marcadores</Label>
+                <Popover open={marcadoresOpen} onOpenChange={setMarcadoresOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      disabled={!effectiveTenant}
+                      className="w-full justify-between font-normal h-auto min-h-10 py-2"
+                    >
+                      {marcadoresSel.size === 0 ? (
+                        <span className="text-muted-foreground">
+                          {effectiveTenant ? "Sem marcadores" : "Selecione um tenant primeiro"}
+                        </span>
+                      ) : (
+                        <span className="flex flex-wrap gap-1">
+                          {(markersLista ?? [])
+                            .filter((m) => marcadoresSel.has(m.id))
+                            .map((m) => (
+                              <Badge
+                                key={m.id}
+                                variant="outline"
+                                className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                              >
+                                {m.label}
+                              </Badge>
+                            ))}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar ou criar marcador…"
+                        value={marcadorBusca}
+                        onValueChange={setMarcadorBusca}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhum marcador.</CommandEmpty>
+                        <CommandGroup>
+                          {(markersLista ?? []).map((m) => {
+                            const ativo = marcadoresSel.has(m.id);
+                            return (
+                              <CommandItem
+                                key={m.id}
+                                value={m.label}
+                                onSelect={() => {
+                                  setMarcadoresSel((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(m.id)) next.delete(m.id);
+                                    else next.add(m.id);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <span className={`mr-2 h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
+                                {m.label}
+                                {ativo && <Check className="ml-auto h-4 w-4" />}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                        {marcadorBusca.trim() &&
+                          !(markersLista ?? []).some(
+                            (m) => m.label.toLowerCase() === marcadorBusca.trim().toLowerCase(),
+                          ) && (
+                            <CommandGroup>
+                              <CommandItem
+                                value={`__criar_marcador__${marcadorBusca}`}
+                                onSelect={() => criarMarcadorInline(marcadorBusca)}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Criar "{marcadorBusca.trim()}"
+                              </CommandItem>
+                            </CommandGroup>
+                          )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               {isSuper && (
                 <div className="space-y-2">
                   <Label htmlFor="dev-tenant">Tenant *</Label>
