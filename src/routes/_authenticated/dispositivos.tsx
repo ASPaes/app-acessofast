@@ -1369,10 +1369,15 @@ function AdicionarDispositivoDialog({
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
-  const [grupo, setGrupo] = useState("");
-  const [grupoOpen, setGrupoOpen] = useState(false);
+  const [clienteId, setClienteId] = useState<string>("");
+  const [clienteOpen, setClienteOpen] = useState(false);
+  const [criandoCliente, setCriandoCliente] = useState(false);
+  const [novoClienteNome, setNovoClienteNome] = useState("");
+  const [novoClienteDoc, setNovoClienteDoc] = useState("");
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
 
   const isSuper = role === "super_admin";
+  const effectiveTenant = isSuper ? tenantSelecionado : tenantId;
 
   const { data: tenants } = useQuery({
     queryKey: ["tenants_lista"],
@@ -1387,21 +1392,26 @@ function AdicionarDispositivoDialog({
     },
   });
 
-  const { data: gruposExistentes } = useQuery({
-    queryKey: ["device_groups"],
+  const { data: clientes } = useQuery({
+    queryKey: ["clients_lista", effectiveTenant],
+    enabled: !!effectiveTenant,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("address_book")
-        .select("device_group");
+        .from("clients")
+        .select("id, name, document, document_type")
+        .eq("tenant_id", effectiveTenant as string)
+        .order("name");
       if (error) throw error;
-      const set = new Set<string>();
-      for (const row of data ?? []) {
-        const g = row.device_group?.trim();
-        if (g) set.add(g);
-      }
-      return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      return (data ?? []) as Array<{
+        id: string;
+        name: string;
+        document: string | null;
+        document_type: string | null;
+      }>;
     },
   });
+
+  const clienteSelecionado = clientes?.find((c) => c.id === clienteId) ?? null;
 
   const resetForm = () => {
     setRustdeskId("");
@@ -1409,8 +1419,76 @@ function AdicionarDispositivoDialog({
     setTenantSelecionado("");
     setSenhaGerada(null);
     setCopiado(false);
-    setGrupo("");
-    setGrupoOpen(false);
+    setClienteId("");
+    setClienteOpen(false);
+    setCriandoCliente(false);
+    setNovoClienteNome("");
+    setNovoClienteDoc("");
+  };
+
+  const criarCliente = async () => {
+    if (!effectiveTenant) {
+      toast.error("Selecione um tenant antes de criar o cliente");
+      return;
+    }
+    const nome = novoClienteNome.trim();
+    if (!nome) {
+      toast.error("Informe o nome do cliente");
+      return;
+    }
+    const digitos = novoClienteDoc.replace(/\D/g, "");
+    let document: string | null = null;
+    let document_type: "cnpj" | "cpf" | null = null;
+    if (digitos.length === 14) {
+      document = digitos;
+      document_type = "cnpj";
+    } else if (digitos.length === 11) {
+      document = digitos;
+      document_type = "cpf";
+    } else if (digitos.length !== 0) {
+      toast.error("Informe CNPJ (14) ou CPF (11) dígitos");
+      return;
+    }
+    setSalvandoCliente(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .insert({ tenant_id: effectiveTenant, name: nome, document, document_type })
+        .select("id, name, document, document_type")
+        .single();
+      if (error) {
+        // violação de unicidade de nome — busca o existente
+        if ((error as { code?: string }).code === "23505") {
+          const { data: existente, error: eErr } = await supabase
+            .from("clients")
+            .select("id, name, document, document_type")
+            .eq("tenant_id", effectiveTenant)
+            .eq("name", nome)
+            .maybeSingle();
+          if (eErr || !existente) throw error;
+          await queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
+          setClienteId(existente.id);
+          setCriandoCliente(false);
+          setNovoClienteNome("");
+          setNovoClienteDoc("");
+          setClienteOpen(false);
+          toast.success("Cliente já existia — selecionado");
+          return;
+        }
+        throw error;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
+      setClienteId(data.id);
+      setCriandoCliente(false);
+      setNovoClienteNome("");
+      setNovoClienteDoc("");
+      setClienteOpen(false);
+      toast.success("Cliente criado");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Falha ao criar cliente");
+    } finally {
+      setSalvandoCliente(false);
+    }
   };
 
   const mutation = useMutation({
@@ -1446,22 +1524,24 @@ function AdicionarDispositivoDialog({
       }
       const adopted = data ?? {};
       let grupoFalhou = false;
-      const grupoTrim = grupo.trim();
-      if (adopted.was_inserted && grupoTrim && adopted.device_id) {
-        const { error: gErr } = await supabase
-          .from("address_book")
-          .update({ device_group: grupoTrim })
-          .eq("id", adopted.device_id);
-        if (gErr) grupoFalhou = true;
+      if (adopted.was_inserted && adopted.device_id && clienteId) {
+        const cli = clientes?.find((c) => c.id === clienteId);
+        if (cli) {
+          const { error: gErr } = await supabase
+            .from("address_book")
+            .update({ client_id: cli.id, device_group: cli.name })
+            .eq("id", adopted.device_id);
+          if (gErr) grupoFalhou = true;
+        }
       }
       return { ...adopted, grupoFalhou };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
-      queryClient.invalidateQueries({ queryKey: ["device_groups"] });
+      queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
       if (data.grupoFalhou) {
         toast.warning(
-          "Dispositivo adotado, mas não consegui definir o grupo — ajuste pelo Editar.",
+          "Dispositivo adotado, mas não consegui vincular o cliente — ajuste pelo Editar.",
         );
       }
       if (data.was_inserted && data.password_provisioned && data.password) {
@@ -1564,80 +1644,113 @@ function AdicionarDispositivoDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Grupo</Label>
-                <Popover open={grupoOpen} onOpenChange={setGrupoOpen}>
+                <Label>Cliente</Label>
+                <Popover open={clienteOpen} onOpenChange={(v) => {
+                  setClienteOpen(v);
+                  if (!v) setCriandoCliente(false);
+                }}>
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
                       variant="outline"
                       role="combobox"
+                      disabled={!effectiveTenant}
                       className="w-full justify-between font-normal"
                     >
-                      <span className={grupo ? "" : "text-muted-foreground"}>
-                        {grupo || "Sem grupo — selecionar ou digitar"}
+                      <span className={clienteSelecionado ? "" : "text-muted-foreground"}>
+                        {clienteSelecionado
+                          ? clienteSelecionado.name
+                          : effectiveTenant
+                            ? "Sem cliente — selecionar ou criar"
+                            : "Selecione um tenant primeiro"}
                       </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput
-                        placeholder="Selecionar ou digitar grupo…"
-                        value={grupo}
-                        onValueChange={setGrupo}
-                      />
-                      <CommandList>
-                        <CommandEmpty>Nenhum grupo encontrado.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="__sem_grupo__"
-                            onSelect={() => {
-                              setGrupo("");
-                              setGrupoOpen(false);
+                    {criandoCliente ? (
+                      <div className="p-3 space-y-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="novo-cliente-nome" className="text-xs">Nome *</Label>
+                          <Input
+                            id="novo-cliente-nome"
+                            value={novoClienteNome}
+                            onChange={(e) => setNovoClienteNome(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="novo-cliente-doc" className="text-xs">CNPJ ou CPF</Label>
+                          <Input
+                            id="novo-cliente-doc"
+                            value={novoClienteDoc}
+                            onChange={(e) => setNovoClienteDoc(e.target.value)}
+                            placeholder="Somente dígitos"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setCriandoCliente(false);
+                              setNovoClienteNome("");
+                              setNovoClienteDoc("");
                             }}
                           >
-                            <span className="text-muted-foreground">Sem grupo</span>
-                            {grupo === "" && <Check className="ml-auto h-4 w-4" />}
-                          </CommandItem>
-                          {(() => {
-                            const q = grupo.trim().toLowerCase();
-                            const lista = (gruposExistentes ?? []).filter((g) =>
-                              q ? g.toLowerCase().includes(q) : true,
-                            );
-                            const trimmed = grupo.trim();
-                            const existeIgual =
-                              trimmed &&
-                              (gruposExistentes ?? []).some(
-                                (g) => g.toLowerCase() === trimmed.toLowerCase(),
-                              );
-                            return (
-                              <>
-                                {lista.map((g) => (
-                                  <CommandItem
-                                    key={g}
-                                    value={g}
-                                    onSelect={() => {
-                                      setGrupo(g);
-                                      setGrupoOpen(false);
-                                    }}
-                                  >
-                                    {g}
-                                    {g === grupo && <Check className="ml-auto h-4 w-4" />}
-                                  </CommandItem>
-                                ))}
-                                {trimmed && !existeIgual && (
-                                  <CommandItem
-                                    value={`__novo__${trimmed}`}
-                                    onSelect={() => setGrupoOpen(false)}
-                                  >
-                                    Usar «{trimmed}»
-                                  </CommandItem>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={salvandoCliente}
+                            onClick={criarCliente}
+                          >
+                            {salvandoCliente ? "Salvando…" : "Salvar cliente"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Command>
+                        <CommandInput placeholder="Buscar cliente…" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__sem_cliente__"
+                              onSelect={() => {
+                                setClienteId("");
+                                setClienteOpen(false);
+                              }}
+                            >
+                              <span className="text-muted-foreground">Sem cliente</span>
+                              {clienteId === "" && <Check className="ml-auto h-4 w-4" />}
+                            </CommandItem>
+                            {(clientes ?? []).map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.name}
+                                onSelect={() => {
+                                  setClienteId(c.id);
+                                  setClienteOpen(false);
+                                }}
+                              >
+                                {c.name}
+                                {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__criar_cliente__"
+                              onSelect={() => setCriandoCliente(true)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Criar cliente
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    )}
                   </PopoverContent>
                 </Popover>
               </div>
