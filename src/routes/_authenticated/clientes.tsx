@@ -308,7 +308,7 @@ function ClienteDialog({
       if (!nomeTrim) throw new Error("Informe o nome do cliente");
       const digits = documento.replace(/\D/g, "");
       let document: string | null = null;
-      let document_type: string | null = null;
+      let document_type: "cnpj" | "cpf" | null = null;
       if (digits.length === 14) {
         document = digits;
         document_type = "cnpj";
