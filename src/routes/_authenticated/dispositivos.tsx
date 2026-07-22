@@ -1165,6 +1165,12 @@ function DispositivosPage() {
                           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
                         <span className="font-medium">{g.label}</span>
+                        {(() => {
+                          const doc = formatarDocumento(g.document, g.document_type);
+                          return doc ? (
+                            <span className="text-[10px] text-muted-foreground/70 tabular-nums">{doc}</span>
+                          ) : null;
+                        })()}
                         <span className="text-xs text-muted-foreground">
                           {g.total} dispositivo{g.total === 1 ? "" : "s"}
                         </span>
