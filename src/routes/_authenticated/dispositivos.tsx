@@ -100,6 +100,7 @@ type AddressBookRow = {
   created_at: string;
   tenant_id: string | null;
   is_active: boolean;
+  client_id: string | null;
   tenants: { name: string } | null;
 };
 
@@ -344,7 +345,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, client_id, tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
