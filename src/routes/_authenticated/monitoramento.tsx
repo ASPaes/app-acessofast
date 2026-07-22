@@ -508,6 +508,50 @@ function MonitoramentoPage() {
         </p>
       </div>
 
+      {isSuper && (
+        <Card className="border-border/60">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Saúde do relay</CardTitle>
+                <CardDescription>Resumo ao vivo da VPS compartilhada</CardDescription>
+              </div>
+              {latest && ageSec != null && ageSec <= 60 ? (
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 text-emerald-500 border-emerald-500/30"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  ao vivo · há {ageSec}s
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                  aguardando coletor
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <VpsStat
+              label="CPU"
+              icon={Cpu}
+              value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : "—"}
+            />
+            <VpsStat
+              label="Memória"
+              icon={Gauge}
+              value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : "—"}
+            />
+            <VpsStat
+              label="Disco"
+              icon={HardDrive}
+              value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : "—"}
+            />
+            <VpsStat label="Rede" icon={Network} value={netMbps} />
+          </CardContent>
+        </Card>
+      )}
+
       {availableGroups.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {availableGroups.map((g) => {
