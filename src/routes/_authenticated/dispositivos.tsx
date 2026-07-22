@@ -363,10 +363,12 @@ function DispositivosPage() {
     queryKey: ["sessoes_ativas"],
     refetchInterval: 15000,
     queryFn: async () => {
+      const limiteHb = new Date(Date.now() - 90000).toISOString();
       const { data, error } = await supabase
         .from("connection_logs")
         .select("address_book_id")
-        .eq("status", "active");
+        .eq("status", "active")
+        .gt("last_heartbeat_at", limiteHb);
       if (error) throw error;
       return new Set((data ?? []).map((r) => r.address_book_id as string));
     },

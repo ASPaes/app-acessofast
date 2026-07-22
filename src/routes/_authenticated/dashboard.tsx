@@ -94,7 +94,7 @@ function Dashboard() {
           supabase.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
         ),
         withTenant(
-          supabase.from("connection_logs").select("id", { count: "exact", head: true }).eq("status", "active"),
+          supabase.from("connection_logs").select("id", { count: "exact", head: true }).eq("status", "active").gt("last_heartbeat_at", new Date(Date.now() - 90000).toISOString()),
         ),
         withTenant(
           supabase
