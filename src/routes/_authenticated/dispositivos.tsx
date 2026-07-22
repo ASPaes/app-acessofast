@@ -476,10 +476,13 @@ function DispositivosPage() {
         if (!hasAny) return false;
       }
       if (t) {
+        const digits = t.replace(/\D/g, "");
         const match =
           d.rustdesk_id.toLowerCase().includes(t) ||
           (d.alias ?? "").toLowerCase().includes(t) ||
-          (d.device_group ?? "").toLowerCase().includes(t);
+          (d.device_group ?? "").toLowerCase().includes(t) ||
+          (d.clients?.name ?? "").toLowerCase().includes(t) ||
+          (digits.length > 0 && (d.clients?.document ?? "").includes(digits));
         if (!match) return false;
       }
       return true;
@@ -794,7 +797,7 @@ function DispositivosPage() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Buscar por ID, alias, grupo…"
+                placeholder="Buscar por ID, alias, grupo ou CNPJ…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
