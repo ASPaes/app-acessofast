@@ -99,6 +99,48 @@ export type Database = {
           },
         ]
       }
+      asaas_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          external_reference: string | null
+          id: string
+          payload: Json
+          payment_id: string | null
+          processed: boolean
+          processed_at: string | null
+          processing_result: string | null
+          received_at: string
+          subscription_id: string | null
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          external_reference?: string | null
+          id?: string
+          payload: Json
+          payment_id?: string | null
+          processed?: boolean
+          processed_at?: string | null
+          processing_result?: string | null
+          received_at?: string
+          subscription_id?: string | null
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          external_reference?: string | null
+          id?: string
+          payload?: Json
+          payment_id?: string | null
+          processed?: boolean
+          processed_at?: string | null
+          processing_result?: string | null
+          received_at?: string
+          subscription_id?: string | null
+        }
+        Relationships: []
+      }
       connection_logs: {
         Row: {
           address_book_id: string | null
@@ -508,6 +550,87 @@ export type Database = {
           },
         ]
       }
+      signup_intents: {
+        Row: {
+          admin_email: string
+          amount_cents: number
+          asaas_checkout_id: string | null
+          asaas_customer_id: string | null
+          asaas_payment_id: string | null
+          asaas_subscription_id: string | null
+          billing_cycle: string
+          cnpj: string
+          company_name: string
+          consent: boolean
+          created_at: string
+          failure_reason: string | null
+          id: string
+          phone: string | null
+          plan_code: string
+          provisioned_at: string | null
+          status: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_email: string
+          amount_cents: number
+          asaas_checkout_id?: string | null
+          asaas_customer_id?: string | null
+          asaas_payment_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_cycle: string
+          cnpj: string
+          company_name: string
+          consent?: boolean
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          phone?: string | null
+          plan_code: string
+          provisioned_at?: string | null
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_email?: string
+          amount_cents?: number
+          asaas_checkout_id?: string | null
+          asaas_customer_id?: string | null
+          asaas_payment_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_cycle?: string
+          cnpj?: string
+          company_name?: string
+          consent?: boolean
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          phone?: string | null
+          plan_code?: string
+          provisioned_at?: string | null
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_intents_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "signup_intents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_features: {
         Row: {
           enabled: boolean
@@ -600,6 +723,10 @@ export type Database = {
       }
       tenants: {
         Row: {
+          asaas_customer_id: string | null
+          asaas_subscription_id: string | null
+          billing_email: string | null
+          cnpj: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -612,6 +739,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_email?: string | null
+          cnpj?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -624,6 +755,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_email?: string | null
+          cnpj?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
