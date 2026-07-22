@@ -929,9 +929,8 @@ function DispositivosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Computador</TableHead>
-                  <TableHead>Grupo</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead>SO</TableHead>
-                  <TableHead>Últ. online</TableHead>
                   {isSuper && <TableHead>Empresa</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
