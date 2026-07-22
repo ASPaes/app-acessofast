@@ -1370,11 +1370,15 @@ function AdicionarDispositivoDialog({
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [clienteId, setClienteId] = useState<string>("");
+  const [clienteNome, setClienteNome] = useState<string>("");
   const [clienteOpen, setClienteOpen] = useState(false);
   const [criandoCliente, setCriandoCliente] = useState(false);
   const [novoClienteNome, setNovoClienteNome] = useState("");
   const [novoClienteDoc, setNovoClienteDoc] = useState("");
   const [salvandoCliente, setSalvandoCliente] = useState(false);
+  const [marcadoresSel, setMarcadoresSel] = useState<Set<string>>(new Set());
+  const [marcadoresOpen, setMarcadoresOpen] = useState(false);
+  const [marcadorBusca, setMarcadorBusca] = useState("");
 
   const isSuper = role === "super_admin";
   const effectiveTenant = isSuper ? tenantSelecionado : tenantId;
@@ -1411,7 +1415,55 @@ function AdicionarDispositivoDialog({
     },
   });
 
+  const { data: markersLista } = useQuery({
+    queryKey: ["markers_lista", effectiveTenant],
+    enabled: !!effectiveTenant,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color")
+        .eq("tenant_id", effectiveTenant as string)
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; label: string; color: string | null }>;
+    },
+  });
+
   const clienteSelecionado = clientes?.find((c) => c.id === clienteId) ?? null;
+
+  const criarMarcadorInline = async (label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed || !effectiveTenant) return;
+    const color = pickMarkerColor(trimmed);
+    const { data, error } = await supabase
+      .from("device_markers")
+      .insert({ tenant_id: effectiveTenant, label: trimmed, color })
+      .select("id")
+      .single();
+    let markerId: string | null = data?.id ?? null;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        const { data: existente } = await supabase
+          .from("device_markers")
+          .select("id")
+          .eq("tenant_id", effectiveTenant)
+          .ilike("label", trimmed)
+          .maybeSingle();
+        markerId = existente?.id ?? null;
+      } else {
+        toast.error(error.message ?? "Falha ao criar marcador");
+        return;
+      }
+    }
+    if (!markerId) return;
+    setMarcadoresSel((prev) => {
+      const next = new Set(prev);
+      next.add(markerId!);
+      return next;
+    });
+    setMarcadorBusca("");
+    await queryClient.invalidateQueries({ queryKey: ["markers_lista", effectiveTenant] });
+  };
 
   const resetForm = () => {
     setRustdeskId("");
@@ -1420,10 +1472,14 @@ function AdicionarDispositivoDialog({
     setSenhaGerada(null);
     setCopiado(false);
     setClienteId("");
+    setClienteNome("");
     setClienteOpen(false);
     setCriandoCliente(false);
     setNovoClienteNome("");
     setNovoClienteDoc("");
+    setMarcadoresSel(new Set());
+    setMarcadoresOpen(false);
+    setMarcadorBusca("");
   };
 
   const criarCliente = async () => {
@@ -1463,11 +1519,12 @@ function AdicionarDispositivoDialog({
             .from("clients")
             .select("id, name, document, document_type")
             .eq("tenant_id", effectiveTenant)
-            .eq("name", nome)
+            .ilike("name", nome)
             .maybeSingle();
           if (eErr || !existente) throw error;
           await queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
           setClienteId(existente.id);
+          setClienteNome(existente.name);
           setCriandoCliente(false);
           setNovoClienteNome("");
           setNovoClienteDoc("");
@@ -1479,6 +1536,7 @@ function AdicionarDispositivoDialog({
       }
       await queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
       setClienteId(data.id);
+      setClienteNome(data.name);
       setCriandoCliente(false);
       setNovoClienteNome("");
       setNovoClienteDoc("");
@@ -1524,24 +1582,41 @@ function AdicionarDispositivoDialog({
       }
       const adopted = data ?? {};
       let grupoFalhou = false;
-      if (adopted.was_inserted && adopted.device_id && clienteId) {
-        const cli = clientes?.find((c) => c.id === clienteId);
-        if (cli) {
+      let marcadoresFalhou = false;
+      if (adopted.was_inserted && adopted.device_id) {
+        if (clienteId && clienteNome) {
           const { error: gErr } = await supabase
             .from("address_book")
-            .update({ client_id: cli.id, device_group: cli.name })
+            .update({ client_id: clienteId, device_group: clienteNome })
             .eq("id", adopted.device_id);
           if (gErr) grupoFalhou = true;
         }
+        if (marcadoresSel.size > 0 && effectiveTenant) {
+          const rows = [...marcadoresSel].map((marker_id) => ({
+            tenant_id: effectiveTenant,
+            device_id: adopted.device_id!,
+            marker_id,
+          }));
+          const { error: mErr } = await supabase
+            .from("device_marker_assignments")
+            .insert(rows);
+          if (mErr) marcadoresFalhou = true;
+        }
       }
-      return { ...adopted, grupoFalhou };
+      return { ...adopted, grupoFalhou, marcadoresFalhou };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
       queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
+      queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
       if (data.grupoFalhou) {
         toast.warning(
           "Dispositivo adotado, mas não consegui vincular o cliente — ajuste pelo Editar.",
+        );
+      }
+      if (data.marcadoresFalhou) {
+        toast.warning(
+          "Dispositivo adotado, mas não consegui aplicar os marcadores — ajuste pelo Editar.",
         );
       }
       if (data.was_inserted && data.password_provisioned && data.password) {
@@ -1719,6 +1794,7 @@ function AdicionarDispositivoDialog({
                               value="__sem_cliente__"
                               onSelect={() => {
                                 setClienteId("");
+                                setClienteNome("");
                                 setClienteOpen(false);
                               }}
                             >
@@ -1731,6 +1807,7 @@ function AdicionarDispositivoDialog({
                                 value={c.name}
                                 onSelect={() => {
                                   setClienteId(c.id);
+                                  setClienteNome(c.name);
                                   setClienteOpen(false);
                                 }}
                               >
@@ -1751,6 +1828,89 @@ function AdicionarDispositivoDialog({
                         </CommandList>
                       </Command>
                     )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Marcadores</Label>
+                <Popover open={marcadoresOpen} onOpenChange={setMarcadoresOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      disabled={!effectiveTenant}
+                      className="w-full justify-between font-normal h-auto min-h-10 py-2"
+                    >
+                      {marcadoresSel.size === 0 ? (
+                        <span className="text-muted-foreground">
+                          {effectiveTenant ? "Sem marcadores" : "Selecione um tenant primeiro"}
+                        </span>
+                      ) : (
+                        <span className="flex flex-wrap gap-1">
+                          {(markersLista ?? [])
+                            .filter((m) => marcadoresSel.has(m.id))
+                            .map((m) => (
+                              <Badge
+                                key={m.id}
+                                variant="outline"
+                                className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                              >
+                                {m.label}
+                              </Badge>
+                            ))}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar ou criar marcador…"
+                        value={marcadorBusca}
+                        onValueChange={setMarcadorBusca}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhum marcador.</CommandEmpty>
+                        <CommandGroup>
+                          {(markersLista ?? []).map((m) => {
+                            const ativo = marcadoresSel.has(m.id);
+                            return (
+                              <CommandItem
+                                key={m.id}
+                                value={m.label}
+                                onSelect={() => {
+                                  setMarcadoresSel((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(m.id)) next.delete(m.id);
+                                    else next.add(m.id);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <span className={`mr-2 h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
+                                {m.label}
+                                {ativo && <Check className="ml-auto h-4 w-4" />}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                        {marcadorBusca.trim() &&
+                          !(markersLista ?? []).some(
+                            (m) => m.label.toLowerCase() === marcadorBusca.trim().toLowerCase(),
+                          ) && (
+                            <CommandGroup>
+                              <CommandItem
+                                value={`__criar_marcador__${marcadorBusca}`}
+                                onSelect={() => criarMarcadorInline(marcadorBusca)}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Criar "{marcadorBusca.trim()}"
+                              </CommandItem>
+                            </CommandGroup>
+                          )}
+                      </CommandList>
+                    </Command>
                   </PopoverContent>
                 </Popover>
               </div>
