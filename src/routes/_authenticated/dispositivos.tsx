@@ -1438,7 +1438,7 @@ function AdicionarDispositivoDialog({
     }
     const digitos = novoClienteDoc.replace(/\D/g, "");
     let document: string | null = null;
-    let document_type: string | null = null;
+    let document_type: "cnpj" | "cpf" | null = null;
     if (digitos.length === 14) {
       document = digitos;
       document_type = "cnpj";
