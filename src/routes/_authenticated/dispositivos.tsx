@@ -101,6 +101,7 @@ type AddressBookRow = {
   tenant_id: string | null;
   is_active: boolean;
   client_id: string | null;
+  clients?: { name: string; document: string | null; document_type: string | null } | null;
   tenants: { name: string } | null;
 };
 
@@ -160,6 +161,33 @@ function pickMarkerColor(label: string): string {
   let sum = 0;
   for (let i = 0; i < label.length; i++) sum += label.charCodeAt(i);
   return MARKER_COLOR_TOKENS[sum % MARKER_COLOR_TOKENS.length];
+}
+
+function formatarDocumento(
+  document: string | null | undefined,
+  document_type: string | null | undefined,
+): string | null {
+  if (!document) return null;
+  const digits = document.replace(/\D/g, "");
+  if (document_type === "cnpj" && digits.length === 14) {
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  }
+  if (document_type === "cpf" && digits.length === 11) {
+    return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  }
+  return document;
+}
+
+function tempoRelativo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 60000);
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  return `há ${d} d`;
 }
 
 async function invokeErrorMessage(error: unknown): Promise<string> {
@@ -345,7 +373,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, client_id, tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, client_id, clients(name, document, document_type), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -512,7 +540,7 @@ function DispositivosPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const colCount = isSuper ? 7 : 6;
+  const colCount = isSuper ? 6 : 5;
 
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
     const status =
@@ -573,20 +601,23 @@ function DispositivosPage() {
         </TableCell>
         {mostrarGrupo && (
           <TableCell>
-            {d.device_group ? (
-              <Badge variant="secondary">{d.device_group}</Badge>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
+            {(() => {
+              const nome = d.clients?.name ?? d.device_group;
+              const doc = formatarDocumento(d.clients?.document, d.clients?.document_type);
+              if (!nome) return <span className="text-muted-foreground">—</span>;
+              return (
+                <div className="flex flex-col">
+                  <Badge variant="secondary" className="w-fit">{nome}</Badge>
+                  {doc && (
+                    <span className="text-[10px] text-muted-foreground/70 mt-1 tabular-nums">{doc}</span>
+                  )}
+                </div>
+              );
+            })()}
           </TableCell>
         )}
         <TableCell className="text-xs text-muted-foreground">
           {d.os ?? "—"}
-        </TableCell>
-        <TableCell className="text-xs text-muted-foreground">
-          {d.last_online
-            ? new Date(d.last_online).toLocaleString("pt-BR")
-            : "nunca"}
         </TableCell>
         {isSuper && (
           <TableCell className="text-xs">
@@ -609,7 +640,7 @@ function DispositivosPage() {
           ) : (
             <Badge variant="outline" className="gap-1.5 text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-              Offline
+              {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
             </Badge>
           )}
         </TableCell>
@@ -694,6 +725,8 @@ function DispositivosPage() {
     const arr = Array.from(map.entries()).map(([key, v]) => {
       let online = 0, atendimento = 0, offline = 0;
       let ultimo: string | null = null;
+      let document: string | null = null;
+      let document_type: string | null = null;
       for (const d of v.devices) {
         if (d.is_active === false) {
           // inativos não contam nos indicadores
@@ -701,8 +734,12 @@ function DispositivosPage() {
         else if (dispositivosOnline?.has(d.id)) online++;
         else offline++;
         if (d.last_online && (!ultimo || d.last_online > ultimo)) ultimo = d.last_online;
+        if (!document && d.clients?.document) {
+          document = d.clients.document;
+          document_type = d.clients.document_type ?? null;
+        }
       }
-      return { key, label: v.label, devices: v.devices, total: v.devices.length, online, atendimento, offline, ultimo };
+      return { key, label: v.label, devices: v.devices, total: v.devices.length, online, atendimento, offline, ultimo, document, document_type };
     });
     arr.sort((a, b) => {
       if (a.key === "__sem_grupo__") return 1;
@@ -898,9 +935,8 @@ function DispositivosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Computador</TableHead>
-                  <TableHead>Grupo</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead>SO</TableHead>
-                  <TableHead>Últ. online</TableHead>
                   {isSuper && <TableHead>Empresa</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -993,10 +1029,13 @@ function DispositivosPage() {
                       ) : (
                         <Badge variant="outline" className="gap-1.5 text-muted-foreground">
                           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-                          Offline
+                          {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
                         </Badge>
                       )}
-                      {d.device_group && <Badge variant="secondary">{d.device_group}</Badge>}
+                      {(() => {
+                        const nome = d.clients?.name ?? d.device_group;
+                        return nome ? <Badge variant="secondary">{nome}</Badge> : null;
+                      })()}
                       {(markersByDevice?.get(d.id) ?? []).map((mid) => {
                         const m = markersById.get(mid);
                         if (!m) return null;
@@ -1017,9 +1056,9 @@ function DispositivosPage() {
                         <span className="text-muted-foreground">{d.os ?? "—"}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Últ. online</span>
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">CNPJ</span>
                         <span className="text-muted-foreground tabular-nums">
-                          {d.last_online ? new Date(d.last_online).toLocaleString("pt-BR") : "nunca"}
+                          {formatarDocumento(d.clients?.document, d.clients?.document_type) ?? "—"}
                         </span>
                       </div>
                       {isSuper && (
@@ -1126,6 +1165,12 @@ function DispositivosPage() {
                           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
                         <span className="font-medium">{g.label}</span>
+                        {(() => {
+                          const doc = formatarDocumento(g.document, g.document_type);
+                          return doc ? (
+                            <span className="text-[10px] text-muted-foreground/70 tabular-nums">{doc}</span>
+                          ) : null;
+                        })()}
                         <span className="text-xs text-muted-foreground">
                           {g.total} dispositivo{g.total === 1 ? "" : "s"}
                         </span>
