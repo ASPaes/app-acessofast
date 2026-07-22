@@ -1431,6 +1431,40 @@ function AdicionarDispositivoDialog({
 
   const clienteSelecionado = clientes?.find((c) => c.id === clienteId) ?? null;
 
+  const criarMarcadorInline = async (label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed || !effectiveTenant) return;
+    const color = pickMarkerColor(trimmed);
+    const { data, error } = await supabase
+      .from("device_markers")
+      .insert({ tenant_id: effectiveTenant, label: trimmed, color })
+      .select("id")
+      .single();
+    let markerId: string | null = data?.id ?? null;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        const { data: existente } = await supabase
+          .from("device_markers")
+          .select("id")
+          .eq("tenant_id", effectiveTenant)
+          .ilike("label", trimmed)
+          .maybeSingle();
+        markerId = existente?.id ?? null;
+      } else {
+        toast.error(error.message ?? "Falha ao criar marcador");
+        return;
+      }
+    }
+    if (!markerId) return;
+    setMarcadoresSel((prev) => {
+      const next = new Set(prev);
+      next.add(markerId!);
+      return next;
+    });
+    setMarcadorBusca("");
+    await queryClient.invalidateQueries({ queryKey: ["markers_lista", effectiveTenant] });
+  };
+
   const resetForm = () => {
     setRustdeskId("");
     setAlias("");
