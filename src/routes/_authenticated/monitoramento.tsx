@@ -396,9 +396,15 @@ function MonitoramentoPage() {
 
   const latest = data?.[0];
   const previous = data?.[1];
-  const ageMs = latest ? now - new Date(latest.captured_at).getTime() : null;
-  const ageSec = ageMs != null ? Math.max(0, Math.floor(ageMs / 1000)) : null;
-  const isActive = ageSec != null && ageSec <= 60;
+  const [recvAt, setRecvAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (latest?.captured_at) setRecvAt(Date.now());
+  }, [latest?.captured_at]);
+  const ageSec = recvAt != null ? Math.max(0, Math.floor((now - recvAt) / 1000)) : null;
+  const idadeReal = latest
+    ? Math.max(0, Math.floor((now - new Date(latest.captured_at).getTime()) / 1000))
+    : null;
+  const isActive = idadeReal != null && idadeReal <= 60;
 
   let netMbps: string = "—";
   let netRxMbps: string = "—";
@@ -542,7 +548,7 @@ function MonitoramentoPage() {
                 <CardTitle className="text-base">Saúde do relay</CardTitle>
                 <CardDescription>Resumo ao vivo da VPS compartilhada</CardDescription>
               </div>
-              {latest && ageSec != null && ageSec <= 60 ? (
+              {latest && isActive ? (
                 <Badge
                   variant="outline"
                   className="gap-1.5 text-emerald-500 border-emerald-500/30"

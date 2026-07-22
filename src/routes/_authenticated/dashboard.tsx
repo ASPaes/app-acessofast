@@ -187,8 +187,13 @@ function Dashboard() {
     return () => clearInterval(id);
   }, []);
   const capturedAt = latest ? new Date(latest.captured_at).getTime() : null;
-  const idadeSeg = capturedAt != null ? Math.floor((now - capturedAt) / 1000) : null;
-  const ativo = latest != null && idadeSeg != null && idadeSeg <= 60;
+  const [recvAt, setRecvAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (latest?.captured_at) setRecvAt(Date.now());
+  }, [latest?.captured_at]);
+  const idadeSeg = recvAt != null ? Math.max(0, Math.floor((now - recvAt) / 1000)) : null;
+  const idadeReal = capturedAt != null ? Math.max(0, Math.floor((now - capturedAt) / 1000)) : null;
+  const ativo = idadeReal != null && idadeReal <= 60;
 
   const role = me?.role;
   const isSuper = role === "super_admin";
@@ -265,6 +270,7 @@ function Dashboard() {
         />
       </div>
 
+      {isSuper && (
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60">
           <CardHeader>
@@ -333,6 +339,7 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
