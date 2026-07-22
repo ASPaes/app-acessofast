@@ -540,7 +540,7 @@ function DispositivosPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const colCount = isSuper ? 7 : 6;
+  const colCount = isSuper ? 6 : 5;
 
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
     const status =
@@ -601,20 +601,23 @@ function DispositivosPage() {
         </TableCell>
         {mostrarGrupo && (
           <TableCell>
-            {d.device_group ? (
-              <Badge variant="secondary">{d.device_group}</Badge>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
+            {(() => {
+              const nome = d.clients?.name ?? d.device_group;
+              const doc = formatarDocumento(d.clients?.document, d.clients?.document_type);
+              if (!nome) return <span className="text-muted-foreground">—</span>;
+              return (
+                <div className="flex flex-col">
+                  <Badge variant="secondary" className="w-fit">{nome}</Badge>
+                  {doc && (
+                    <span className="text-[10px] text-muted-foreground/70 mt-1 tabular-nums">{doc}</span>
+                  )}
+                </div>
+              );
+            })()}
           </TableCell>
         )}
         <TableCell className="text-xs text-muted-foreground">
           {d.os ?? "—"}
-        </TableCell>
-        <TableCell className="text-xs text-muted-foreground">
-          {d.last_online
-            ? new Date(d.last_online).toLocaleString("pt-BR")
-            : "nunca"}
         </TableCell>
         {isSuper && (
           <TableCell className="text-xs">
@@ -637,7 +640,7 @@ function DispositivosPage() {
           ) : (
             <Badge variant="outline" className="gap-1.5 text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-              Offline
+              {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
             </Badge>
           )}
         </TableCell>
