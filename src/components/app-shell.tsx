@@ -10,6 +10,7 @@ import { HealthPill } from "@/components/ui-shell/health-pill";
 const routeLabels: Record<string, string> = {
   "/dashboard": "Visão geral",
   "/dispositivos": "Dispositivos",
+  "/clientes": "Clientes",
   "/auditoria": "Auditoria",
   "/usuarios": "Usuários",
   "/monitoramento": "Monitoramento",

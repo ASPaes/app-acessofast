@@ -9,6 +9,7 @@ import {
   Activity,
   Settings,
   Building2,
+  Store,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,6 +25,7 @@ type NavItem = {
   url:
     | "/dashboard"
     | "/dispositivos"
+    | "/clientes"
     | "/auditoria"
     | "/usuarios"
     | "/monitoramento"
@@ -35,6 +37,7 @@ type NavItem = {
 const operacao: NavItem[] = [
   { title: "Visão geral", url: "/dashboard", icon: LayoutDashboard },
   { title: "Dispositivos", url: "/dispositivos", icon: MonitorSmartphone },
+  { title: "Clientes", url: "/clientes", icon: Store },
   { title: "Auditoria", url: "/auditoria", icon: History },
 ];
 
