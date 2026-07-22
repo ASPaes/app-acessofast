@@ -1966,8 +1966,103 @@ function EditarDispositivoDialog({
 }) {
   const queryClient = useQueryClient();
   const [alias, setAlias] = useState(device.alias ?? "");
-  const [grupo, setGrupo] = useState(device.device_group ?? "");
   const [so, setSo] = useState(device.os ?? "");
+  const [clienteId, setClienteId] = useState<string>(device.client_id ?? "");
+  const [clienteNome, setClienteNome] = useState<string>(device.device_group ?? "");
+  const [clienteOpen, setClienteOpen] = useState(false);
+  const [criandoCliente, setCriandoCliente] = useState(false);
+  const [novoClienteNome, setNovoClienteNome] = useState("");
+  const [novoClienteDoc, setNovoClienteDoc] = useState("");
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
+
+  const tenantScope = device.tenant_id;
+
+  const { data: clientes } = useQuery({
+    queryKey: ["clients_lista", tenantScope],
+    enabled: !!tenantScope,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, document, document_type")
+        .eq("tenant_id", tenantScope as string)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        name: string;
+        document: string | null;
+        document_type: string | null;
+      }>;
+    },
+  });
+
+  const clienteSelecionado = clientes?.find((c) => c.id === clienteId) ?? null;
+
+  const criarCliente = async () => {
+    if (!tenantScope) {
+      toast.error("Dispositivo sem tenant — não é possível criar cliente");
+      return;
+    }
+    const nome = novoClienteNome.trim();
+    if (!nome) {
+      toast.error("Informe o nome do cliente");
+      return;
+    }
+    const digitos = novoClienteDoc.replace(/\D/g, "");
+    let document: string | null = null;
+    let document_type: "cnpj" | "cpf" | null = null;
+    if (digitos.length === 14) {
+      document = digitos;
+      document_type = "cnpj";
+    } else if (digitos.length === 11) {
+      document = digitos;
+      document_type = "cpf";
+    } else if (digitos.length !== 0) {
+      toast.error("Informe CNPJ (14) ou CPF (11) dígitos");
+      return;
+    }
+    setSalvandoCliente(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .insert({ tenant_id: tenantScope, name: nome, document, document_type })
+        .select("id, name, document, document_type")
+        .single();
+      if (error) {
+        if ((error as { code?: string }).code === "23505") {
+          const { data: existente, error: eErr } = await supabase
+            .from("clients")
+            .select("id, name, document, document_type")
+            .eq("tenant_id", tenantScope)
+            .ilike("name", nome)
+            .maybeSingle();
+          if (eErr || !existente) throw error;
+          await queryClient.invalidateQueries({ queryKey: ["clients_lista", tenantScope] });
+          setClienteId(existente.id);
+          setClienteNome(existente.name);
+          setCriandoCliente(false);
+          setNovoClienteNome("");
+          setNovoClienteDoc("");
+          setClienteOpen(false);
+          toast.success("Cliente já existia — selecionado");
+          return;
+        }
+        throw error;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["clients_lista", tenantScope] });
+      setClienteId(data.id);
+      setClienteNome(data.name);
+      setCriandoCliente(false);
+      setNovoClienteNome("");
+      setNovoClienteDoc("");
+      setClienteOpen(false);
+      toast.success("Cliente criado");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Falha ao criar cliente");
+    } finally {
+      setSalvandoCliente(false);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -1975,7 +2070,8 @@ function EditarDispositivoDialog({
         .from("address_book")
         .update({
           alias: alias.trim() || null,
-          device_group: grupo.trim() || null,
+          client_id: clienteId || null,
+          device_group: clienteNome || null,
           os: so.trim() || null,
         })
         .eq("id", device.id);
@@ -2002,8 +2098,8 @@ function EditarDispositivoDialog({
         <DialogHeader>
           <DialogTitle>Editar dispositivo</DialogTitle>
           <DialogDescription>
-            Atualize alias, grupo e sistema operacional. Rustdesk ID e senha não são alterados
-            aqui.
+            Atualize alias, cliente e sistema operacional. Rustdesk ID e senha não são
+            alterados aqui.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -2016,12 +2112,119 @@ function EditarDispositivoDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-grupo">Grupo</Label>
-            <Input
-              id="edit-grupo"
-              value={grupo}
-              onChange={(e) => setGrupo(e.target.value)}
-            />
+            <Label>Cliente</Label>
+            <Popover open={clienteOpen} onOpenChange={(v) => {
+              setClienteOpen(v);
+              if (!v) setCriandoCliente(false);
+            }}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  disabled={!tenantScope}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className={clienteSelecionado ? "" : "text-muted-foreground"}>
+                    {clienteSelecionado
+                      ? clienteSelecionado.name
+                      : clienteNome
+                        ? clienteNome
+                        : tenantScope
+                          ? "Sem cliente — selecionar ou criar"
+                          : "Dispositivo sem tenant"}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                {criandoCliente ? (
+                  <div className="p-3 space-y-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-novo-cliente-nome" className="text-xs">Nome *</Label>
+                      <Input
+                        id="edit-novo-cliente-nome"
+                        value={novoClienteNome}
+                        onChange={(e) => setNovoClienteNome(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-novo-cliente-doc" className="text-xs">CNPJ ou CPF</Label>
+                      <Input
+                        id="edit-novo-cliente-doc"
+                        value={novoClienteDoc}
+                        onChange={(e) => setNovoClienteDoc(e.target.value)}
+                        placeholder="Somente dígitos"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setCriandoCliente(false);
+                          setNovoClienteNome("");
+                          setNovoClienteDoc("");
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={salvandoCliente}
+                        onClick={criarCliente}
+                      >
+                        {salvandoCliente ? "Salvando…" : "Salvar cliente"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Command>
+                    <CommandInput placeholder="Buscar cliente…" />
+                    <CommandList>
+                      <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__sem_cliente__"
+                          onSelect={() => {
+                            setClienteId("");
+                            setClienteNome("");
+                            setClienteOpen(false);
+                          }}
+                        >
+                          <span className="text-muted-foreground">Sem cliente</span>
+                          {clienteId === "" && <Check className="ml-auto h-4 w-4" />}
+                        </CommandItem>
+                        {(clientes ?? []).map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setClienteId(c.id);
+                              setClienteNome(c.name);
+                              setClienteOpen(false);
+                            }}
+                          >
+                            {c.name}
+                            {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__criar_cliente__"
+                          onSelect={() => setCriandoCliente(true)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Criar cliente
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
           <MarcadoresField device={device} />
           <div className="space-y-2">
