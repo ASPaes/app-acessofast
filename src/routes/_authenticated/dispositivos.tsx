@@ -1644,80 +1644,113 @@ function AdicionarDispositivoDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Grupo</Label>
-                <Popover open={grupoOpen} onOpenChange={setGrupoOpen}>
+                <Label>Cliente</Label>
+                <Popover open={clienteOpen} onOpenChange={(v) => {
+                  setClienteOpen(v);
+                  if (!v) setCriandoCliente(false);
+                }}>
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
                       variant="outline"
                       role="combobox"
+                      disabled={!effectiveTenant}
                       className="w-full justify-between font-normal"
                     >
-                      <span className={grupo ? "" : "text-muted-foreground"}>
-                        {grupo || "Sem grupo — selecionar ou digitar"}
+                      <span className={clienteSelecionado ? "" : "text-muted-foreground"}>
+                        {clienteSelecionado
+                          ? clienteSelecionado.name
+                          : effectiveTenant
+                            ? "Sem cliente — selecionar ou criar"
+                            : "Selecione um tenant primeiro"}
                       </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput
-                        placeholder="Selecionar ou digitar grupo…"
-                        value={grupo}
-                        onValueChange={setGrupo}
-                      />
-                      <CommandList>
-                        <CommandEmpty>Nenhum grupo encontrado.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="__sem_grupo__"
-                            onSelect={() => {
-                              setGrupo("");
-                              setGrupoOpen(false);
+                    {criandoCliente ? (
+                      <div className="p-3 space-y-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="novo-cliente-nome" className="text-xs">Nome *</Label>
+                          <Input
+                            id="novo-cliente-nome"
+                            value={novoClienteNome}
+                            onChange={(e) => setNovoClienteNome(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="novo-cliente-doc" className="text-xs">CNPJ ou CPF</Label>
+                          <Input
+                            id="novo-cliente-doc"
+                            value={novoClienteDoc}
+                            onChange={(e) => setNovoClienteDoc(e.target.value)}
+                            placeholder="Somente dígitos"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setCriandoCliente(false);
+                              setNovoClienteNome("");
+                              setNovoClienteDoc("");
                             }}
                           >
-                            <span className="text-muted-foreground">Sem grupo</span>
-                            {grupo === "" && <Check className="ml-auto h-4 w-4" />}
-                          </CommandItem>
-                          {(() => {
-                            const q = grupo.trim().toLowerCase();
-                            const lista = (gruposExistentes ?? []).filter((g) =>
-                              q ? g.toLowerCase().includes(q) : true,
-                            );
-                            const trimmed = grupo.trim();
-                            const existeIgual =
-                              trimmed &&
-                              (gruposExistentes ?? []).some(
-                                (g) => g.toLowerCase() === trimmed.toLowerCase(),
-                              );
-                            return (
-                              <>
-                                {lista.map((g) => (
-                                  <CommandItem
-                                    key={g}
-                                    value={g}
-                                    onSelect={() => {
-                                      setGrupo(g);
-                                      setGrupoOpen(false);
-                                    }}
-                                  >
-                                    {g}
-                                    {g === grupo && <Check className="ml-auto h-4 w-4" />}
-                                  </CommandItem>
-                                ))}
-                                {trimmed && !existeIgual && (
-                                  <CommandItem
-                                    value={`__novo__${trimmed}`}
-                                    onSelect={() => setGrupoOpen(false)}
-                                  >
-                                    Usar «{trimmed}»
-                                  </CommandItem>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={salvandoCliente}
+                            onClick={criarCliente}
+                          >
+                            {salvandoCliente ? "Salvando…" : "Salvar cliente"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Command>
+                        <CommandInput placeholder="Buscar cliente…" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__sem_cliente__"
+                              onSelect={() => {
+                                setClienteId("");
+                                setClienteOpen(false);
+                              }}
+                            >
+                              <span className="text-muted-foreground">Sem cliente</span>
+                              {clienteId === "" && <Check className="ml-auto h-4 w-4" />}
+                            </CommandItem>
+                            {(clientes ?? []).map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.name}
+                                onSelect={() => {
+                                  setClienteId(c.id);
+                                  setClienteOpen(false);
+                                }}
+                              >
+                                {c.name}
+                                {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__criar_cliente__"
+                              onSelect={() => setCriandoCliente(true)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Criar cliente
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    )}
                   </PopoverContent>
                 </Popover>
               </div>
