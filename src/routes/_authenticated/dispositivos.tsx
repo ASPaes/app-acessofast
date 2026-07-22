@@ -725,6 +725,8 @@ function DispositivosPage() {
     const arr = Array.from(map.entries()).map(([key, v]) => {
       let online = 0, atendimento = 0, offline = 0;
       let ultimo: string | null = null;
+      let document: string | null = null;
+      let document_type: string | null = null;
       for (const d of v.devices) {
         if (d.is_active === false) {
           // inativos não contam nos indicadores
@@ -732,8 +734,12 @@ function DispositivosPage() {
         else if (dispositivosOnline?.has(d.id)) online++;
         else offline++;
         if (d.last_online && (!ultimo || d.last_online > ultimo)) ultimo = d.last_online;
+        if (!document && d.clients?.document) {
+          document = d.clients.document;
+          document_type = d.clients.document_type ?? null;
+        }
       }
-      return { key, label: v.label, devices: v.devices, total: v.devices.length, online, atendimento, offline, ultimo };
+      return { key, label: v.label, devices: v.devices, total: v.devices.length, online, atendimento, offline, ultimo, document, document_type };
     });
     arr.sort((a, b) => {
       if (a.key === "__sem_grupo__") return 1;
