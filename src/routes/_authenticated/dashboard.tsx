@@ -270,6 +270,7 @@ function Dashboard() {
         />
       </div>
 
+      {isSuper && (
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60">
           <CardHeader>
@@ -338,6 +339,7 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
