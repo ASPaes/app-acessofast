@@ -1760,6 +1760,7 @@ function AdicionarDispositivoDialog({
                               value="__sem_cliente__"
                               onSelect={() => {
                                 setClienteId("");
+                                setClienteNome("");
                                 setClienteOpen(false);
                               }}
                             >
@@ -1772,6 +1773,7 @@ function AdicionarDispositivoDialog({
                                 value={c.name}
                                 onSelect={() => {
                                   setClienteId(c.id);
+                                  setClienteNome(c.name);
                                   setClienteOpen(false);
                                 }}
                               >
