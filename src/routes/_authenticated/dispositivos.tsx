@@ -163,6 +163,33 @@ function pickMarkerColor(label: string): string {
   return MARKER_COLOR_TOKENS[sum % MARKER_COLOR_TOKENS.length];
 }
 
+function formatarDocumento(
+  document: string | null | undefined,
+  document_type: string | null | undefined,
+): string | null {
+  if (!document) return null;
+  const digits = document.replace(/\D/g, "");
+  if (document_type === "cnpj" && digits.length === 14) {
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  }
+  if (document_type === "cpf" && digits.length === 11) {
+    return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  }
+  return document;
+}
+
+function tempoRelativo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 60000);
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  return `há ${d} d`;
+}
+
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
     try {
