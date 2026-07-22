@@ -346,7 +346,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, client_id, tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, client_id, clients(name, document, document_type), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
