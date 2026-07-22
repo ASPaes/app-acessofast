@@ -548,7 +548,7 @@ function MonitoramentoPage() {
                 <CardTitle className="text-base">Saúde do relay</CardTitle>
                 <CardDescription>Resumo ao vivo da VPS compartilhada</CardDescription>
               </div>
-              {latest && ageSec != null && ageSec <= 60 ? (
+              {latest && isActive ? (
                 <Badge
                   variant="outline"
                   className="gap-1.5 text-emerald-500 border-emerald-500/30"
