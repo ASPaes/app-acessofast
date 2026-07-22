@@ -508,6 +508,32 @@ function MonitoramentoPage() {
         </p>
       </div>
 
+
+      {availableGroups.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {availableGroups.map((g) => {
+            const on = show(g.id);
+            return (
+              <Button
+                key={g.id}
+                size="sm"
+                variant={on ? "secondary" : "outline"}
+                className={on ? undefined : "opacity-60"}
+                onClick={() => toggleHidden(g.id)}
+              >
+                {g.label}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Resumo da saúde do relay — visão rápida. Ícones IGUAIS ao card do Dashboard:
+          h-5 w-5, animate-pulse e cor por métrica (CPU sky, Memória violet, Disco amber,
+          Rede emerald), layout centralizado.
+          POSIÇÃO: logo ABAIXO da barra de botões de seções (Agentes/Sessões/…) e ACIMA
+          do bloco {canSecao && (...)}. Reusa latest, ageSec, netMbps, isSuper e os ícones
+          Cpu/Gauge/HardDrive/Network já importados. */}
       {isSuper && (
         <Card className="border-border/60">
           <CardHeader>
@@ -532,43 +558,34 @@ function MonitoramentoPage() {
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <VpsStat
-              label="CPU"
-              icon={Cpu}
-              value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : "—"}
-            />
-            <VpsStat
-              label="Memória"
-              icon={Gauge}
-              value={latest ? `${Number(latest.mem_pct).toFixed(1)}%` : "—"}
-            />
-            <VpsStat
-              label="Disco"
-              icon={HardDrive}
-              value={latest ? `${Number(latest.disk_pct).toFixed(0)}%` : "—"}
-            />
-            <VpsStat label="Rede" icon={Network} value={netMbps} />
+            <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
+              <Cpu className="h-5 w-5 animate-pulse text-sky-400" />
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">CPU</div>
+              <div className="text-2xl font-semibold tabular-nums tracking-tight">
+                {latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : "—"}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
+              <Gauge className="h-5 w-5 animate-pulse text-violet-400" />
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">Memória</div>
+              <div className="text-2xl font-semibold tabular-nums tracking-tight">
+                {latest ? `${Number(latest.mem_pct).toFixed(1)}%` : "—"}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
+              <HardDrive className="h-5 w-5 animate-pulse text-amber-400" />
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">Disco</div>
+              <div className="text-2xl font-semibold tabular-nums tracking-tight">
+                {latest ? `${Number(latest.disk_pct).toFixed(0)}%` : "—"}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
+              <Network className="h-5 w-5 animate-pulse text-emerald-400" />
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">Rede</div>
+              <div className="text-2xl font-semibold tabular-nums tracking-tight">{netMbps}</div>
+            </div>
           </CardContent>
         </Card>
-      )}
-
-      {availableGroups.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {availableGroups.map((g) => {
-            const on = show(g.id);
-            return (
-              <Button
-                key={g.id}
-                size="sm"
-                variant={on ? "secondary" : "outline"}
-                className={on ? undefined : "opacity-60"}
-                onClick={() => toggleHidden(g.id)}
-              >
-                {g.label}
-              </Button>
-            );
-          })}
-        </div>
       )}
 
       {canSecao && (
