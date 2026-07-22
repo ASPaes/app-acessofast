@@ -1370,11 +1370,15 @@ function AdicionarDispositivoDialog({
   const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [clienteId, setClienteId] = useState<string>("");
+  const [clienteNome, setClienteNome] = useState<string>("");
   const [clienteOpen, setClienteOpen] = useState(false);
   const [criandoCliente, setCriandoCliente] = useState(false);
   const [novoClienteNome, setNovoClienteNome] = useState("");
   const [novoClienteDoc, setNovoClienteDoc] = useState("");
   const [salvandoCliente, setSalvandoCliente] = useState(false);
+  const [marcadoresSel, setMarcadoresSel] = useState<Set<string>>(new Set());
+  const [marcadoresOpen, setMarcadoresOpen] = useState(false);
+  const [marcadorBusca, setMarcadorBusca] = useState("");
 
   const isSuper = role === "super_admin";
   const effectiveTenant = isSuper ? tenantSelecionado : tenantId;
@@ -1411,6 +1415,20 @@ function AdicionarDispositivoDialog({
     },
   });
 
+  const { data: markersLista } = useQuery({
+    queryKey: ["markers_lista", effectiveTenant],
+    enabled: !!effectiveTenant,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color")
+        .eq("tenant_id", effectiveTenant as string)
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; label: string; color: string | null }>;
+    },
+  });
+
   const clienteSelecionado = clientes?.find((c) => c.id === clienteId) ?? null;
 
   const resetForm = () => {
@@ -1420,10 +1438,14 @@ function AdicionarDispositivoDialog({
     setSenhaGerada(null);
     setCopiado(false);
     setClienteId("");
+    setClienteNome("");
     setClienteOpen(false);
     setCriandoCliente(false);
     setNovoClienteNome("");
     setNovoClienteDoc("");
+    setMarcadoresSel(new Set());
+    setMarcadoresOpen(false);
+    setMarcadorBusca("");
   };
 
   const criarCliente = async () => {
@@ -1463,11 +1485,12 @@ function AdicionarDispositivoDialog({
             .from("clients")
             .select("id, name, document, document_type")
             .eq("tenant_id", effectiveTenant)
-            .eq("name", nome)
+            .ilike("name", nome)
             .maybeSingle();
           if (eErr || !existente) throw error;
           await queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
           setClienteId(existente.id);
+          setClienteNome(existente.name);
           setCriandoCliente(false);
           setNovoClienteNome("");
           setNovoClienteDoc("");
@@ -1479,6 +1502,7 @@ function AdicionarDispositivoDialog({
       }
       await queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
       setClienteId(data.id);
+      setClienteNome(data.name);
       setCriandoCliente(false);
       setNovoClienteNome("");
       setNovoClienteDoc("");
@@ -1524,24 +1548,41 @@ function AdicionarDispositivoDialog({
       }
       const adopted = data ?? {};
       let grupoFalhou = false;
-      if (adopted.was_inserted && adopted.device_id && clienteId) {
-        const cli = clientes?.find((c) => c.id === clienteId);
-        if (cli) {
+      let marcadoresFalhou = false;
+      if (adopted.was_inserted && adopted.device_id) {
+        if (clienteId && clienteNome) {
           const { error: gErr } = await supabase
             .from("address_book")
-            .update({ client_id: cli.id, device_group: cli.name })
+            .update({ client_id: clienteId, device_group: clienteNome })
             .eq("id", adopted.device_id);
           if (gErr) grupoFalhou = true;
         }
+        if (marcadoresSel.size > 0 && effectiveTenant) {
+          const rows = [...marcadoresSel].map((marker_id) => ({
+            tenant_id: effectiveTenant,
+            device_id: adopted.device_id!,
+            marker_id,
+          }));
+          const { error: mErr } = await supabase
+            .from("device_marker_assignments")
+            .insert(rows);
+          if (mErr) marcadoresFalhou = true;
+        }
       }
-      return { ...adopted, grupoFalhou };
+      return { ...adopted, grupoFalhou, marcadoresFalhou };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
       queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
+      queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
       if (data.grupoFalhou) {
         toast.warning(
           "Dispositivo adotado, mas não consegui vincular o cliente — ajuste pelo Editar.",
+        );
+      }
+      if (data.marcadoresFalhou) {
+        toast.warning(
+          "Dispositivo adotado, mas não consegui aplicar os marcadores — ajuste pelo Editar.",
         );
       }
       if (data.was_inserted && data.password_provisioned && data.password) {
