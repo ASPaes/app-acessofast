@@ -20,6 +20,7 @@ export type Database = {
           alias: string | null
           approved_at: string | null
           approved_by: string | null
+          client_id: string | null
           created_at: string
           created_by: string | null
           deactivated_at: string | null
@@ -40,6 +41,7 @@ export type Database = {
           alias?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
           deactivated_at?: string | null
@@ -60,6 +62,7 @@ export type Database = {
           alias?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
           deactivated_at?: string | null
@@ -76,6 +79,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "address_book_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "address_book_created_by_fkey"
             columns: ["created_by"]
@@ -140,6 +150,50 @@ export type Database = {
           subscription_id?: string | null
         }
         Relationships: []
+      }
+      clients: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          document: string | null
+          document_type: Database["public"]["Enums"]["document_type"] | null
+          id: string
+          is_active: boolean
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          document?: string | null
+          document_type?: Database["public"]["Enums"]["document_type"] | null
+          id?: string
+          is_active?: boolean
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          document?: string | null
+          document_type?: Database["public"]["Enums"]["document_type"] | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       connection_logs: {
         Row: {
@@ -1116,6 +1170,7 @@ export type Database = {
       }
     }
     Enums: {
+      document_type: "cnpj" | "cpf"
       enrollment_status: "pending" | "approved" | "rejected"
       lead_status: "novo" | "em_contato" | "qualificado" | "ganho" | "perdido"
       session_status: "active" | "ended" | "failed"
@@ -1247,6 +1302,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      document_type: ["cnpj", "cpf"],
       enrollment_status: ["pending", "approved", "rejected"],
       lead_status: ["novo", "em_contato", "qualificado", "ganho", "perdido"],
       session_status: ["active", "ended", "failed"],
