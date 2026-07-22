@@ -101,6 +101,7 @@ type AddressBookRow = {
   tenant_id: string | null;
   is_active: boolean;
   client_id: string | null;
+  clients: { name: string; document: string | null; document_type: string | null } | null;
   tenants: { name: string } | null;
 };
 
