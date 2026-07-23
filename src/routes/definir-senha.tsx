@@ -26,11 +26,14 @@ function DefinirSenhaPage() {
   const navigate = useNavigate();
   const [estado, setEstado] = useState<Estado>("carregando");
   const [erroLink, setErroLink] = useState<string>(
-    "Link inválido ou expirado. Peça um novo convite ao administrador.",
+    "Este link expirou ou já foi utilizado. Solicite um novo abaixo.",
   );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [emailReenvio, setEmailReenvio] = useState("");
+  const [reenviando, setReenviando] = useState(false);
+  const [reenviado, setReenviado] = useState(false);
 
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -41,7 +44,7 @@ function DefinirSenhaPage() {
         .verifyOtp({ token_hash: tokenHash, type: tipo as any })
         .then(({ error }) => {
           if (error) {
-            setErroLink("Link inválido ou expirado. Peça um novo convite ao administrador.");
+            setErroLink("Este link expirou ou já foi utilizado. Solicite um novo abaixo.");
             setEstado("linkInvalido");
           } else {
             setEstado("pronto");
@@ -56,7 +59,7 @@ function DefinirSenhaPage() {
       const desc = params.get("error_description");
       if (desc) {
         setErroLink(
-          `Link inválido ou expirado (${decodeURIComponent(desc).replace(/\+/g, " ")}). Peça um novo convite ao administrador.`,
+          `Este link expirou ou já foi utilizado (${decodeURIComponent(desc).replace(/\+/g, " ")}). Solicite um novo abaixo.`,
         );
       }
       setEstado("linkInvalido");
@@ -94,6 +97,27 @@ function DefinirSenhaPage() {
     };
   }, []);
 
+  const handleReenviar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = emailReenvio.trim().toLowerCase();
+    if (!email) return;
+
+    setReenviando(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    setReenviando(false);
+
+    if (error) {
+      toast.error(
+        error.message?.includes("rate")
+          ? "Aguarde um minuto antes de solicitar outro link."
+          : "Não foi possível enviar agora. Tente novamente em instantes.",
+      );
+      return;
+    }
+
+    setReenviado(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 8) {
@@ -126,10 +150,59 @@ function DefinirSenhaPage() {
         )}
 
         {estado === "linkInvalido" && (
-          <Alert variant="destructive">
-            <AlertTitle>Não foi possível abrir o convite</AlertTitle>
-            <AlertDescription>{erroLink}</AlertDescription>
-          </Alert>
+          <div className="space-y-4">
+            <Alert variant="destructive">
+              <AlertTitle>Não foi possível abrir o convite</AlertTitle>
+              <AlertDescription>{erroLink}</AlertDescription>
+            </Alert>
+
+            {reenviado ? (
+              <Card className="border-border/60">
+                <CardHeader>
+                  <CardTitle>Link enviado</CardTitle>
+                  <CardDescription>
+                    Se este e-mail estiver cadastrado, você receberá um link de acesso
+                    em instantes. Verifique também a caixa de spam.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : (
+              <Card className="border-border/60">
+                <CardHeader>
+                  <CardTitle>Solicitar novo link</CardTitle>
+                  <CardDescription>
+                    Informe o e-mail usado na contratação para receber um novo link de
+                    acesso.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleReenviar} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email-reenvio">E-mail</Label>
+                      <Input
+                        id="email-reenvio"
+                        type="email"
+                        autoComplete="email"
+                        value={emailReenvio}
+                        onChange={(e) => setEmailReenvio(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={reenviando}>
+                      {reenviando ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Enviando…
+                        </>
+                      ) : (
+                        "Enviar novo link"
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
 
         {estado === "pronto" && (
