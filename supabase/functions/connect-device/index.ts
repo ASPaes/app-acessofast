@@ -71,13 +71,38 @@ Deno.serve(async (req) => {
       .from("profiles").select("is_active").eq("id", user.id).maybeSingle();
     if (!profile || profile.is_active === false) return json({ error: "user_inactive" }, 403);
 
+    // GATE DE CONCORRENCIA + criacao do grant, ATOMICO (antes de qualquer trabalho de cripto).
+    // Emissao-com-quota: se o tecnico ja esta no limite de sessoes simultaneas do plano,
+    // a senha NAO e emitida. O grant (connection_logs ativo) e criado aqui, na emissao.
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    const { data: grantRows, error: grantErr } = await admin.rpc("create_access_grant", {
+      p_device_id: deviceId,
+      p_actor: user.id,
+      p_technician_email: user.email ?? null,
+      p_technician_ip: clientIp,
+    });
+    if (grantErr) {
+      const msg = grantErr.message ?? "";
+      if (msg.includes("quota_exceeded")) return json({ error: "quota_exceeded" }, 429);
+      if (msg.includes("device_inativo")) return json({ error: "device_inativo" }, 403);
+      if (msg.includes("device_not_found")) return json({ error: "forbidden_or_not_found" }, 403);
+      return json({ error: "grant_failed" }, 500);
+    }
+    const grant = Array.isArray(grantRows) ? grantRows[0] : grantRows;
+    if (!grant?.grant_id) return json({ error: "grant_failed" }, 500);
+    const grantId = grant.grant_id as string;
+    // A partir daqui, qualquer falha deve DESFAZER o grant pra nao consumir a quota.
+    const rollbackGrant = async () => {
+      await admin.from("connection_logs").delete().eq("id", grantId);
+    };
+
     // Ciphertext via RPC mecanica (so service_role executa).
     const { data: secretRows, error: secErr } = await admin
       .rpc("get_device_secret", { p_device_id: deviceId });
-    if (secErr) return json({ error: "secret_fetch_failed" }, 500);
+    if (secErr) { await rollbackGrant(); return json({ error: "secret_fetch_failed" }, 500); }
     const row = Array.isArray(secretRows) ? secretRows[0] : secretRows;
-    if (!row) return json({ error: "sem_senha_provisionada" }, 409);
-    if (row.key_version !== 1) return json({ error: "key_version_desconhecida" }, 500);
+    if (!row) { await rollbackGrant(); return json({ error: "sem_senha_provisionada" }, 409); }
+    if (row.key_version !== 1) { await rollbackGrant(); return json({ error: "key_version_desconhecida" }, 500); }
 
     // Decifra AES-256-GCM. AAD = device_id.
     const key = await crypto.subtle.importKey(
@@ -91,19 +116,9 @@ Deno.serve(async (req) => {
       );
       password = new TextDecoder().decode(plain);
     } catch {
+      await rollbackGrant();
       return json({ error: "decrypt_failed" }, 500);
     }
-
-    // Registra a sessao (service_role passa pela policy de insert que exige is_super_admin).
-    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-    await admin.from("connection_logs").insert({
-      tenant_id: device.tenant_id,
-      address_book_id: device.id,
-      rustdesk_id: device.rustdesk_id,
-      technician_id: user.id,
-      technician_email: user.email ?? null,
-      technician_ip: clientIp,
-    });
 
     // Normaliza o ID pra digitos antes do deep link (RustDesk exibe com espacos; a URI nao pode ter).
     const rid = String(device.rustdesk_id).replace(/\D/g, "");

@@ -257,6 +257,10 @@ function DispositivosPage() {
           toast.error(
             "Dispositivo sem senha provisionada. Provisione a senha antes de conectar.",
           );
+        } else if (raw.includes("quota_exceeded")) {
+          toast.error(
+            "Limite de sessões simultâneas do plano atingido. Encerre uma sessão ativa para conectar em outro dispositivo.",
+          );
         } else if (raw.includes("device_inativo")) {
           toast.error("Dispositivo inativo. Reative-o para conectar.");
         } else {
