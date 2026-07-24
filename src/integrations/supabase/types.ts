@@ -780,12 +780,18 @@ export type Database = {
           asaas_customer_id: string | null
           asaas_subscription_id: string | null
           billing_email: string | null
+          billing_exempt: boolean
+          billing_exempt_reason: string | null
+          billing_exempt_until: string | null
+          billing_invoice_url: string | null
+          billing_status: string
           cnpj: string | null
           created_at: string
           id: string
           is_active: boolean
           max_concurrent_per_tech: number | null
           name: string
+          past_due_since: string | null
           plan_code: string | null
           relay_quota_gb: number
           seat_limit: number
@@ -796,12 +802,18 @@ export type Database = {
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
           billing_email?: string | null
+          billing_exempt?: boolean
+          billing_exempt_reason?: string | null
+          billing_exempt_until?: string | null
+          billing_invoice_url?: string | null
+          billing_status?: string
           cnpj?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           max_concurrent_per_tech?: number | null
           name: string
+          past_due_since?: string | null
           plan_code?: string | null
           relay_quota_gb?: number
           seat_limit?: number
@@ -812,12 +824,18 @@ export type Database = {
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
           billing_email?: string | null
+          billing_exempt?: boolean
+          billing_exempt_reason?: string | null
+          billing_exempt_until?: string | null
+          billing_invoice_url?: string | null
+          billing_status?: string
           cnpj?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           max_concurrent_per_tech?: number | null
           name?: string
+          past_due_since?: string | null
           plan_code?: string | null
           relay_quota_gb?: number
           seat_limit?: number

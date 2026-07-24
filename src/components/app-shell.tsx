@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
+import { BillingBanner } from "@/components/billing-banner";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Visão geral",
@@ -49,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name")
+        .select("name, billing_status, billing_invoice_url, past_due_since")
         .eq("id", me!.tenant_id as string)
         .single();
       if (error) throw error;
@@ -81,7 +82,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               <UserMenu />
             </div>
           </header>
-          <main className="flex-1 overflow-auto bg-background">{children}</main>
+          <main className="flex-1 overflow-auto bg-background">
+            {!isSuper && (
+              <BillingBanner
+                status={tenant?.billing_status}
+                invoiceUrl={tenant?.billing_invoice_url}
+                pastDueSince={tenant?.past_due_since}
+                canPay={me?.role === "admin"}
+              />
+            )}
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>
