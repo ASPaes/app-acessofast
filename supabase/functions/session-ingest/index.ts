@@ -67,13 +67,36 @@ Deno.serve(async (req) => {
   async function latestActive() {
     const { data } = await db
       .from("connection_logs")
-      .select("id, session_start")
+      .select("id, session_start, notes")
       .eq("rustdesk_id", rustdesk_id)
       .eq("status", "active")
       .order("session_start", { ascending: false })
       .limit(1)
       .maybeSingle();
     return data;
+  }
+
+  // Billing B2: cap de 2h do free. Devolve o hard_cap_at do atendimento corrente
+  // (free -> +2h; crédito/plano -> null). So p/ sessao iniciada pelo painel: a
+  // externa (notes setado) nao passa pelo connect-device e nao tem atendimento.
+  //
+  // FILTRO = hard_cap_at NO FUTURO (> now). Critico: um cap JA vencido de um free
+  // anterior nao pode "vazar" e cortar uma sessao de credito seguinte no mesmo
+  // device. O agente arma o corte LOCALMENTE ao receber o valor e dispara pelo
+  // proprio relogio — nao precisa do valor depois de vencido. Sem depender de ended_at.
+  async function currentHardCap(isPanelSession: boolean): Promise<string | null> {
+    if (!isPanelSession) return null;
+    const nowIso2 = new Date().toISOString();
+    const { data } = await db
+      .from("atendimentos")
+      .select("hard_cap_at")
+      .eq("rustdesk_id", rustdesk_id)
+      .not("hard_cap_at", "is", null)
+      .gt("hard_cap_at", nowIso2)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data?.hard_cap_at ?? null;
   }
 
   // 3) Tratar o evento.
@@ -86,7 +109,8 @@ Deno.serve(async (req) => {
         .update({ last_heartbeat_at: nowIso })
         .eq("id", active.id);
       if (error) return json({ error: "db_error", detail: error.message }, 500);
-      return json({ ok: true, session_id: active.id, action: "heartbeat" });
+      const hard_cap_at = await currentHardCap(!active.notes);
+      return json({ ok: true, session_id: active.id, action: "heartbeat", hard_cap_at });
     }
 
     const { data: inserted, error } = await db
@@ -103,7 +127,8 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     if (error) return json({ error: "db_error", detail: error.message }, 500);
-    return json({ ok: true, session_id: inserted.id, action: "created_external" });
+    // Sessao externa: sem atendimento -> sem cap de 2h.
+    return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null });
   }
 
   // event === "end": fecha a sessao. NAO escreve duration_seconds (coluna gerada).

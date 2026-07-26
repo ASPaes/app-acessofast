@@ -87,6 +87,13 @@ type ConnectResult = {
   rustdesk_id?: string;
   password?: string;
   deep_link?: string;
+  source?: "free" | "credit" | "plan" | null;
+  charged?: boolean;
+  // Billing B1: quando a conta precisa escolher entre free e crédito, o
+  // connect-device responde isto SEM emitir senha (needs_choice).
+  needs_choice?: boolean;
+  free_remaining?: number;
+  credit_balance?: number;
   error?: string;
 };
 
@@ -236,6 +243,12 @@ function DispositivosPage() {
     deep_link: string;
   } | null>(null);
   const [copiadoConn, setCopiadoConn] = useState(false);
+  // Billing B1: oferta free x crédito (individual + tem os dois).
+  const [choiceData, setChoiceData] = useState<{
+    deviceId: string;
+    free_remaining: number;
+    credit_balance: number;
+  } | null>(null);
   const [confirmRedefinirId, setConfirmRedefinirId] = useState<string | null>(null);
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
@@ -244,12 +257,15 @@ function DispositivosPage() {
   } | null>(null);
   const [copiadoRedef, setCopiadoRedef] = useState(false);
 
-  const handleConectar = async (deviceId: string) => {
+  // Billing B1: connect em (até) 2 etapas. 1ª chamada sem `source`; se a conta
+  // for individual e tiver free E crédito, o servidor responde needs_choice e
+  // abrimos o modal — a 2ª chamada leva a fonte escolhida.
+  const doConnect = async (deviceId: string, source?: "free" | "credit") => {
     setConnectingId(deviceId);
     try {
       const { data, error } = await supabase.functions.invoke<ConnectResult>(
         "connect-device",
-        { body: { device_id: deviceId } },
+        { body: source ? { device_id: deviceId, source } : { device_id: deviceId } },
       );
       if (error || data?.error) {
         const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
@@ -261,6 +277,18 @@ function DispositivosPage() {
           toast.error(
             "Limite de sessões simultâneas do plano atingido. Encerre uma sessão ativa para conectar em outro dispositivo.",
           );
+        } else if (raw.includes("no_credits")) {
+          toast.error(
+            "Sem acessos gratuitos e sem créditos disponíveis. Compre créditos ou conheça os planos para conectar.",
+          );
+        } else if (raw.includes("billing_blocked")) {
+          toast.error(
+            "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
+          );
+        } else if (raw.includes("free_requires_individual")) {
+          toast.error(
+            "O acesso gratuito só vale para uma conexão por vez. Use um crédito para conexões simultâneas.",
+          );
         } else if (raw.includes("device_inativo")) {
           toast.error("Dispositivo inativo. Reative-o para conectar.");
         } else {
@@ -268,10 +296,20 @@ function DispositivosPage() {
         }
         return;
       }
+      // Servidor pede escolha free x crédito (só na 1ª etapa).
+      if (data?.needs_choice) {
+        setChoiceData({
+          deviceId,
+          free_remaining: data.free_remaining ?? 0,
+          credit_balance: data.credit_balance ?? 0,
+        });
+        return;
+      }
       if (!data?.rustdesk_id || !data?.password || !data?.deep_link) {
         toast.error("Resposta inválida do servidor");
         return;
       }
+      setChoiceData(null);
       setConnectData({
         rustdesk_id: data.rustdesk_id,
         password: data.password,
@@ -282,6 +320,8 @@ function DispositivosPage() {
       setConnectingId(null);
     }
   };
+
+  const handleConectar = (deviceId: string) => doConnect(deviceId);
 
   const copiarSenhaConn = async () => {
     if (!connectData) return;
@@ -1311,6 +1351,47 @@ function DispositivosPage() {
             >
               <Monitor className="h-4 w-4 mr-2" />
               Abrir conexão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={choiceData !== null}
+        onOpenChange={(v) => {
+          if (!v) setChoiceData(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Como deseja conectar?</DialogTitle>
+            <DialogDescription>
+              Esta é uma conexão individual. O acesso gratuito concede até 2 horas
+              conectado; se o atendimento pode passar disso, use um crédito (sem esse limite).
+            </DialogDescription>
+          </DialogHeader>
+          {choiceData && (
+            <div className="grid gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={connectingId !== null || choiceData.free_remaining <= 0}
+                onClick={() => doConnect(choiceData.deviceId, "free")}
+              >
+                Usar acesso gratuito ({choiceData.free_remaining} restantes hoje) · até 2h
+              </Button>
+              <Button
+                type="button"
+                disabled={connectingId !== null || choiceData.credit_balance <= 0}
+                onClick={() => doConnect(choiceData.deviceId, "credit")}
+              >
+                Gastar 1 crédito ({choiceData.credit_balance} disponíveis) · sem limite de 2h
+              </Button>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setChoiceData(null)}>
+              Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>
