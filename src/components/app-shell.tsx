@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name, billing_status, billing_invoice_url, past_due_since")
+        .select("name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt")
         .eq("id", me!.tenant_id as string)
         .single();
       if (error) throw error;
@@ -89,6 +89,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 invoiceUrl={tenant?.billing_invoice_url}
                 pastDueSince={tenant?.past_due_since}
                 canPay={me?.role === "admin"}
+                isTrial={tenant?.is_trial}
+                planExpiresAt={tenant?.plan_expires_at}
+                billingExempt={tenant?.billing_exempt}
               />
             )}
             {children}

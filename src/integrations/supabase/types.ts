@@ -789,9 +789,11 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_trial: boolean
           max_concurrent_per_tech: number | null
           name: string
           past_due_since: string | null
+          plan_expires_at: string | null
           plan_code: string | null
           relay_quota_gb: number
           seat_limit: number
@@ -811,9 +813,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_trial?: boolean
           max_concurrent_per_tech?: number | null
           name: string
           past_due_since?: string | null
+          plan_expires_at?: string | null
           plan_code?: string | null
           relay_quota_gb?: number
           seat_limit?: number
@@ -833,9 +837,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_trial?: boolean
           max_concurrent_per_tech?: number | null
           name?: string
           past_due_since?: string | null
+          plan_expires_at?: string | null
           plan_code?: string | null
           relay_quota_gb?: number
           seat_limit?: number
