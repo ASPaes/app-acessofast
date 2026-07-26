@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { AlertTriangle, CreditCard, Ban, Clock, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlanPickerDialog } from "@/components/plan-picker-dialog";
 
 type Props = {
   status: string | null | undefined;
@@ -9,6 +11,8 @@ type Props = {
   isTrial: boolean | null | undefined;
   planExpiresAt: string | null | undefined;
   billingExempt: boolean | null | undefined;
+  currentPlanCode: string | null | undefined;
+  activeUsers: number | null | undefined;
 };
 
 type Estado =
@@ -35,10 +39,13 @@ export function BillingBanner({
   isTrial,
   planExpiresAt,
   billingExempt,
+  currentPlanCode,
+  activeUsers,
 }: Props) {
-  // 4b substitui o corpo desta função pela chamada a create-renewal-checkout.
-  function handleCheckout(motivo: string) {
-    console.log("[billing] checkout solicitado", { motivo });
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  function handleCheckout() {
+    setPickerOpen(true);
   }
 
   let resolvido: Estado | null = null;
@@ -147,47 +154,58 @@ export function BillingBanner({
   const acaoDestrutiva = estado === "trial_expirado" || estado === "plano_vencido";
   const rotuloAcao =
     estado === "trial_expirado" || estado === "trial_ativo" ? "Assinar agora" : "Renovar plano";
+  const reason = estado === "trial_ativo" || estado === "trial_expirado" ? "assinar" : "renovar";
 
   return (
-    <div
-      role="status"
-      className={"flex flex-wrap items-center gap-3 border-b px-4 py-3 text-[13px] " + cor}
-    >
-      <Icone className="h-4 w-4 shrink-0" aria-hidden />
+    <>
+      <div
+        role="status"
+        className={"flex flex-wrap items-center gap-3 border-b px-4 py-3 text-[13px] " + cor}
+      >
+        <Icone className="h-4 w-4 shrink-0" aria-hidden />
 
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{titulo}</p>
-        <p className="opacity-90">{corpo}</p>
-      </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">{titulo}</p>
+          <p className="opacity-90">{corpo}</p>
+        </div>
 
-      {legado ? (
-        canPay && invoiceUrl ? (
+        {legado ? (
+          canPay && invoiceUrl ? (
+            <Button
+              size="sm"
+              variant={suspenso ? "destructive" : "default"}
+              onClick={() => window.open(invoiceUrl, "_blank", "noopener,noreferrer")}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Regularizar pagamento
+            </Button>
+          ) : (
+            <span className="opacity-90">
+              {suspenso ? "Bloqueio financeiro." : "Pendência financeira."} Entre em contato com seu
+              administrador responsável.
+            </span>
+          )
+        ) : canPay ? (
           <Button
             size="sm"
-            variant={suspenso ? "destructive" : "default"}
-            onClick={() => window.open(invoiceUrl, "_blank", "noopener,noreferrer")}
+            variant={acaoDestrutiva ? "destructive" : "default"}
+            onClick={() => handleCheckout()}
           >
             <CreditCard className="mr-2 h-4 w-4" />
-            Regularizar pagamento
+            {rotuloAcao}
           </Button>
         ) : (
-          <span className="opacity-90">
-            {suspenso ? "Bloqueio financeiro." : "Pendência financeira."} Entre em contato com seu
-            administrador responsável.
-          </span>
-        )
-      ) : canPay ? (
-        <Button
-          size="sm"
-          variant={acaoDestrutiva ? "destructive" : "default"}
-          onClick={() => handleCheckout(estado)}
-        >
-          <CreditCard className="mr-2 h-4 w-4" />
-          {rotuloAcao}
-        </Button>
-      ) : (
-        <span className="opacity-90">Entre em contato com o administrador da conta.</span>
-      )}
-    </div>
+          <span className="opacity-90">Entre em contato com o administrador da conta.</span>
+        )}
+      </div>
+
+      <PlanPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        currentPlanCode={currentPlanCode}
+        activeUsers={activeUsers ?? 0}
+        reason={reason}
+      />
+    </>
   );
 }

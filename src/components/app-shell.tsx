@@ -50,11 +50,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt")
+        .select("name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code")
         .eq("id", me!.tenant_id as string)
         .single();
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: activeUsers } = useQuery({
+    queryKey: ["active-users-count", me?.tenant_id],
+    enabled: !!me?.tenant_id && !isSuper,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", me!.tenant_id as string)
+        .eq("is_active", true)
+        .neq("role", "super_admin");
+      if (error) throw error;
+      return count ?? 0;
     },
   });
 
@@ -92,6 +107,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 isTrial={tenant?.is_trial}
                 planExpiresAt={tenant?.plan_expires_at}
                 billingExempt={tenant?.billing_exempt}
+                currentPlanCode={tenant?.plan_code}
+                activeUsers={activeUsers}
               />
             )}
             {children}
