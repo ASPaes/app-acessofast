@@ -790,6 +790,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean
+          onboarding_done_at: string | null
           role: Database["public"]["Enums"]["user_role"]
           tenant_id: string | null
           updated_at: string
@@ -800,6 +801,7 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean
+          onboarding_done_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           tenant_id?: string | null
           updated_at?: string
@@ -810,6 +812,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean
+          onboarding_done_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           tenant_id?: string | null
           updated_at?: string

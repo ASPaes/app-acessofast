@@ -146,6 +146,7 @@ function NavGroup({
           const link = (
             <Link
               to={item.url}
+              data-tour={`nav:${item.url}`}
               className={`relative flex items-center gap-2.5 rounded-md px-2 h-[36px] text-[13px] transition-colors ${
                 active
                   ? "bg-primary/10 text-foreground font-medium"
