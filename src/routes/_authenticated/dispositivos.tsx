@@ -40,8 +40,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -197,6 +197,36 @@ function tempoRelativo(iso: string | null | undefined): string {
   return `há ${d} d`;
 }
 
+// Billing (coluna Consumo + cards). Dia corrente em America/Sao_Paulo (GMT-3),
+// mesma referencia do reset do free.
+function todaySP(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
+// Duracao restante humana a partir de ms. >1h -> "1h 4m"; <1h -> "4m 10s"; <1m -> "10s".
+function fmtRestante(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+type AtendimentoAtivo = {
+  source: "free" | "credit" | "plan";
+  hard_cap_at: string | null;
+  window_expires_at: string;
+};
+
+// Prazo relevante: free corta em hard_cap_at; credito nao corta -> janela de
+// reconexao (window_expires_at). Coincidem no free (2h).
+function prazoAtendimento(a: AtendimentoAtivo): number {
+  const iso = a.source === "free" ? (a.hard_cap_at ?? a.window_expires_at) : a.window_expires_at;
+  return new Date(iso).getTime();
+}
+
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
     try {
@@ -256,6 +286,8 @@ function DispositivosPage() {
     password: string;
   } | null>(null);
   const [copiadoRedef, setCopiadoRedef] = useState(false);
+  // Relogio p/ os countdowns da coluna Consumo (só tica quando ha atendimento ativo).
+  const [now, setNow] = useState(() => Date.now());
 
   // Billing B1: connect em (até) 2 etapas. 1ª chamada sem `source`; se a conta
   // for individual e tiver free E crédito, o servidor responde needs_choice e
@@ -447,6 +479,72 @@ function DispositivosPage() {
     },
   });
 
+  // Billing: atendimentos abertos (janela ainda valida) por device -> coluna Consumo.
+  const { data: atendimentosAtivos } = useQuery({
+    queryKey: ["atendimentos_ativos"],
+    enabled: !isSuper && !!perfil?.tenant_id,
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("atendimentos")
+        .select("address_book_id, source, hard_cap_at, window_expires_at")
+        .is("ended_at", null)
+        .gt("window_expires_at", new Date().toISOString());
+      if (error) throw error;
+      const map = new Map<string, AtendimentoAtivo>();
+      for (const r of data ?? []) {
+        if (!r.address_book_id) continue;
+        // Se houver mais de um aberto p/ o mesmo device, fica o de menor prazo.
+        const nova: AtendimentoAtivo = {
+          source: r.source as AtendimentoAtivo["source"],
+          hard_cap_at: r.hard_cap_at,
+          window_expires_at: r.window_expires_at,
+        };
+        const atual = map.get(r.address_book_id);
+        if (!atual || prazoAtendimento(nova) < prazoAtendimento(atual)) {
+          map.set(r.address_book_id, nova);
+        }
+      }
+      return map;
+    },
+  });
+
+  // Billing: carteira do tenant (creditos + gratis hoje) + modo, p/ os cards.
+  // Saldo soma o ledger no cliente (bounded p/ o volume atual; migrar p/ view/RPC
+  // se crescer). daily_access: linha do dia (default cap 5).
+  const { data: carteira } = useQuery({
+    queryKey: ["billing_carteira", perfil?.tenant_id],
+    enabled: !isSuper && !!perfil?.tenant_id,
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const tid = perfil!.tenant_id as string;
+      const today = todaySP();
+      const [tenantRes, creditsRes, dailyRes] = await Promise.all([
+        supabase.from("tenants").select("billing_mode").eq("id", tid).single(),
+        supabase.from("credit_ledger").select("credits").eq("tenant_id", tid),
+        supabase
+          .from("daily_access")
+          .select("used, cap")
+          .eq("tenant_id", tid)
+          .eq("access_date", today)
+          .maybeSingle(),
+      ]);
+      if (tenantRes.error) throw tenantRes.error;
+      if (creditsRes.error) throw creditsRes.error;
+      if (dailyRes.error) throw dailyRes.error;
+      const credits = (creditsRes.data ?? []).reduce((sum, r) => sum + (r.credits ?? 0), 0);
+      const cap = dailyRes.data?.cap ?? 5;
+      const used = dailyRes.data?.used ?? 0;
+      return {
+        billingMode: tenantRes.data.billing_mode as "free" | "credits" | "plan",
+        credits,
+        freeRemaining: Math.max(0, cap - used),
+        freeCap: cap,
+      };
+    },
+  });
+
   const { data: dispositivosOnline } = useQuery({
     queryKey: ["dispositivos_online"],
     refetchInterval: 30000,
@@ -587,7 +685,39 @@ function DispositivosPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const colCount = isSuper ? 6 : 5;
+  // Billing: cards + coluna Consumo só p/ tenant metrado (free/credits), nunca super/plano.
+  const metered = !isSuper && (carteira?.billingMode === "free" || carteira?.billingMode === "credits");
+  const showConsumo = metered;
+  const atendCount = atendimentosAtivos?.size ?? 0;
+
+  // Countdown ao vivo: tique de 1s só enquanto ha atendimento aberto.
+  useEffect(() => {
+    if (atendCount === 0) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [atendCount]);
+
+  const colCount = (isSuper ? 6 : 5) + (showConsumo ? 1 : 0);
+
+  // Badge de consumo de um device (ou null se sem atendimento aberto).
+  const consumoBadge = (deviceId: string) => {
+    const a = atendimentosAtivos?.get(deviceId);
+    if (!a) return null;
+    const isFree = a.source === "free";
+    const restante = fmtRestante(prazoAtendimento(a) - now);
+    return (
+      <Badge
+        className={
+          isFree
+            ? "gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15"
+            : "gap-1.5 bg-primary/10 text-primary border-primary/30 hover:bg-primary/10"
+        }
+        title={isFree ? "Corte automático da sessão grátis" : "Reconexão sem custo até o fim da janela"}
+      >
+        {isFree ? "Grátis" : "Crédito"} · <span className="tabular-nums">{restante}</span>
+      </Badge>
+    );
+  };
 
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
     const status =
@@ -691,6 +821,11 @@ function DispositivosPage() {
             </Badge>
           )}
         </TableCell>
+        {showConsumo && (
+          <TableCell>
+            {consumoBadge(d.id) ?? <span className="text-muted-foreground">—</span>}
+          </TableCell>
+        )}
         <TableCell className="text-right">
           <div className="flex items-center gap-1 justify-end">
             <Button
@@ -798,11 +933,53 @@ function DispositivosPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dispositivos</h1>
-        <p className="text-sm text-muted-foreground">
-          Endpoints AcessoFast cadastrados no address book do seu tenant.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dispositivos</h1>
+          <p className="text-sm text-muted-foreground">
+            Endpoints AcessoFast cadastrados no address book do seu tenant.
+          </p>
+        </div>
+
+        {metered && carteira && (
+          <Card className="border-border/60">
+            <CardContent className="flex items-stretch divide-x divide-border/60 p-0">
+              {carteira.billingMode === "free" && (
+                <div className="flex items-center gap-3 px-5 py-3">
+                  <CalendarDays className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="text-xl font-semibold leading-none tabular-nums">
+                      {carteira.freeRemaining}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        /{carteira.freeCap}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">grátis hoje</p>
+                    <p className="text-[10px] text-muted-foreground/70">renova à meia-noite</p>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3 px-5 py-3">
+                <Coins className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-xl font-semibold leading-none tabular-nums">
+                    {carteira.credits}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">créditos</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 px-5 py-3">
+                <Activity className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-xl font-semibold leading-none tabular-nums">{atendCount}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {atendCount === 1 ? "sessão ativa" : "sessões ativas"}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Card className="border-border/60">
@@ -986,6 +1163,7 @@ function DispositivosPage() {
                   <TableHead>SO</TableHead>
                   {isSuper && <TableHead>Empresa</TableHead>}
                   <TableHead>Status</TableHead>
+                  {showConsumo && <TableHead>Consumo</TableHead>}
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1079,6 +1257,7 @@ function DispositivosPage() {
                           {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
                         </Badge>
                       )}
+                      {showConsumo && consumoBadge(d.id)}
                       {(() => {
                         const nome = d.clients?.name ?? d.device_group;
                         return nome ? <Badge variant="secondary">{nome}</Badge> : null;
