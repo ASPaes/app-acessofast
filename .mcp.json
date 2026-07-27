@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "supabase-acessofast": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=plmfyibyrowbgjjyblcl&features=database,docs,debugging,functions,development"
+    }
+  }
+}
