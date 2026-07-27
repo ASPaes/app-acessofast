@@ -703,6 +703,18 @@ function DispositivosPage() {
   const consumoBadge = (deviceId: string) => {
     const a = atendimentosAtivos?.get(deviceId);
     if (!a) return null;
+    // source 'plan' num tenant metrado = sessão de suporte (super_admin), não cobrada.
+    if (a.source === "plan") {
+      return (
+        <Badge
+          variant="outline"
+          className="gap-1.5 text-muted-foreground"
+          title="Sessão de suporte — não cobrada"
+        >
+          Suporte
+        </Badge>
+      );
+    }
     const isFree = a.source === "free";
     const restante = fmtRestante(prazoAtendimento(a) - now);
     return (

@@ -10,6 +10,7 @@ import {
   Settings,
   Building2,
   Store,
+  Wallet,
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,6 +30,7 @@ type NavItem = {
     | "/auditoria"
     | "/usuarios"
     | "/monitoramento"
+    | "/financeiro"
     | "/configuracoes"
     | "/empresas";
   icon: typeof LayoutDashboard;
@@ -43,6 +45,7 @@ const operacao: NavItem[] = [
 
 const gestao: NavItem[] = [
   { title: "Usuários", url: "/usuarios", icon: Users },
+  { title: "Financeiro", url: "/financeiro", icon: Wallet },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
