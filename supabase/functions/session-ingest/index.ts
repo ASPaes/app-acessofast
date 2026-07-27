@@ -2,6 +2,9 @@
 // Recebe eventos de sessao do AGENTE do endpoint e mantem o ciclo em connection_logs.
 // Deploy com verify_jwt = FALSE (auth propria via token de dispositivo).
 // FIX v2: duration_seconds e coluna GERADA -> nunca escrever nela; so setar session_end.
+// FIX v3: aceita o evento "presence" (agente manda a cada 60s com a maquina ociosa) e
+//         carimba address_book.last_online em TODO evento autenticado. O painel deriva
+//         online/offline dessa coluna (janela de 2 min) — sem isto tudo fica "Offline".
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -37,7 +40,7 @@ Deno.serve(async (req) => {
   const agent_token = body.agent_token ?? "";
   const event = body.event ?? "";
 
-  if (!rustdesk_id || !agent_token || !["start", "heartbeat", "end"].includes(event)) {
+  if (!rustdesk_id || !agent_token || !["start", "heartbeat", "end", "presence"].includes(event)) {
     return json({ error: "missing_or_invalid_fields" }, 400);
   }
 
@@ -63,6 +66,22 @@ Deno.serve(async (req) => {
   }
 
   const nowIso = new Date().toISOString();
+
+  // 2.1) Presenca: qualquer evento autenticado prova que a maquina esta viva agora.
+  // O painel calcula online/offline por address_book.last_online > now() - 2min, e o
+  // agente ocioso so manda "presence" (60s em 60s) — por isso o carimbo vem ANTES do
+  // roteamento por evento, e nao so no ramo de sessao.
+  const { error: presErr } = await db
+    .from("address_book")
+    .update({ last_online: nowIso })
+    .eq("id", device.id);
+
+  // "presence" = maquina ligada e ociosa. Marca presenca e sai: nao abre, nao fecha
+  // e nao toca em connection_logs (nao e sessao, nao cobra, nao gera grant).
+  if (event === "presence") {
+    if (presErr) return json({ error: "db_error", detail: presErr.message }, 500);
+    return json({ ok: true, action: "presence" });
+  }
 
   async function latestActive() {
     const { data } = await db
