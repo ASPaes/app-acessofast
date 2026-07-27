@@ -122,7 +122,7 @@ export function PlanPickerDialog({
     setPendente(code);
     try {
       const { data, error } = await supabase.functions.invoke<CheckoutResult>(
-        "create-renewal-checkout",
+        "create-renewal-prod",
         { body: { plan_code: code, billing_cycle: cycle } },
       );
       if (error) throw error;
