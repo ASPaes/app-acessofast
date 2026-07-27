@@ -30,6 +30,8 @@ import {
   Gauge,
   AlertTriangle,
   Network,
+  Coins,
+  Gift,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -38,6 +40,11 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   }),
   component: Dashboard,
 });
+
+// Dia corrente em America/Sao_Paulo (GMT-3) — mesma referencia do reset do free.
+function todaySP(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
 
 type VpsMetric = {
   captured_at: string;
@@ -145,6 +152,40 @@ function Dashboard() {
     },
   });
 
+  // Billing: carteira do tenant (creditos + gratis hoje) + modo, p/ os cards.
+  const carteira = useQuery({
+    queryKey: ["dashboard-carteira", me?.tenant_id],
+    enabled: !!me && me.role !== "super_admin" && !!me.tenant_id,
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const tid = me!.tenant_id as string;
+      const today = todaySP();
+      const [tenantRes, creditsRes, dailyRes] = await Promise.all([
+        supabase.from("tenants").select("billing_mode").eq("id", tid).single(),
+        supabase.from("credit_ledger").select("credits").eq("tenant_id", tid),
+        supabase
+          .from("daily_access")
+          .select("used, cap")
+          .eq("tenant_id", tid)
+          .eq("access_date", today)
+          .maybeSingle(),
+      ]);
+      if (tenantRes.error) throw tenantRes.error;
+      if (creditsRes.error) throw creditsRes.error;
+      if (dailyRes.error) throw dailyRes.error;
+      const credits = (creditsRes.data ?? []).reduce((sum, r) => sum + (r.credits ?? 0), 0);
+      const cap = dailyRes.data?.cap ?? 5;
+      const used = dailyRes.data?.used ?? 0;
+      return {
+        billingMode: tenantRes.data.billing_mode as "free" | "credits" | "plan",
+        credits,
+        freeRemaining: Math.max(0, cap - used),
+        freeCap: cap,
+      };
+    },
+  });
+
   const [realtimeOk, setRealtimeOk] = useState(false);
 
   useEffect(() => {
@@ -198,6 +239,9 @@ function Dashboard() {
   const role = me?.role;
   const isSuper = role === "super_admin";
   const isTech = role === "tech";
+  // Cards de billing só p/ tenant metrado (free/credits), nunca super/plano.
+  const cart = carteira.data;
+  const metered = !isSuper && (cart?.billingMode === "free" || cart?.billingMode === "credits");
 
   const hintUsuarios = isSuper ? "Contas de todas as empresas" : "Contas habilitadas no seu tenant";
   const hintDispositivos = isSuper ? "Endpoints de todas as empresas" : "Endpoints no address book";
@@ -268,6 +312,26 @@ function Dashboard() {
           loading={stats.isLoading}
           color="violet"
         />
+        {metered && (
+          <StatCard
+            title="Créditos"
+            value={cart?.credits}
+            icon={Coins}
+            hint="Saldo disponível para atendimentos"
+            loading={carteira.isLoading}
+            color="yellow"
+          />
+        )}
+        {metered && cart?.billingMode === "free" && (
+          <StatCard
+            title="Grátis hoje"
+            value={`${cart.freeRemaining}/${cart.freeCap}`}
+            icon={Gift}
+            hint="Acessos gratuitos · renova à meia-noite"
+            loading={carteira.isLoading}
+            color="sky"
+          />
+        )}
       </div>
 
       {isSuper && (
@@ -420,6 +484,8 @@ const STAT_COLORS = {
   emerald: { icon: "text-emerald-500", wrap: "bg-emerald-500/10" },
   amber: { icon: "text-amber-500", wrap: "bg-amber-500/10" },
   violet: { icon: "text-violet-500", wrap: "bg-violet-500/10" },
+  yellow: { icon: "text-yellow-500", wrap: "bg-yellow-500/10" },
+  sky: { icon: "text-sky-500", wrap: "bg-sky-500/10" },
 } as const;
 
 function StatCard({
@@ -431,7 +497,7 @@ function StatCard({
   color = "blue",
 }: {
   title: string;
-  value: number | undefined;
+  value: number | string | undefined;
   icon: typeof Users;
   hint: string;
   loading: boolean;
