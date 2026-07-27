@@ -26,7 +26,7 @@ async function sha256Hex(input: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; event?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string };
   try {
     body = await req.json();
   } catch {
@@ -36,6 +36,9 @@ Deno.serve(async (req) => {
   const rustdesk_id = (body.rustdesk_id ?? "").trim();
   const agent_token = body.agent_token ?? "";
   const event = body.event ?? "";
+  // B6: IP do peer conectante (do log "opened from <IP>"). Opcional — o agente
+  // atual ainda não envia; entra como auditoria da sessão direta quando enviar.
+  const peer_ip = (body.peer_ip ?? "").trim() || null;
 
   if (!rustdesk_id || !agent_token || !["start", "heartbeat", "end"].includes(event)) {
     return json({ error: "missing_or_invalid_fields" }, 400);
@@ -76,21 +79,21 @@ Deno.serve(async (req) => {
     return data;
   }
 
-  // Billing B2: cap de 2h do free. Devolve o hard_cap_at do atendimento corrente
-  // (free -> +2h; crédito/plano -> null). So p/ sessao iniciada pelo painel: a
-  // externa (notes setado) nao passa pelo connect-device e nao tem atendimento.
+  // Billing B2/B6: cap de 2h do free. Devolve o hard_cap_at do atendimento ABERTO
+  // do device (free -> +2h; crédito/plano -> null). Vale p/ PAINEL e DIRETO: no B6
+  // a sessao externa (.exe) tambem passa a ter atendimento, entao nao filtramos mais
+  // por origem — so pelo atendimento aberto do rustdesk_id.
   //
-  // FILTRO = hard_cap_at NO FUTURO (> now). Critico: um cap JA vencido de um free
-  // anterior nao pode "vazar" e cortar uma sessao de credito seguinte no mesmo
-  // device. O agente arma o corte LOCALMENTE ao receber o valor e dispara pelo
-  // proprio relogio — nao precisa do valor depois de vencido. Sem depender de ended_at.
-  async function currentHardCap(isPanelSession: boolean): Promise<string | null> {
-    if (!isPanelSession) return null;
+  // FILTRO = ended_at null E hard_cap_at NO FUTURO (> now). Critico: um cap JA
+  // vencido de um free anterior nao pode "vazar" e cortar a sessao seguinte no
+  // mesmo device. O agente arma o corte LOCALMENTE ao receber o valor.
+  async function currentHardCap(): Promise<string | null> {
     const nowIso2 = new Date().toISOString();
     const { data } = await db
       .from("atendimentos")
       .select("hard_cap_at")
       .eq("rustdesk_id", rustdesk_id)
+      .is("ended_at", null)
       .not("hard_cap_at", "is", null)
       .gt("hard_cap_at", nowIso2)
       .order("started_at", { ascending: false })
@@ -109,7 +112,7 @@ Deno.serve(async (req) => {
         .update({ last_heartbeat_at: nowIso })
         .eq("id", active.id);
       if (error) return json({ error: "db_error", detail: error.message }, 500);
-      const hard_cap_at = await currentHardCap(!active.notes);
+      const hard_cap_at = await currentHardCap();
       return json({ ok: true, session_id: active.id, action: "heartbeat", hard_cap_at });
     }
 
@@ -127,8 +130,37 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     if (error) return json({ error: "db_error", detail: error.message }, 500);
-    // Sessao externa: sem atendimento -> sem cap de 2h.
-    return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null });
+
+    // Billing B6: sessao externa (.exe, direta) agora e MEDIDA aqui. Auto free->credito;
+    // reconexao unificada nao cobra; sem saldo/conta bloqueada -> blocked (cortamos).
+    const { data: meterRows, error: meterErr } = await db.rpc("meter_external_session", {
+      p_rustdesk_id: rustdesk_id,
+      p_connection_log_id: inserted.id,
+      p_peer_ip: peer_ip,
+    });
+    if (meterErr) {
+      // Medicao falhou: nao derruba a sessao (fail-open); segue sem cap.
+      return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null });
+    }
+    const meter = Array.isArray(meterRows) ? meterRows[0] : meterRows;
+    if (meter?.blocked) {
+      // Sem saldo / conta bloqueada: cap = AGORA -> o agente (B2) corta na hora.
+      return json({
+        ok: true,
+        session_id: inserted.id,
+        action: "blocked_external",
+        reason: meter.reason ?? "blocked",
+        hard_cap_at: nowIso,
+      });
+    }
+    // Permitida: free -> +2h (cortada aos 2h); credito/plano -> null (sem corte).
+    return json({
+      ok: true,
+      session_id: inserted.id,
+      action: "created_external",
+      source: meter?.source ?? null,
+      hard_cap_at: meter?.hard_cap_at ?? null,
+    });
   }
 
   // event === "end": fecha a sessao. NAO escreve duration_seconds (coluna gerada).

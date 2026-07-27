@@ -241,3 +241,39 @@ B0 ──┬── B1 ── B2            (Free+Crédito ponta a ponta = 1º pr
 B5 (independente, após decisão)
 ```
 **Menor incremento vendável:** B0 → B1 → B2 (free com corte real + crédito). **Receita de crédito** exige também B3. **Planos** já têm scaffolding (concorrência+seats+Asaas parcial); faltam trial/dunning (B4).
+
+---
+
+## B6 — Acesso direto medido (.exe fora do portal)  *(def. 2026-07-27)*
+
+**Motivação:** o técnico deve ser **livre pra escolher** como acessa o cliente — pelo **painel** (senha rotativa permanente, não-assistido) **ou** direto pelo **.exe** (assistido): digitando a **senha de uso único** (embaixo do ID) ou o cliente clicando **Aceitar**. O produto tem que **controlar/medir** o acesso **mesmo quando vem pelo .exe**, sem passar pelo portal.
+
+**Como se comunica:** o **agente** já detecta 100% das sessões pelo log do RustDesk (`#N Connection opened from <IP>`) e reporta ao `session-ingest`. Hoje a sessão direta só vira `connection_logs` com nota "Acesso externo", **sem medição**. B6 = **medir no `session-ingest`** o que não veio do painel, com a **mesma** lógica free/crédito.
+
+**2 caminhos, 1 medição:**
+| Caminho | Acesso do técnico | Onde mede |
+|---|---|---|
+| Painel (não-assistido) | Conectar → senha rotativa permanente | `connect-device` (hoje) |
+| Direto (.exe, assistido) | senha de **uso único** OU cliente **Aceita** | agente → `session-ingest` (novo) |
+
+**Decisões (2026-07-27):**
+1. **Cobrança da sessão direta = AUTO free→crédito** (igual ao modelo; sem modal de escolha — não há painel). Reconexão=grátis; senão free do dia; senão 1 crédito; senão corta.
+2. **Sem saldo (free e crédito zerados) = CORTA** a sessão (reusa o corte do B2: rotaciona + reinicia serviço). Enforcement pós-conexão (a sessão cai em segundos).
+3. **Reconexão UNIFICADA por device+janela** (`rustdesk_id` na janela, independente de origem painel/.exe e de técnico) → **não cobra 2x**. Muda o `create_access_grant` (reconexão deixa de exigir mesmo técnico) e a nova RPC usa a mesma regra.
+
+**Diferenças estruturais da sessão direta:**
+- **Sem técnico identificado:** só temos `rustdesk_id` + **IP do peer** (do log). → `atendimentos.technician_id` vira **nullable**; grava `origin='direct'` e `peer_ip`. Concorrência do free passa a ser **por tenant** (não por técnico). Auditoria fica pelo `peer_ip`.
+- **Sem modal:** decide sozinho (decisão 1).
+- **Enforcement é corte, não bloqueio prévio** (a conexão já subiu quando o agente reporta).
+
+**Segurança:** senha de **uso único** morre no uso e **Aceitar** exige alguém no endpoint — ambos são **assistidos** e não reintroduzem o risco "senha vista sobrevive" que a rotação (Fase 2/3) resolve. A senha permanente rotativa continua **só** pro painel (não-assistido). Coerente.
+
+**Peças (ordem de implementação):**
+1. **Schema (aditivo):** `atendimentos.technician_id` → nullable; `+origin text ('panel'|'direct')`; `+peer_ip inet`.
+2. **RPC `meter_external_session(rustdesk_id, connection_log_id, peer_ip)`** (service_role): reconexão unificada → auto free→crédito → cria atendimento (tech null, origin 'direct') e debita, OU devolve `blocked` (sem saldo / billing_blocked).
+3. **`create_access_grant`:** reconexão passa a casar por `rustdesk_id`+janela (unificação); free concurrency por tenant.
+4. **`session-ingest`:** na sessão externa, chama a RPC; se `blocked` → devolve corte (agente derruba); senão devolve `hard_cap_at`.
+5. **Agente:** captura `peer_ip` do `opened from`; trata resposta de corte no `start`.
+6. **Cliente branded (verificar em máquina):** confirmar que expõe **senha de uso único** e **modo Aceitar** (RustDesk liga por padrão; o build pode ter travado). A senha permanente rotativa segue só pro painel.
+
+**Depende de:** B0/B1/B2 (em prod). **Esforço:** G (schema + RPC + edge + agente + rebuild/instalador + verificação no cliente).
