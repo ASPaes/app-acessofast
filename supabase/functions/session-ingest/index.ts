@@ -103,9 +103,14 @@ Deno.serve(async (req) => {
   // a sessao externa (.exe) tambem passa a ter atendimento, entao nao filtramos mais
   // por origem — so pelo atendimento aberto do rustdesk_id.
   //
-  // FILTRO = ended_at null E hard_cap_at NO FUTURO (> now). Critico: um cap JA
-  // vencido de um free anterior nao pode "vazar" e cortar a sessao seguinte no
-  // mesmo device. O agente arma o corte LOCALMENTE ao receber o valor.
+  // Usa o atendimento aberto MAIS RECENTE (order by started_at desc). Isso resolve
+  // dois casos de uma vez:
+  //  • "vazamento": se ja ha uma sessao/atendimento NOVO (cap futuro), ele e o mais
+  //    recente e vence — o cap vencido de um free anterior nao corta a sessao nova.
+  //  • overstay: se o unico atendimento aberto e um free cujo cap JA venceu (sessao
+  //    esticou alem das 2h e o agente nao cortou), devolvemos "cortar AGORA" (nowIso,
+  //    mesma convencao do ramo blocked) em vez de null — antes o null desarmava o
+  //    corte e a sessao virava fantasma. hard_cap_at null (credito/plano) = sem corte.
   async function currentHardCap(): Promise<string | null> {
     const nowIso2 = new Date().toISOString();
     const { data } = await db
@@ -113,12 +118,11 @@ Deno.serve(async (req) => {
       .select("hard_cap_at")
       .eq("rustdesk_id", rustdesk_id)
       .is("ended_at", null)
-      .not("hard_cap_at", "is", null)
-      .gt("hard_cap_at", nowIso2)
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    return data?.hard_cap_at ?? null;
+    if (!data || !data.hard_cap_at) return null;           // sem atendimento aberto, ou credito/plano
+    return data.hard_cap_at <= nowIso2 ? nowIso2 : data.hard_cap_at;
   }
 
   // 3) Tratar o evento.
