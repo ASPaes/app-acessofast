@@ -131,8 +131,8 @@ const MARKER_COLOR_TOKENS = [
 
 const MARKER_COLOR_CLASSES: Record<string, string> = {
   slate: "bg-slate-500/15 text-slate-500 border-slate-500/30",
-  red: "bg-red-500/15 text-red-500 border-red-500/30",
-  amber: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+  red: "bg-destructive/15 text-destructive border-destructive/30",
+  amber: "bg-warning/15 text-warning border-warning/30",
   green: "bg-green-500/15 text-green-500 border-green-500/30",
   blue: "bg-blue-500/15 text-blue-500 border-blue-500/30",
   violet: "bg-violet-500/15 text-violet-500 border-violet-500/30",
@@ -142,8 +142,8 @@ const MARKER_COLOR_CLASSES: Record<string, string> = {
 
 const MARKER_DOT_CLASSES: Record<string, string> = {
   slate: "bg-slate-500",
-  red: "bg-red-500",
-  amber: "bg-amber-500",
+  red: "bg-destructive",
+  amber: "bg-warning",
   green: "bg-green-500",
   blue: "bg-blue-500",
   violet: "bg-violet-500",
@@ -721,7 +721,7 @@ function DispositivosPage() {
       <Badge
         className={
           isFree
-            ? "gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15"
+            ? "gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15"
             : "gap-1.5 bg-primary/10 text-primary border-primary/30 hover:bg-primary/10"
         }
         title={isFree ? "Corte automático da sessão grátis" : "Reconexão sem custo até o fim da janela"}
@@ -742,9 +742,9 @@ function DispositivosPage() {
             : "offline";
     const iconColor =
       status === "atendimento"
-        ? "text-amber-500"
+        ? "text-warning"
         : status === "online"
-          ? "text-emerald-500"
+          ? "text-success"
           : "text-muted-foreground/40";
 
     return (
@@ -758,7 +758,7 @@ function DispositivosPage() {
               title={favoritos?.has(d.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
               onClick={() => toggleFavoritoMutation.mutate({ deviceId: d.id, favoritar: !favoritos?.has(d.id) })}
             >
-              <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+              <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-warning text-warning" : "text-muted-foreground"}`} />
             </Button>
             <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
             <div className="flex flex-col">
@@ -817,13 +817,13 @@ function DispositivosPage() {
           {status === "inativo" ? (
             <Badge variant="secondary">Inativo</Badge>
           ) : status === "atendimento" ? (
-            <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <Badge className="gap-1.5 bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">
+              <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
               Em atendimento
             </Badge>
           ) : status === "online" ? (
-            <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
               Online
             </Badge>
           ) : (
@@ -997,12 +997,12 @@ function DispositivosPage() {
       <Card className="border-border/60">
         <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="h-2 w-2 rounded-full bg-success" />
             <span className="text-lg font-semibold tabular-nums">{contagem.online}</span>
             <span className="text-sm text-muted-foreground">online</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            <span className="h-2 w-2 rounded-full bg-warning" />
             <span className="text-lg font-semibold tabular-nums">{contagem.atendimento}</span>
             <span className="text-sm text-muted-foreground">em atendimento</span>
           </div>
@@ -1127,33 +1127,42 @@ function DispositivosPage() {
                 </Command>
               </PopoverContent>
             </Popover>
-            <div className="flex items-center rounded-md border border-border/60">
+            {/* Seletor de visão: botão de 36px com glifo de 20px.
+                O glifo é maior do que a proporção usual pede porque num seletor
+                sem rótulo ele é a única informação — e há um motivo concreto:
+                `LayoutGrid` desenha quatro quadrados com vão entre eles; a 16px
+                cada quadrado fica com ~5px e o ícone degrada para quatro
+                pontinhos. A 20px os quadrados voltam a ler como quadrados.
+                `shrink-0` no ícone não é enfeite: sem ele o SVG é item flexível
+                e o navegador o espreme para caber na caixa de conteúdo, em
+                silêncio. */}
+            <div className="flex items-center rounded-lg border border-border/60 p-0.5 gap-0.5">
               <Button
                 size="icon"
                 variant={viewMode === "list" ? "secondary" : "ghost"}
-                className="h-8 w-8 rounded-r-none"
+                className="h-9 w-9 [&_svg]:size-5 [&_svg]:shrink-0"
                 title="Lista"
                 onClick={() => setViewMode("list")}
               >
-                <List className="h-4 w-4" />
+                <List />
               </Button>
               <Button
                 size="icon"
                 variant={viewMode === "grid" ? "secondary" : "ghost"}
-                className="h-8 w-8 rounded-none"
+                className="h-9 w-9 [&_svg]:size-5 [&_svg]:shrink-0"
                 title="Grade"
                 onClick={() => setViewMode("grid")}
               >
-                <LayoutGrid className="h-4 w-4" />
+                <LayoutGrid />
               </Button>
               <Button
                 size="icon"
                 variant={viewMode === "grouped" ? "secondary" : "ghost"}
-                className="h-8 w-8 rounded-l-none"
+                className="h-9 w-9 [&_svg]:size-5 [&_svg]:shrink-0"
                 title="Agrupar por grupo"
                 onClick={() => setViewMode("grouped")}
               >
-                <FolderTree className="h-4 w-4" />
+                <FolderTree />
               </Button>
             </div>
             {podeAdicionar && perfil && (
@@ -1226,9 +1235,9 @@ function DispositivosPage() {
                         : "offline";
                 const iconColor =
                   status === "atendimento"
-                    ? "text-amber-500"
+                    ? "text-warning"
                     : status === "online"
-                      ? "text-emerald-500"
+                      ? "text-success"
                       : "text-muted-foreground/40";
                 return (
                   <div key={d.id} className="rounded-lg border border-border/60 bg-muted/20 p-4 flex flex-col gap-3">
@@ -1243,7 +1252,7 @@ function DispositivosPage() {
                         title={favoritos?.has(d.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                         onClick={() => toggleFavoritoMutation.mutate({ deviceId: d.id, favoritar: !favoritos?.has(d.id) })}
                       >
-                        <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                        <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-warning text-warning" : "text-muted-foreground"}`} />
                       </Button>
                     </div>
                     <div className="flex flex-col">
@@ -1254,13 +1263,13 @@ function DispositivosPage() {
                       {status === "inativo" ? (
                         <Badge variant="secondary">Inativo</Badge>
                       ) : status === "atendimento" ? (
-                        <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        <Badge className="gap-1.5 bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">
+                          <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
                           Em atendimento
                         </Badge>
                       ) : status === "online" ? (
-                        <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15">
+                          <span className="h-1.5 w-1.5 rounded-full bg-success" />
                           Online
                         </Badge>
                       ) : (
@@ -1414,11 +1423,11 @@ function DispositivosPage() {
                         </span>
                         <div className="flex items-center gap-3 ml-4">
                           <div className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                            <span className="h-2 w-2 rounded-full bg-success" />
                             <span className="text-sm tabular-nums">{g.online}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full bg-amber-500" />
+                            <span className="h-2 w-2 rounded-full bg-warning" />
                             <span className="text-sm tabular-nums">{g.atendimento}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -1656,7 +1665,7 @@ function DispositivosPage() {
                   </Button>
                 </div>
               </div>
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                 Aplique esta senha como senha permanente (unattended) no client AcessoFast
                 deste computador. A senha anterior não funciona mais.
               </div>

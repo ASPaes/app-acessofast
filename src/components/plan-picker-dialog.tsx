@@ -241,7 +241,7 @@ export function PlanPickerDialog({
                   </p>
 
                   {excedeUsuarios && (
-                    <p className="text-xs text-amber-500">
+                    <p className="text-xs text-warning">
                       {`Seu tenant tem ${activeUsers} usuários ativos; este plano permite ${plano.max_users}.`}
                     </p>
                   )}

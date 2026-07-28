@@ -376,7 +376,7 @@ function Financeiro() {
                         <TableCell
                           className={
                             "text-right font-medium tabular-nums " +
-                            (h.credits >= 0 ? "text-emerald-500" : "text-muted-foreground")
+                            (h.credits >= 0 ? "text-success" : "text-muted-foreground")
                           }
                         >
                           {h.credits >= 0 ? `+${h.credits}` : h.credits}
@@ -432,14 +432,14 @@ function BillingStatusBadge({
   }
   if (status === "active") {
     return (
-      <Badge className="gap-1.5 bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15 w-fit">
+      <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15 w-fit">
         Ativo
       </Badge>
     );
   }
   if (status === "past_due") {
     return (
-      <Badge className="gap-1.5 bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/15 w-fit">
+      <Badge className="gap-1.5 bg-warning/15 text-warning border-warning/30 hover:bg-warning/15 w-fit">
         Pagamento pendente
       </Badge>
     );
