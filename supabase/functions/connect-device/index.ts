@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
     if (elig.blocked_reason) {
       if (elig.blocked_reason === "device_not_found") return json({ error: "forbidden_or_not_found" }, 403);
       if (elig.blocked_reason === "billing_blocked") return json({ error: "billing_blocked" }, 403);
+      if (elig.blocked_reason === "quota_exceeded") return json({ error: "quota_exceeded" }, 429);
       if (elig.blocked_reason === "no_credits") return json({ error: "no_credits" }, 402);
       return json({ error: "blocked" }, 402);
     }
