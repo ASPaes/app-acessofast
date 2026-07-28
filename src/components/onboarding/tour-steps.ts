@@ -26,6 +26,12 @@ export type TourStep = {
   body: string;
   /** ausente = passo vale para todos os papéis */
   roles?: TourRole[];
+  /**
+   * Passo de mão na massa: o overlay deixa de capturar cliques e o usuário opera
+   * o painel de verdade. O tour espera a ação acontecer antes de liberar o
+   * "Próximo" — ver `feito` em onboarding-tour.tsx.
+   */
+  interativo?: boolean;
 };
 
 const PASSOS: TourStep[] = [
@@ -42,6 +48,14 @@ const PASSOS: TourStep[] = [
     route: "/dispositivos",
     title: "Dispositivos",
     body: "Os endpoints AcessoFast do seu address book. É daqui que sai o atendimento: procure a máquina, use favoritos e marcadores para achar rápido e clique em Conectar para abrir a sessão remota.",
+  },
+  {
+    id: "cadastrar-dispositivo",
+    target: "add-device",
+    route: "/dispositivos",
+    title: "Cadastre seu computador",
+    body: "Vamos fazer junto, é o passo que mais importa. Abra o AcessoFast neste computador, copie o ID que aparece na tela do programa e cadastre aqui — é assim que toda máquina entra no address book. Começar pela sua deixa você testar uma conexão sem depender de cliente.",
+    interativo: true,
   },
   {
     id: "clientes",
