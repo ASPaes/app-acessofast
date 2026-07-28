@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
 import { BillingBanner } from "@/components/billing-banner";
+import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Visão geral",
@@ -95,7 +96,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
             <div className="ml-auto flex items-center gap-3">
               <HealthPill enabled={isSuper} />
-              <UserMenu />
+              <div data-tour="user-menu" className="flex items-center">
+                <UserMenu />
+              </div>
             </div>
           </header>
           <main className="flex-1 overflow-auto bg-background">
@@ -116,6 +119,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
+      <OnboardingTour userId={me?.id} role={me?.role} />
     </SidebarProvider>
   );
 }
