@@ -29,7 +29,7 @@ async function sha256Hex(input: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string };
   try {
     body = await req.json();
   } catch {
@@ -42,6 +42,9 @@ Deno.serve(async (req) => {
   // B6: IP do peer conectante (do log "opened from <IP>"). Opcional — o agente
   // atual ainda não envia; entra como auditoria da sessão direta quando enviar.
   const peer_ip = (body.peer_ip ?? "").trim() || null;
+  // Auto-adoção: rustdesk_id do CONTROLADOR (máquina do técnico) parseado do log do
+  // cliente. Opcional; usado só p/ adotar um device ainda não registrado no 'start'.
+  const controller_rustdesk_id = (body.controller_rustdesk_id ?? "").trim() || null;
 
   if (!rustdesk_id || !agent_token || !["start", "heartbeat", "end", "presence"].includes(event)) {
     return json({ error: "missing_or_invalid_fields" }, 400);
@@ -51,19 +54,47 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  // Hash do token apresentado (usado na auth e na auto-adoção).
+  const presentedHash = await sha256Hex(agent_token);
+
   // 1) Resolver o dispositivo pelo rustdesk_id (unico) -> tenant + hash do token.
-  const { data: device, error: devErr } = await db
+  let { data: device, error: devErr } = await db
     .from("address_book")
     .select("id, tenant_id, agent_token_hash")
     .eq("rustdesk_id", rustdesk_id)
     .maybeSingle();
-
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
+
+  // 1.1) AUTO-ADOÇÃO (acesso direto): device ainda não adotado (só claim 'waiting',
+  // não está no address_book). Só no 'start' e com o rustdesk_id do CONTROLADOR (a
+  // máquina do técnico, já adotada): a RPC autentica pelo claim, resolve o tenant pelo
+  // controlador e cria o device 'approved'. Controlador desconhecido -> 403 (corta).
+  if (!device && event === "start" && controller_rustdesk_id) {
+    const { data: adoptRows, error: adoptErr } = await db.rpc("auto_adopt_direct", {
+      p_rustdesk_id: rustdesk_id,
+      p_agent_token_hash: presentedHash,
+      p_controller_rustdesk_id: controller_rustdesk_id,
+    });
+    if (adoptErr) return json({ error: "db_error", detail: adoptErr.message }, 500);
+    const a = Array.isArray(adoptRows) ? adoptRows[0] : adoptRows;
+    if (a && (a.adopted || a.reason === "already_adopted")) {
+      // adotado agora (ou já estava) -> re-busca pra seguir o fluxo normal.
+      const r = await db
+        .from("address_book")
+        .select("id, tenant_id, agent_token_hash")
+        .eq("rustdesk_id", rustdesk_id)
+        .maybeSingle();
+      device = r.data;
+    } else if (a?.reason === "unknown_controller") {
+      return json({ error: "unknown_controller" }, 403);
+    }
+    // no_claim_or_bad_token (ou nulo) -> cai no device_not_registered abaixo.
+  }
+
   if (!device) return json({ error: "device_not_registered" }, 404);
   if (!device.agent_token_hash) return json({ error: "device_not_provisioned" }, 401);
 
   // 2) Autenticar o agente.
-  const presentedHash = await sha256Hex(agent_token);
   if (presentedHash !== device.agent_token_hash) {
     return json({ error: "unauthorized" }, 401);
   }
