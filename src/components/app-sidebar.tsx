@@ -82,8 +82,23 @@ export function AppSidebar() {
   const isSuper = me?.role === "super_admin";
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border-subtle bg-sidebar">
-      <SidebarHeader className="border-b border-border-subtle px-3 h-14 justify-center">
+    <Sidebar
+      collapsible="icon"
+      // Translúcida, para a coluna ler como parte do fundo. A cor de fundo mora
+      // num filho interno do primitivo shadcn (`[data-sidebar=sidebar]`, com
+      // `bg-sidebar` fixo), então alcançamos por variante em vez de editar o
+      // primitivo — o componente segue igual para qualquer outro uso.
+      // Sem `backdrop-blur`: atrás dela só passa a camada de ambiente, que já é
+      // desfocada. Blur ali seria custo de GPU sem ganho visual.
+      className={[
+        "border-r border-border-subtle",
+        "[&_[data-sidebar=sidebar]]:bg-sidebar/55",
+        "[&_[data-sidebar=sidebar]]:bg-[linear-gradient(180deg,rgba(47,107,255,0.07)_0%,rgba(47,107,255,0.02)_30%,transparent_64%)]",
+      ].join(" ")}
+    >
+      {/* Sem `border-b`: o bloco da marca e a navegação são a mesma coluna, e o
+          traço no meio a partia em dois. */}
+      <SidebarHeader className="px-3 h-14 justify-center">
         <div className="flex items-center gap-2.5">
           <img
             src={acessofastLogo.url}
