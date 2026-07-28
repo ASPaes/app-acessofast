@@ -1,0 +1,12 @@
+{
+  "name": "acessofast-redesign-preview",
+  "private": true,
+  "type": "module",
+  "description": "Preview visual isolado do redesign do AcessoFast. Não faz parte do build do app real.",
+  "scripts": {
+    "dev": "vite --config redesign-preview/vite.config.ts",
+    "build": "vite build --config redesign-preview/vite.config.ts",
+    "preview": "vite preview --config redesign-preview/vite.config.ts"
+  },
+  "note": "Este pacote NÃO instala dependências próprias. Ele resolve react, react-dom, @radix-ui/*, lucide-react, recharts, tailwindcss, @tailwindcss/vite, vite e @vitejs/plugin-react do node_modules da raiz do repositório (resolução ascendente do Node). Rode os comandos a partir da raiz do projeto."
+}
