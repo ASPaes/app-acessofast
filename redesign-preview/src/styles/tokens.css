@@ -1,0 +1,166 @@
+/*
+ * AcessoFast — Design tokens (preview do redesign)
+ * ------------------------------------------------
+ * Fonte única de verdade do visual. Nenhum componente do preview escreve
+ * cor, raio, sombra ou duração "na mão": tudo sai daqui.
+ *
+ * O tema é dark-first e não tem variante clara — o painel é uma ferramenta
+ * de plantão, usada horas seguidas, e a superfície escura azulada reduz
+ * fadiga sem recorrer a preto absoluto (que "estoura" o contraste das bordas).
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Superfícies -------------------------------------------------- */
+  /*
+   * Rampa inteira no matiz ~219°, o mesmo do azul da marca (--af-primary é
+   * ~221°). Isso não é detalhe: a paleta inicial ficava por volta de 45% de
+   * saturação e, ao lado do brilho azul da camada atmosférica, os painéis
+   * liam como cinza sujo. Subindo para ~54% no mesmo matiz, o painel passa a
+   * ser "o mesmo azul, mais escuro" em vez de uma cor concorrente.
+   *
+   * A luminância foi mantida onde estava, por dois motivos:
+   *   - o painel precisa continuar mais claro que o fundo em QUALQUER ponto da
+   *     composição, inclusive no canto superior esquerdo, onde o brilho é forte;
+   *   - --af-text-muted sobre --af-surface fica em 4,9:1, acima do mínimo AA
+   *     de 4,5:1. Clarear a superfície derruba esse número — não subir daqui.
+   */
+  --af-bg: #060d18; /* fundo da aplicação */
+  --af-bg-secondary: #0a1324; /* faixas/bandas dentro do conteúdo */
+  --af-sidebar: #070f1c; /* navegação lateral */
+  --af-surface: #101e37; /* painel padrão */
+  --af-surface-2: #142543; /* painel aninhado / cabeçalho de tabela */
+  --af-surface-raised: #192d52; /* modal, dropdown, popover */
+  --af-surface-hover: #1c3157; /* hover de item clicável */
+
+  /* ---- Vidro (acabamento translúcido dos painéis) --------------------- */
+  /* Estes três valores NÃO foram escolhidos a olho: são a média medida do que
+     o painel translúcido já mostrava na área de conteúdo (1920x1080), com a
+     pilha de gradientes da atmosfera avaliada ponto a ponto. Usar a média
+     significa que fechar o painel não muda a cor — só impede a constelação de
+     atravessar. Se as manchas de `ambient.tsx` mudarem, remedir. */
+  --af-glass: #0d182c; /* painel */
+  --af-glass-2: #0e1a30; /* painel aninhado / toolbar */
+  --af-glass-head: #13223e; /* cabeçalho de tabela grudado no topo */
+
+  /* ---- Zebrado das listas ------------------------------------------- */
+  /* 2,5% de branco, não mais. Medido sobre as duas superfícies de painel:
+       faixa vs linha base .... Δ ~6 níveis por canal (percebe-se)
+       texto discreto na faixa  6,09:1 (vidro) / 5,67:1 (sólido)
+       hover vs faixa ......... Δ ~9 (vidro) / ~6 (sólido)
+     A terceira linha é a que define o teto: a partir de ~3,5% o hover deixa de
+     ser mais forte que o zebrado e o "estou nesta linha" some justo nas pares.
+     Sendo um branco translúcido, funciona igual nos dois acabamentos. */
+  --af-zebra: rgba(255, 255, 255, 0.025);
+  /* Linha aberta/selecionada — manda mais que o zebrado, porque é estado e não
+     decoração. O hover continua ganhando dos dois, e está certo: hover é
+     resposta ao ponteiro, dura o tempo do ponteiro. */
+  --af-row-ativa: rgba(28, 49, 87, 0.55);
+
+  /* ---- Traços ------------------------------------------------------- */
+  --af-border: #22304a;
+  --af-border-subtle: rgba(148, 163, 184, 0.12);
+  --af-border-strong: #2c3d5c;
+
+  /* ---- Marca -------------------------------------------------------- */
+  /* #2F6BFF da paleta inicial dava 4,498:1 com texto branco — passava raspando
+     POR BAIXO do mínimo AA. Escurecido o mínimo necessário para folgar; a
+     diferença é invisível a olho nu. */
+  --af-primary: #2c67fa;
+  /* O hover ESCURECE, não clareia. Clarear (o antigo #4585FF) derrubava o texto
+     branco do botão para 3,47:1 — reprovado justamente no estado em que a
+     pessoa está prestes a clicar. É também o que o painel atual já faz, com
+     `hover:bg-primary/90`. */
+  --af-primary-hover: #1d54e0;
+  --af-primary-light: #64a4ff;
+  --af-primary-soft: rgba(47, 107, 255, 0.12);
+  --af-primary-soft-hover: rgba(47, 107, 255, 0.18);
+  --af-primary-ring: rgba(47, 107, 255, 0.45);
+
+  /* ---- Texto -------------------------------------------------------- */
+  --af-text: #f7f9fc;
+  --af-text-secondary: #b2bed0;
+  /* Clareado junto com a rampa de superfícies. Com as superfícies mais azuis,
+     o #7F8CA3 anterior caía para 4,02:1 sobre --af-surface-raised (dica de
+     campo dentro de modal) e 4,49:1 sobre --af-surface-2 (cabeçalho de tabela)
+     — os dois abaixo do mínimo AA de 4,5:1.
+     Quem dita este valor é a superfície MAIS CLARA da rampa: se um dia
+     --af-surface-hover ou --af-surface-raised subirem, este token sobe junto. */
+  --af-text-muted: #909db3;
+  --af-text-on-primary: #ffffff;
+
+  /* ---- Paleta categórica dos ícones de métrica ---------------------- */
+  /* Cada métrica tem uma cor fixa, como no painel atual. Não é decoração:
+     é o que deixa "Disco" ou "Sessões 24h" reconhecível na visão periférica,
+     antes de ler o rótulo.
+
+     O que define se essa codificação funciona não é a beleza do conjunto e sim
+     a MENOR distância entre dois tons quaisquer — é nesse par que a pessoa
+     erra. Medido em CIEDE2000 (não ΔE76, que superestima diferença no azul e
+     subestima no amarelo, justo as duas pontas deste caso):
+
+       herdado do app atual ..... menor ΔE00  4,4   (amber x yellow)
+       depois do ajuste ......... menor ΔE00 19,8   (emerald x lime)
+
+     Abaixo de ~15 num elemento de 16 px as pessoas confundem. Três pares
+     estavam abaixo disso; hoje nenhum está. Ver a tabela no README. */
+  --af-viz-blue: #5b8cff; /* Usuários ativos */
+  --af-viz-emerald: #31c48d; /* Dispositivos · rede */
+  --af-viz-amber: #f5b942; /* Sessões ativas · disco */
+  --af-viz-violet: #c084fc; /* Sessões 24h · memória */
+  --af-viz-cyan: #22d3ee; /* Grátis hoje · CPU */
+  --af-viz-lime: #a9d95a; /* Créditos */
+
+  /* ---- Semânticas --------------------------------------------------- */
+  --af-success: #31c48d;
+  --af-success-soft: rgba(49, 196, 141, 0.12);
+  --af-warning: #f5b942;
+  --af-warning-soft: rgba(245, 185, 66, 0.12);
+  --af-danger: #f05252;
+  --af-danger-soft: rgba(240, 82, 82, 0.12);
+  --af-info: #4ea1ff;
+  --af-info-soft: rgba(78, 161, 255, 0.12);
+  --af-neutral: #7f8ca3;
+  --af-neutral-soft: rgba(127, 140, 163, 0.12);
+
+  /* ---- Raios -------------------------------------------------------- */
+  --af-radius-xs: 4px;
+  --af-radius-sm: 6px;
+  --af-radius-md: 8px;
+  --af-radius-lg: 12px;
+  --af-radius-xl: 14px;
+  --af-radius-2xl: 18px;
+  --af-radius-pill: 999px;
+
+  /* ---- Sombras (discretas: profundidade vem da superfície, não da sombra) */
+  --af-shadow-sm: 0 1px 2px rgba(2, 6, 16, 0.4);
+  --af-shadow-md: 0 4px 16px -6px rgba(2, 6, 16, 0.6);
+  --af-shadow-pop: 0 12px 32px -12px rgba(2, 6, 16, 0.75);
+  --af-shadow-modal: 0 24px 64px -24px rgba(2, 6, 16, 0.9);
+
+  /* ---- Movimento ---------------------------------------------------- */
+  --af-dur-hover: 140ms;
+  --af-dur-menu: 180ms;
+  --af-dur-modal: 200ms;
+  --af-ease: cubic-bezier(0.2, 0, 0.13, 1);
+
+  /* ---- Camadas ------------------------------------------------------ */
+  --af-z-sticky: 20;
+  --af-z-sidebar: 30;
+  --af-z-popover: 40;
+  --af-z-modal: 50;
+  --af-z-toast: 60;
+
+  /* ---- Métricas do shell -------------------------------------------- */
+  --af-sidebar-w: 236px;
+  --af-sidebar-w-collapsed: 64px;
+  --af-topbar-h: 56px;
+  --af-row-h: 52px;
+}
+
+/* Densidade compacta: mesma hierarquia, mais linhas na tela.
+   Usada em 1366x768 e por quem prefere lista densa. */
+:root[data-density="compact"] {
+  --af-row-h: 44px;
+}

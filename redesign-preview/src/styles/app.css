@@ -1,0 +1,359 @@
+@import "tailwindcss" source(none);
+@source "../";
+
+@import "./tokens.css";
+
+/*
+ * Ponte tokens -> utilitários Tailwind v4.
+ * Cada token vira uma classe utilitária (bg-surface, text-muted, border-line…),
+ * então nenhum componente precisa repetir valores hexadecimais.
+ */
+@theme inline {
+  --font-sans:
+    "Inter var", "Inter", ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", system-ui,
+    -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono:
+    ui-monospace, "Cascadia Mono", "Segoe UI Mono", "JetBrains Mono", "SFMono-Regular", Menlo,
+    monospace;
+
+  --color-bg: var(--af-bg);
+  --color-bg-secondary: var(--af-bg-secondary);
+  --color-sidebar: var(--af-sidebar);
+  --color-surface: var(--af-surface);
+  --color-surface-2: var(--af-surface-2);
+  --color-surface-raised: var(--af-surface-raised);
+  --color-surface-hover: var(--af-surface-hover);
+
+  --color-line: var(--af-border);
+  --color-line-subtle: var(--af-border-subtle);
+  --color-line-strong: var(--af-border-strong);
+
+  --color-primary: var(--af-primary);
+  --color-primary-hover: var(--af-primary-hover);
+  --color-primary-light: var(--af-primary-light);
+  --color-primary-soft: var(--af-primary-soft);
+  --color-primary-soft-hover: var(--af-primary-soft-hover);
+
+  --color-ink: var(--af-text);
+  --color-ink-2: var(--af-text-secondary);
+  --color-muted: var(--af-text-muted);
+  --color-on-primary: var(--af-text-on-primary);
+
+  --color-success: var(--af-success);
+  --color-success-soft: var(--af-success-soft);
+  --color-warning: var(--af-warning);
+  --color-warning-soft: var(--af-warning-soft);
+  --color-danger: var(--af-danger);
+  --color-danger-soft: var(--af-danger-soft);
+  --color-info: var(--af-info);
+  --color-info-soft: var(--af-info-soft);
+  --color-neutral: var(--af-neutral);
+  --color-neutral-soft: var(--af-neutral-soft);
+
+  --radius-xs: var(--af-radius-xs);
+  --radius-sm: var(--af-radius-sm);
+  --radius-md: var(--af-radius-md);
+  --radius-lg: var(--af-radius-lg);
+  --radius-xl: var(--af-radius-xl);
+  --radius-2xl: var(--af-radius-2xl);
+
+  --shadow-sm: var(--af-shadow-sm);
+  --shadow-md: var(--af-shadow-md);
+  --shadow-pop: var(--af-shadow-pop);
+  --shadow-modal: var(--af-shadow-modal);
+}
+
+@layer base {
+  * {
+    border-color: var(--af-border-subtle);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--af-bg);
+    color: var(--af-text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* Foco de teclado sempre visível — nunca removido, só estilizado. */
+  :focus-visible {
+    outline: 2px solid var(--af-primary);
+    outline-offset: 2px;
+    border-radius: var(--af-radius-sm);
+  }
+
+  ::selection {
+    background: var(--af-primary-soft-hover);
+    color: var(--af-text);
+  }
+
+  /* Barras de rolagem no tom da superfície — sem "faixa branca" no dark. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--af-border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--af-border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #3a4d70;
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  .af-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Label de categoria: caixa alta só aqui, nunca em texto corrido. */
+  .af-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--af-text-muted);
+  }
+
+  /* Gradiente de marca — usado só em detalhes pequenos (logo, faixa de topo). */
+  .af-brand-line {
+    background: linear-gradient(
+      90deg,
+      var(--af-primary) 0%,
+      var(--af-primary-light) 55%,
+      transparent 100%
+    );
+  }
+
+  .af-scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Estilo "vidro" dos painéis — alternável no painel Preview.
+ *
+ * A referência é vidro FOSCO, não vidro transparente: a superfície pega luz na
+ * aresta de cima, tem canto mais arredondado e sombra macia, mas o que está
+ * atrás vira um borrão sem detalhe. É essa a parte que importa para um painel
+ * de trabalho — atrás do vidro não pode passar nada que compita com o dado.
+ *
+ * Por que a base é OPACA e não translúcida
+ * ----------------------------------------
+ * A constelação atravessando os painéis atrapalhava a leitura. Medindo a
+ * composição (script em scratchpad, avalia a pilha de gradientes ponto a ponto
+ * em 1920x1080):
+ *
+ *   amplitude de uma bolinha atravessando .... RGB (56, 74, 92)
+ *   amplitude da mancha azul na área útil .... RGB ( 6, 11, 23)
+ *
+ * A bolinha é ~4x mais forte que o degradê que ela acompanha. Não existe nível
+ * de transparência que deixe passar a mancha e barre a constelação: a 90% a
+ * bolinha ainda chega com 9 níveis (visível, e movimento a vista detecta mais
+ * que contraste estático) enquanto a mancha já caiu para 2 (invisível). Como
+ * não há separação possível, a transparência deixa de ser um recurso útil aqui.
+ *
+ * A saída é fechar o painel numa cor que seja exatamente a MÉDIA MEDIDA do que
+ * ele já mostrava (--af-glass*, ver tokens.css). O painel continua com a mesma
+ * cor de antes; o que some é só a constelação por dentro. O caráter de vidro
+ * passa a vir da física da luz — aresta iluminada, brilho de topo, raio maior e
+ * sombra — que é como vidro fosco sobre fundo movimentado se comporta de fato.
+ *
+ * Efeito colateral bem-vindo: sem translucidez não sobra nenhum `backdrop-filter`
+ * na tela de conteúdo. Cada um deles recalcularia a cada repintura da
+ * constelação — foi exatamente essa a causa do travamento anterior.
+ * -------------------------------------------------------------------------- */
+:root[data-painel="vidro"] .af-panel {
+  border-radius: var(--af-radius-2xl);
+  border-color: rgba(255, 255, 255, 0.09);
+  background-color: var(--af-glass);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.075) 0%,
+    rgba(255, 255, 255, 0.018) 38%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  /* a aresta de cima acesa é o que sustenta a leitura de "vidro" agora que a
+     superfície é opaca; some junto com a sombra se for removida */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    var(--af-shadow-pop);
+}
+
+:root[data-painel="vidro"] .af-panel-2 {
+  border-radius: var(--af-radius-xl);
+  border-color: rgba(255, 255, 255, 0.07);
+  background-color: var(--af-glass-2);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Cabeçalho de tabela: um degrau acima do painel, porque as linhas passam por
+   baixo dele quando a página rola. Opaco, então dispensa o blur que antes
+   precisava existir para esconder a constelação. */
+:root[data-painel="vidro"] .af-panel thead {
+  background-color: var(--af-glass-head);
+}
+
+/* --------------------------------------------------------------------------
+ * Zebrado das listas.
+ *
+ * Vale para TODA tabela do painel de uma vez — é por isso que a regra mora
+ * aqui e não numa classe repetida em dez telas.
+ *
+ * POR QUE DENTRO DE `@layer base` E NÃO SOLTO AQUI FORA
+ * ----------------------------------------------------
+ * O Tailwind v4 declara `@layer theme, base, components, utilities` e coloca
+ * TODAS as utilidades em `utilities`. Regra fora de camada ganha de qualquer
+ * camada, por mais específica que a outra seja — especificidade só é comparada
+ * dentro da mesma camada. Solta aqui fora, a faixa venceria o
+ * `hover:bg-surface-hover/45` das linhas e o "estou nesta linha" sumiria em
+ * metade da tabela.
+ *
+ * Dentro de `base`, a ordem das camadas resolve sozinha:
+ *
+ *   base (zebrado)  <  utilities (hover, seleção)
+ *
+ * Sem `!important` e sem depender de ordem de importação.
+ * -------------------------------------------------------------------------- */
+@layer base {
+  tbody tr:nth-child(even) {
+    background-color: var(--af-zebra);
+  }
+
+  /* Linha em estado próprio (expandida) manda mais que a faixa: mesma
+     especificidade, declarada depois. O hover continua ganhando das duas,
+     porque mora em `utilities`. */
+  tbody tr.af-linha-ativa,
+  tbody tr.af-linha-detalhe {
+    background-color: var(--af-row-ativa);
+  }
+}
+
+/* Faixa de cobrança — mesmo problema, causa diferente.
+   A tinta de estado é 12% de opacidade por definição (--af-*-soft), então
+   pintada direto sobre a atmosfera ela deixava a constelação passar por trás
+   do texto do aviso. Aqui a tinta vira `background-image` e é aplicada SOBRE
+   uma base opaca: a cor final é idêntica à de antes, sem as bolinhas atrás.
+   Vale nos dois acabamentos — o aviso de cobrança precisa ser legível sempre.
+   A cor vem de `--af-tinta`, definida por estado em billing-banner.tsx. */
+.af-faixa {
+  background-color: var(--af-glass);
+  background-image: linear-gradient(
+    0deg,
+    var(--af-tinta, transparent),
+    var(--af-tinta, transparent)
+  );
+}
+
+/* --------------------------------------------------------------------------
+ * Animações: curtas, funcionais e canceláveis por preferência de sistema.
+ * -------------------------------------------------------------------------- */
+@keyframes af-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes af-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes af-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes af-shimmer {
+  from {
+    background-position: -320px 0;
+  }
+  to {
+    background-position: 320px 0;
+  }
+}
+
+@keyframes af-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.af-anim-fade {
+  animation: af-fade-in var(--af-dur-menu) var(--af-ease);
+}
+.af-anim-pop {
+  animation: af-pop-in var(--af-dur-menu) var(--af-ease);
+}
+.af-anim-modal {
+  animation: af-modal-in var(--af-dur-modal) var(--af-ease);
+}
+.af-anim-breathe {
+  animation: af-breathe 2.4s var(--af-ease) infinite;
+}
+
+.af-skeleton {
+  background-color: var(--af-surface-2);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.08) 50%,
+    transparent 100%
+  );
+  background-size: 320px 100%;
+  background-repeat: no-repeat;
+  animation: af-shimmer 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

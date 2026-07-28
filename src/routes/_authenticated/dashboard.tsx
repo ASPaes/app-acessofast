@@ -264,17 +264,13 @@ function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground">{subtitulo}</p>
-        </div>
-          <Badge variant="outline" className="gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          ao vivo
-        </Badge>
+      {/* O selo "ao vivo" que ficava aqui foi retirado a pedido: sozinho no
+          canto, não dizia nada sobre nada específico. O selo "ao vivo · há Ns"
+          do painel do relay continua — aquele informa se o coletor está
+          respondendo, é estado e não enfeite. */}
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">{subtitulo}</p>
       </div>
 
       <div className={`grid gap-4 grid-cols-2 ${isTech ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
@@ -319,7 +315,7 @@ function Dashboard() {
             icon={Coins}
             hint="Saldo disponível para atendimentos"
             loading={carteira.isLoading}
-            color="yellow"
+            color="lime"
           />
         )}
         {metered && cart?.billingMode === "free" && (
@@ -329,7 +325,7 @@ function Dashboard() {
             icon={Gift}
             hint="Acessos gratuitos · renova à meia-noite"
             loading={carteira.isLoading}
-            color="sky"
+            color="cyan"
           />
         )}
       </div>
@@ -344,8 +340,8 @@ function Dashboard() {
                 <CardDescription>Saúde da VPS compartilhada (super_admin)</CardDescription>
               </div>
               {ativo ? (
-                <Badge variant="outline" className="gap-1.5 text-emerald-500 border-emerald-500/30">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <Badge variant="outline" className="gap-1.5 text-success border-success/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                   ao vivo · há {idadeSeg}s
                 </Badge>
               ) : (
@@ -370,7 +366,7 @@ function Dashboard() {
                   label="CPU"
                   icon={Cpu}
                   value={latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : undefined}
-                  color="sky"
+                  color="cyan"
                 />
                 <MetricPlaceholder
                   label="Memória"
@@ -479,13 +475,31 @@ function Dashboard() {
   );
 }
 
+/**
+ * Cor categórica de métrica — identifica o cartão, não comunica estado.
+ *
+ * Os tons de fábrica do Tailwind tinham três pares indistinguíveis num ícone de
+ * 16px. Medido em CIEDE2000 (ΔE76 subestima diferença justo na faixa amarela):
+ *
+ *   amber x yellow ... 4,4     <- "Sessões ativas" e "Créditos" liam igual
+ *   blue  x sky ...... 8,0
+ *   blue  x violet ... 14,4
+ *
+ * Abaixo de ~15 as pessoas confundem. Trocando yellow->lime, sky->cyan e
+ * clareando o violeta, a MENOR distância do conjunto vai de 4,4 para 19,8 —
+ * é o par mais próximo que decide se a codificação por cor funciona.
+ *
+ * Créditos ficou verde-limão e não rosa por significado, não estética: o rosa
+ * que a otimização também aceitava fica a ΔE00 10,9 do vermelho de erro, e num
+ * painel de cobrança um ícone de Créditos que lê como alarme é armadilha.
+ */
 const STAT_COLORS = {
-  blue: { icon: "text-blue-500", wrap: "bg-blue-500/10" },
-  emerald: { icon: "text-emerald-500", wrap: "bg-emerald-500/10" },
-  amber: { icon: "text-amber-500", wrap: "bg-amber-500/10" },
-  violet: { icon: "text-violet-500", wrap: "bg-violet-500/10" },
-  yellow: { icon: "text-yellow-500", wrap: "bg-yellow-500/10" },
-  sky: { icon: "text-sky-500", wrap: "bg-sky-500/10" },
+  blue: { icon: "text-viz-blue", wrap: "bg-viz-blue/10" },
+  emerald: { icon: "text-viz-emerald", wrap: "bg-viz-emerald/10" },
+  amber: { icon: "text-viz-amber", wrap: "bg-viz-amber/10" },
+  violet: { icon: "text-viz-violet", wrap: "bg-viz-violet/10" },
+  lime: { icon: "text-viz-lime", wrap: "bg-viz-lime/10" },
+  cyan: { icon: "text-viz-cyan", wrap: "bg-viz-cyan/10" },
 } as const;
 
 function StatCard({
@@ -525,18 +539,21 @@ function StatCard({
   );
 }
 
+/** Mesma paleta categórica dos cartões — uma métrica tem UMA cor no painel
+    inteiro. Métrica com duas cores obriga a ler o rótulo, que é justamente o
+    que a cor deveria evitar. */
 const METRIC_COLORS = {
-  sky: "text-sky-400",
-  violet: "text-violet-400",
-  amber: "text-amber-400",
-  emerald: "text-emerald-400",
+  cyan: "text-viz-cyan",
+  violet: "text-viz-violet",
+  amber: "text-viz-amber",
+  emerald: "text-viz-emerald",
 } as const;
 
 function MetricPlaceholder({
   label,
   icon: Icon,
   value,
-  color = "sky",
+  color = "cyan",
 }: {
   label: string;
   icon: typeof Cpu;

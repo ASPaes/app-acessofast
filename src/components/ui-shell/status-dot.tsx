@@ -2,10 +2,13 @@ import { cn } from "@/lib/utils";
 
 type Tone = "online" | "warning" | "offline" | "neutral";
 
+// Cor de ESTADO: sai do vocabulário semântico (--af-success/warning/danger),
+// não da paleta crua do Tailwind. O brilho usa a mesma variável do ponto, para
+// não haver dois tons de "verde de online" no mesmo pixel.
 const toneClass: Record<Tone, string> = {
-  online: "bg-emerald-500 shadow-[0_0_8px_theme(colors.emerald.500)]",
-  warning: "bg-amber-500 shadow-[0_0_8px_theme(colors.amber.500)]",
-  offline: "bg-red-500",
+  online: "bg-success shadow-[0_0_8px_var(--af-success)]",
+  warning: "bg-warning shadow-[0_0_8px_var(--af-warning)]",
+  offline: "bg-destructive",
   neutral: "bg-muted-foreground/50",
 };
 

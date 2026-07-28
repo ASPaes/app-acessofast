@@ -10,12 +10,20 @@
  * The @theme inline block maps CSS custom properties to Tailwind utility
  * classes (e.g. --color-primary -> bg-primary, text-primary).
  *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
+ * Fonte única de verdade: o bloco --af-* em :root. Os nomes semânticos do
+ * shadcn (--background, --card, --primary…) são APELIDOS para esses tokens,
+ * tanto em :root quanto em .dark. Antes os dois blocos tinham valores próprios
+ * e o .dark vencia — mexer em :root não fazia nada, o que já custou tempo.
+ * O painel é dark-first sempre, então os dois apontam para a mesma paleta.
+ *
+ * Todos os valores em oklch, por convenção deste arquivo. Foram convertidos de
+ * hex com verificação de ida e volta: cada oklch aqui volta para exatamente o
+ * mesmo hex de origem, então os contrastes medidos valem como medidos.
  *
  * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ * 1. Add the raw value as --af-<name> in :root
+ * 2. Alias it in :root and .dark (e.g. --card: var(--af-surface))
+ * 3. Register it in @theme inline as --color-<name>: var(--<name>)
  */
 
 @theme inline {
@@ -59,78 +67,179 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Utilitários que o app JÁ usava sem estarem definidos — `bg-surface-hover`,
+     `border-border-subtle`, `text-text-dim` e `bg-border-subtle` não geravam
+     regra nenhuma e caíam em silêncio. Agora existem. */
+  --color-surface: var(--af-surface);
+  --color-surface-2: var(--af-surface-2);
+  --color-surface-hover: var(--af-surface-hover);
+  --color-border-subtle: var(--af-border-subtle);
+  --color-border-strong: var(--af-border-strong);
+  --color-text-dim: var(--af-text-muted);
+
+  /* Cor categórica de métrica. Não é decoração: é o que deixa cada cartão
+     reconhecível na visão periférica. Os seis tons foram escolhidos pela MENOR
+     distância perceptual entre dois deles (CIEDE2000), não por gosto — o par
+     mais próximo é o que decide se a codificação funciona. */
+  --color-viz-blue: var(--af-viz-blue);
+  --color-viz-emerald: var(--af-viz-emerald);
+  --color-viz-amber: var(--af-viz-amber);
+  --color-viz-violet: var(--af-viz-violet);
+  --color-viz-cyan: var(--af-viz-cyan);
+  --color-viz-lime: var(--af-viz-lime);
+
+  --color-success: var(--af-success);
+  --color-warning: var(--af-warning);
+  --color-info: var(--af-info);
 }
 
 :root {
-  /* Acessofast — mission control (dark-first, sempre) */
-  --radius: 0.5rem;
-  --background: oklch(0.16 0.02 250);
-  --foreground: oklch(0.96 0.005 250);
-  --card: oklch(0.20 0.025 255);
-  --card-foreground: oklch(0.96 0.005 250);
-  --popover: oklch(0.20 0.025 255);
-  --popover-foreground: oklch(0.96 0.005 250);
-  --primary: oklch(0.78 0.16 200);
-  --primary-foreground: oklch(0.16 0.02 250);
-  --secondary: oklch(0.26 0.03 255);
-  --secondary-foreground: oklch(0.96 0.005 250);
-  --muted: oklch(0.24 0.025 255);
-  --muted-foreground: oklch(0.68 0.02 250);
-  --accent: oklch(0.30 0.05 200);
-  --accent-foreground: oklch(0.96 0.005 250);
-  --destructive: oklch(0.65 0.22 25);
-  --destructive-foreground: oklch(0.98 0.005 250);
-  --border: oklch(0.30 0.03 255);
-  --input: oklch(0.26 0.03 255);
-  --ring: oklch(0.78 0.16 200);
-  --chart-1: oklch(0.78 0.16 200);
-  --chart-2: oklch(0.75 0.18 150);
-  --chart-3: oklch(0.80 0.18 85);
-  --chart-4: oklch(0.70 0.22 25);
-  --chart-5: oklch(0.65 0.22 305);
-  --sidebar: oklch(0.14 0.03 255);
-  --sidebar-foreground: oklch(0.86 0.015 250);
-  --sidebar-primary: oklch(0.78 0.16 200);
-  --sidebar-primary-foreground: oklch(0.16 0.02 250);
-  --sidebar-accent: oklch(0.22 0.04 255);
-  --sidebar-accent-foreground: oklch(0.96 0.005 250);
-  --sidebar-border: oklch(0.24 0.03 255);
-  --sidebar-ring: oklch(0.78 0.16 200);
+  /* =====================================================================
+   * PALETA — fonte única de verdade
+   * ===================================================================== */
+
+  --radius: 0.75rem;
+
+  /* ---- Superfícies ---------------------------------------------------
+   * Rampa inteira no matiz ~261° (o mesmo azul da marca). A ~45% de saturação
+   * os painéis liam como cinza sujo ao lado do brilho azul do fundo.
+   * O painel precisa continuar mais claro que o fundo em QUALQUER ponto da
+   * composição — e --af-text-muted sobre --af-surface-hover fica em 4,71:1,
+   * acima do mínimo AA de 4,5:1. Clarear as superfícies derruba esse número. */
+  --af-bg: oklch(0.158 0.026 257.58); /* #060d18 */
+  --af-bg-secondary: oklch(0.188 0.037 262.22); /* #0a1324 */
+  --af-sidebar: oklch(0.168 0.03 259.04); /* #070f1c */
+  --af-surface: oklch(0.237 0.052 261.2); /* #101e37 */
+  --af-surface-2: oklch(0.267 0.061 260.98); /* #142543 */
+  --af-surface-raised: oklch(0.302 0.072 261.64); /* #192d52 */
+  --af-surface-hover: oklch(0.317 0.073 261.35); /* #1c3157 */
+
+  /* ---- Vidro ---------------------------------------------------------
+   * Acabamento translúcido dos painéis. Os três valores são a MÉDIA MEDIDA do
+   * que o painel mostrava sobre a camada de atmosfera (1920x1080, pilha de
+   * gradientes avaliada ponto a ponto). Sendo opacos, a constelação do fundo
+   * não atravessa o conteúdo — e nenhum backdrop-filter precisa recalcular a
+   * cada repintura. Se as manchas do fundo mudarem, remedir. */
+  --af-glass: oklch(0.21 0.043 261.57); /* #0d182c */
+  --af-glass-2: oklch(0.22 0.047 261.65); /* #0e1a30 */
+  --af-glass-head: oklch(0.255 0.057 261.87); /* #13223e */
+
+  /* ---- Traços --------------------------------------------------------- */
+  --af-border: oklch(0.31 0.051 262.18); /* #22304a */
+  --af-border-subtle: oklch(0.798 0.029 258.37 / 12%);
+  --af-border-strong: oklch(0.36 0.058 261.87); /* #2c3d5c */
+
+  /* ---- Marca ----------------------------------------------------------
+   * #2F6BFF da paleta inicial dava 4,498:1 com texto branco — passava raspando
+   * POR BAIXO do mínimo AA. Escurecido o mínimo necessário.
+   * O hover ESCURECE, não clareia: clarear derrubava o texto do botão para
+   * 3,47:1, reprovado justo no estado em que a pessoa vai clicar. */
+  --af-primary: oklch(0.568 0.228 263.89); /* #2c67fa · branco 4,74:1 */
+  --af-primary-hover: oklch(0.506 0.22 263.79); /* #1d54e0 · branco 6,18:1 */
+  --af-primary-light: oklch(0.716 0.149 257.34); /* #64a4ff */
+
+  /* ---- Texto ---------------------------------------------------------- */
+  --af-text: oklch(0.981 0.005 258.32); /* #f7f9fc */
+  --af-text-secondary: oklch(0.798 0.029 258.37); /* #b2bed0 */
+  --af-text-muted: oklch(0.693 0.036 260.99); /* #909db3 · 4,71:1 no pior caso */
+
+  /* ---- Semânticas (estado) -------------------------------------------- */
+  --af-success: oklch(0.7315 0.1455 162.767); /* #31c48d */
+  --af-warning: oklch(0.821 0.147 80.74); /* #f5b942 */
+  --af-danger: oklch(0.655 0.194 24.23); /* #f05252 */
+  --af-info: oklch(0.701 0.16 253.45); /* #4ea1ff */
+
+  /* ---- Categóricas (identidade de métrica) ----------------------------
+   * A paleta de fábrica do Tailwind tinha três pares abaixo do limiar de
+   * confusão (~ΔE00 15 num ícone de 16px):
+   *   amber x yellow 4,4 · blue x sky 8,0 · blue x violet 14,4
+   * Depois do ajuste a menor distância do conjunto é 19,8. */
+  --af-viz-blue: oklch(0.662 0.179 264.64); /* #5b8cff · usuários */
+  --af-viz-emerald: oklch(0.7315 0.1455 162.767); /* #31c48d · dispositivos */
+  --af-viz-amber: oklch(0.821 0.147 80.74); /* #f5b942 · sessões ativas */
+  --af-viz-violet: oklch(0.722 0.177 305.5); /* #c084fc · sessões 24h */
+  --af-viz-cyan: oklch(0.7971 0.1339 211.53); /* #22d3ee · CPU / grátis hoje */
+  --af-viz-lime: oklch(0.826 0.164 127.09); /* #a9d95a · créditos */
+
+  /* ---- Listas ---------------------------------------------------------
+   * 2,5% de branco, não mais: a partir de ~3,5% o hover deixa de ser mais forte
+   * que a faixa e o "estou nesta linha" some justo nas linhas pares. */
+  --af-zebra: oklch(1 0 0 / 2.5%);
+  --af-row-ativa: oklch(0.317 0.073 261.35 / 55%);
+
+  /* =====================================================================
+   * APELIDOS SEMÂNTICOS — o shadcn consome daqui
+   * ===================================================================== */
+  --background: var(--af-bg);
+  --foreground: var(--af-text);
+  --card: var(--af-glass);
+  --card-foreground: var(--af-text);
+  --popover: var(--af-surface-raised);
+  --popover-foreground: var(--af-text);
+  --primary: var(--af-primary);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: var(--af-surface-2);
+  --secondary-foreground: var(--af-text);
+  --muted: var(--af-surface-2);
+  --muted-foreground: var(--af-text-muted);
+  --accent: var(--af-surface-hover);
+  --accent-foreground: var(--af-text);
+  --destructive: var(--af-danger);
+  --destructive-foreground: oklch(1 0 0);
+  --border: var(--af-border);
+  --input: var(--af-border);
+  --ring: var(--af-primary);
+  --chart-1: var(--af-viz-blue);
+  --chart-2: var(--af-viz-emerald);
+  --chart-3: var(--af-viz-amber);
+  --chart-4: var(--af-viz-violet);
+  --chart-5: var(--af-viz-cyan);
+  --sidebar: var(--af-sidebar);
+  --sidebar-foreground: var(--af-text-secondary);
+  --sidebar-primary: var(--af-primary);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: var(--af-surface-hover);
+  --sidebar-accent-foreground: var(--af-text);
+  --sidebar-border: var(--af-border-subtle);
+  --sidebar-ring: var(--af-primary);
 }
 
+/* O painel é dark-first sempre: o .dark repete os mesmos apelidos para que
+   remover ou manter a classe no <html> dê exatamente o mesmo resultado. */
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.623 0.214 259.815);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.623 0.214 259.815);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --background: var(--af-bg);
+  --foreground: var(--af-text);
+  --card: var(--af-glass);
+  --card-foreground: var(--af-text);
+  --popover: var(--af-surface-raised);
+  --popover-foreground: var(--af-text);
+  --primary: var(--af-primary);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: var(--af-surface-2);
+  --secondary-foreground: var(--af-text);
+  --muted: var(--af-surface-2);
+  --muted-foreground: var(--af-text-muted);
+  --accent: var(--af-surface-hover);
+  --accent-foreground: var(--af-text);
+  --destructive: var(--af-danger);
+  --destructive-foreground: oklch(1 0 0);
+  --border: var(--af-border);
+  --input: var(--af-border);
+  --ring: var(--af-primary);
+  --chart-1: var(--af-viz-blue);
+  --chart-2: var(--af-viz-emerald);
+  --chart-3: var(--af-viz-amber);
+  --chart-4: var(--af-viz-violet);
+  --chart-5: var(--af-viz-cyan);
+  --sidebar: var(--af-sidebar);
+  --sidebar-foreground: var(--af-text-secondary);
+  --sidebar-primary: var(--af-primary);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: var(--af-surface-hover);
+  --sidebar-accent-foreground: var(--af-text);
+  --sidebar-border: var(--af-border-subtle);
+  --sidebar-ring: var(--af-primary);
 }
 
 @layer base {
@@ -141,5 +250,37 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+  }
+
+  /* Numeral tabular onde o número é o dado: contadores, IDs, durações, valores.
+     Sem isso a largura do dígito muda a cada atualização e a coluna "dança". */
+  .af-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* ------------------------------------------------------------------
+   * Zebrado das listas — vale para toda tabela do painel de uma vez.
+   *
+   * Mora dentro de `@layer base` de propósito. O Tailwind v4 declara
+   * `@layer theme, base, components, utilities` e põe TODA utilidade em
+   * `utilities`; regra fora de camada ganha de qualquer camada, por mais
+   * específica que a outra seja. Solta, a faixa venceria o `hover:` das
+   * linhas e o "estou nesta linha" sumiria em metade da tabela.
+   * Dentro de `base`, a ordem das camadas resolve sozinha.
+   * ------------------------------------------------------------------ */
+  tbody tr:nth-child(even) {
+    background-color: var(--af-zebra);
+  }
+
+  /* Linha em estado próprio (expandida/selecionada) manda mais que a faixa:
+     mesma especificidade, declarada depois. O hover continua ganhando das
+     duas, porque mora em `utilities` — e está certo, hover é resposta ao
+     ponteiro. A linha de detalhe compartilha o fundo da linha aberta para o
+     par ler como UM bloco; sem isso ela entra na contagem do nth-child e a
+     faixa aparece duas vezes seguidas na emenda. */
+  tbody tr.af-linha-ativa,
+  tbody tr.af-linha-detalhe {
+    background-color: var(--af-row-ativa);
   }
 }

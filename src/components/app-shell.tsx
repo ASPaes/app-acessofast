@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
+import { AmbientBackground } from "@/components/ui-shell/ambient-background";
 import { BillingBanner } from "@/components/billing-banner";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 
@@ -79,10 +80,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "4rem" } as React.CSSProperties}>
-      <div className="min-h-screen flex w-full bg-background text-foreground">
+      {/* Camada de ambiente: `fixed`, atrás de tudo, sem eventos. Só existe
+          dentro do shell autenticado — a tela de login não a recebe. */}
+      <AmbientBackground />
+      <div className="min-h-screen flex w-full text-foreground relative z-10">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center gap-3 border-b border-border-subtle bg-background px-4">
+          {/* Translúcida, para a barra ler como parte do fundo em vez de uma
+              faixa colada por cima. Sem `backdrop-blur`: o `<main>` tem rolagem
+              própria, então nada passa por baixo desta barra — atrás dela só
+              existe a camada de ambiente, que já é suave. Borrar o que já está
+              borrado não muda pixel e ainda obrigaria a refazer o filtro a cada
+              repintura da constelação. */}
+          <header className="h-14 flex items-center gap-3 border-b border-border-subtle bg-background/55 px-4">
             <SidebarTrigger className="h-7 w-7 text-text-dim hover:text-foreground" />
             <div className="h-4 w-px bg-border-subtle" aria-hidden />
             <nav aria-label="Local" className="flex items-center gap-2 text-[13px] min-w-0">
@@ -101,7 +111,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </div>
           </header>
-          <main className="flex-1 overflow-auto bg-background">
+          {/* Sem fundo próprio: a camada de ambiente precisa aparecer por trás
+              do conteúdo. Quem pinta o fundo é o `body` (ver styles.css). */}
+          <main className="flex-1 overflow-auto">
             {!isSuper && (
               <BillingBanner
                 status={tenant?.billing_status}

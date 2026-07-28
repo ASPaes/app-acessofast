@@ -95,7 +95,7 @@ export function BillingBanner({
     estado === "vencendo" ||
     (estado === "trial_ativo" && dias !== null && dias <= 2)
   ) {
-    cor = "border-amber-500/40 bg-amber-500/10 text-amber-500";
+    cor = "border-warning/40 bg-warning/10 text-warning";
   } else if (estado === "trial_ativo") {
     cor = "border-primary/40 bg-primary/10 text-primary";
   }

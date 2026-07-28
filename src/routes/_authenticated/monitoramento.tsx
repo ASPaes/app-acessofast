@@ -483,16 +483,16 @@ function MonitoramentoPage() {
       <div
         className={`
           flex-1 rounded-xl border px-4 py-5 text-center
-          ${isUp ? "border-emerald-500/40 bg-emerald-500/10" : ""}
-          ${isDown ? "border-red-500/40 bg-red-500/10" : ""}
+          ${isUp ? "border-success/40 bg-success/10" : ""}
+          ${isDown ? "border-destructive/40 bg-destructive/10" : ""}
           ${!isUp && !isDown ? "border-muted bg-muted/40" : ""}
         `}
       >
         <div
           className={`
             text-2xl font-semibold tracking-tight tabular-nums
-            ${isUp ? "text-emerald-500" : ""}
-            ${isDown ? "text-red-500" : ""}
+            ${isUp ? "text-success" : ""}
+            ${isDown ? "text-destructive" : ""}
             ${!isUp && !isDown ? "text-muted-foreground" : ""}
           `}
         >
@@ -551,9 +551,9 @@ function MonitoramentoPage() {
               {latest && isActive ? (
                 <Badge
                   variant="outline"
-                  className="gap-1.5 text-emerald-500 border-emerald-500/30"
+                  className="gap-1.5 text-success border-success/30"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                   ao vivo · há {ageSec}s
                 </Badge>
               ) : (
@@ -565,28 +565,28 @@ function MonitoramentoPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
-              <Cpu className="h-5 w-5 animate-pulse text-sky-400" />
+              <Cpu className="h-5 w-5 animate-pulse text-viz-cyan" />
               <div className="text-xs uppercase tracking-widest text-muted-foreground">CPU</div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">
                 {latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : "—"}
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
-              <Gauge className="h-5 w-5 animate-pulse text-violet-400" />
+              <Gauge className="h-5 w-5 animate-pulse text-viz-violet" />
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Memória</div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">
                 {latest ? `${Number(latest.mem_pct).toFixed(1)}%` : "—"}
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
-              <HardDrive className="h-5 w-5 animate-pulse text-amber-400" />
+              <HardDrive className="h-5 w-5 animate-pulse text-viz-amber" />
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Disco</div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">
                 {latest ? `${Number(latest.disk_pct).toFixed(0)}%` : "—"}
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
-              <Network className="h-5 w-5 animate-pulse text-emerald-400" />
+              <Network className="h-5 w-5 animate-pulse text-viz-emerald" />
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Rede</div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">{netMbps}</div>
             </div>
@@ -633,7 +633,7 @@ function MonitoramentoPage() {
                       return (
                         <TableRow
                           key={`${r.address_book_id ?? r.rustdesk_id ?? i}`}
-                          className={vivo ? undefined : "bg-amber-500/5"}
+                          className={vivo ? undefined : "bg-warning/5"}
                         >
                           <TableCell className="font-medium">
                             {nomeDispositivo(r.address_book_id, r.rustdesk_id)}
@@ -653,14 +653,14 @@ function MonitoramentoPage() {
                             {vivo ? (
                               <Badge
                                 variant="outline"
-                                className="text-emerald-500 border-emerald-500/30"
+                                className="text-success border-success/30"
                               >
                                 vivo
                               </Badge>
                             ) : (
                               <Badge
                                 variant="outline"
-                                className="text-amber-500 border-amber-500/40"
+                                className="text-warning border-warning/40"
                               >
                                 sem sinal
                               </Badge>
@@ -741,10 +741,10 @@ function MonitoramentoPage() {
           )}
 
           {show("externos") && (
-          <Card className="border-amber-500/40 bg-amber-500/[0.02]">
+          <Card className="border-warning/40 bg-warning/[0.02]">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-amber-500" />
+                <ShieldAlert className="h-5 w-5 text-warning" />
                 Acessos externos
               </CardTitle>
               <CardDescription>Conexões não iniciadas pelo painel.</CardDescription>
@@ -838,13 +838,13 @@ function MonitoramentoPage() {
                 ) : isActive ? (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <span
-                      className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+                      className="inline-block h-2 w-2 rounded-full bg-success"
                       aria-hidden
                     />
                     <span>Coletor ativo · há {ageSec}s</span>
                   </div>
                 ) : (
-                  <Badge variant="outline" className="text-amber-500 border-amber-500/40">
+                  <Badge variant="outline" className="text-warning border-warning/40">
                     coletor parado
                   </Badge>
                 )}
@@ -885,7 +885,7 @@ function MonitoramentoPage() {
             <Card className="border-border/60">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-sky-500" /> CPU & Load
+                  <Cpu className="h-4 w-4 text-viz-cyan" /> CPU & Load
                 </CardTitle>
                 <CardDescription>Uso de CPU, I/O wait, steal e load average.</CardDescription>
               </CardHeader>
@@ -918,7 +918,7 @@ function MonitoramentoPage() {
             <Card className="border-border/60">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <MemoryStick className="h-4 w-4 text-violet-500" /> Memória
+                  <MemoryStick className="h-4 w-4 text-viz-violet" /> Memória
                 </CardTitle>
                 <CardDescription>RAM em uso e swap.</CardDescription>
               </CardHeader>
@@ -953,7 +953,7 @@ function MonitoramentoPage() {
             <Card className="border-border/60">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <HardDrive className="h-4 w-4 text-amber-500" /> Disco
+                  <HardDrive className="h-4 w-4 text-warning" /> Disco
                 </CardTitle>
                 <CardDescription>Uso do volume principal.</CardDescription>
               </CardHeader>
@@ -976,7 +976,7 @@ function MonitoramentoPage() {
             <Card className="border-border/60">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Network className="h-4 w-4 text-emerald-500" /> Rede (eth0 = relay)
+                  <Network className="h-4 w-4 text-success" /> Rede (eth0 = relay)
                 </CardTitle>
                 <CardDescription>Taxa derivada das duas últimas amostras.</CardDescription>
               </CardHeader>
@@ -1032,7 +1032,7 @@ function MonitoramentoPage() {
                 <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
                   <TrendCard
                     title="CPU & Steal (%)"
-                    icon={<Cpu className="h-4 w-4 text-sky-500" />}
+                    icon={<Cpu className="h-4 w-4 text-viz-cyan" />}
                   >
                     <LineChart data={series.data}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
@@ -1076,7 +1076,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Load average"
-                    icon={<Gauge className="h-4 w-4 text-violet-500" />}
+                    icon={<Gauge className="h-4 w-4 text-viz-violet" />}
                   >
                     <LineChart data={series.data}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
@@ -1120,7 +1120,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Memória (%)"
-                    icon={<MemoryStick className="h-4 w-4 text-violet-500" />}
+                    icon={<MemoryStick className="h-4 w-4 text-viz-violet" />}
                   >
                     <LineChart data={series.data}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
@@ -1147,7 +1147,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Rede/Relay (Mbps)"
-                    icon={<Network className="h-4 w-4 text-emerald-500" />}
+                    icon={<Network className="h-4 w-4 text-success" />}
                   >
                     <LineChart data={series.data}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
@@ -1174,7 +1174,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Disco (%)"
-                    icon={<HardDrive className="h-4 w-4 text-amber-500" />}
+                    icon={<HardDrive className="h-4 w-4 text-warning" />}
                   >
                     <LineChart data={series.data}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
@@ -1259,7 +1259,7 @@ function VpsStat({
     <div
       className={
         "rounded-md border p-3 " +
-        (warn ? "border-amber-500/40 bg-amber-500/[0.04]" : "border-border/60")
+        (warn ? "border-warning/40 bg-warning/[0.04]" : "border-border/60")
       }
     >
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
