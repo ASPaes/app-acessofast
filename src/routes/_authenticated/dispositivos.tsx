@@ -42,6 +42,7 @@ import {
 import { toast } from "sonner";
 import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { filtrarIgnorandoPontuacao } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -2134,8 +2135,8 @@ function AdicionarDispositivoDialog({
                         </div>
                       </div>
                     ) : (
-                      <Command>
-                        <CommandInput placeholder="Buscar cliente…" />
+                      <Command filter={filtrarIgnorandoPontuacao}>
+                        <CommandInput placeholder="Buscar por nome ou CNPJ/CPF…" />
                         <CommandList>
                           <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
                           <CommandGroup>
@@ -2153,14 +2154,22 @@ function AdicionarDispositivoDialog({
                             {(clientes ?? []).map((c) => (
                               <CommandItem
                                 key={c.id}
-                                value={c.name}
+                                // O documento entra no value porque é ele que o
+                                // filtro do cmdk enxerga — sem isso não dá para
+                                // achar cliente por CNPJ.
+                                value={`${c.name} ${c.document ?? ""}`}
                                 onSelect={() => {
                                   setClienteId(c.id);
                                   setClienteNome(c.name);
                                   setClienteOpen(false);
                                 }}
                               >
-                                {c.name}
+                                <span className="truncate">{c.name}</span>
+                                {c.document && (
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {formatarDocumento(c.document, c.document_type)}
+                                  </span>
+                                )}
                                 {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
                               </CommandItem>
                             ))}
@@ -2528,8 +2537,8 @@ function EditarDispositivoDialog({
                     </div>
                   </div>
                 ) : (
-                  <Command>
-                    <CommandInput placeholder="Buscar cliente…" />
+                  <Command filter={filtrarIgnorandoPontuacao}>
+                    <CommandInput placeholder="Buscar por nome ou CNPJ/CPF…" />
                     <CommandList>
                       <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
                       <CommandGroup>
@@ -2547,14 +2556,22 @@ function EditarDispositivoDialog({
                         {(clientes ?? []).map((c) => (
                           <CommandItem
                             key={c.id}
-                            value={c.name}
+                            // O documento entra no value porque é ele que o
+                            // filtro do cmdk enxerga — sem isso não dá para
+                            // achar cliente por CNPJ.
+                            value={`${c.name} ${c.document ?? ""}`}
                             onSelect={() => {
                               setClienteId(c.id);
                               setClienteNome(c.name);
                               setClienteOpen(false);
                             }}
                           >
-                            {c.name}
+                            <span className="truncate">{c.name}</span>
+                            {c.document && (
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {formatarDocumento(c.document, c.document_type)}
+                              </span>
+                            )}
                             {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
                           </CommandItem>
                         ))}
