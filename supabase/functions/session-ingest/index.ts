@@ -86,7 +86,18 @@ Deno.serve(async (req) => {
         .maybeSingle();
       device = r.data;
     } else if (a?.reason === "unknown_controller") {
-      return json({ error: "unknown_controller" }, 403);
+      // Segurança (B6): o device É um cliente AcessoFast (claim + token válidos), mas
+      // está sendo controlado por uma máquina NÃO adotada -> acesso ilegítimo (possível
+      // invasão). Não há tenant/registro pra medir, mas mandamos o sinal de CORTE:
+      // hard_cap_at = agora. O agente lê hard_cap_at do corpo (independe do status HTTP)
+      // e derruba a sessão no próximo tick (~3s): rotaciona a senha efêmera + reinicia o
+      // cliente. Só cortamos neste caso (controlador conhecido-porém-não-adotado); um
+      // device_not_registered cru NÃO corta (cobre matrícula legítima / cliente antigo).
+      return json({
+        error: "unknown_controller",
+        action: "cut_unknown_controller",
+        hard_cap_at: new Date().toISOString(),
+      }, 403);
     }
     // no_claim_or_bad_token (ou nulo) -> cai no device_not_registered abaixo.
   }
