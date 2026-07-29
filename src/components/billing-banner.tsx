@@ -13,6 +13,13 @@ type Props = {
   billingExempt: boolean | null | undefined;
   currentPlanCode: string | null | undefined;
   activeUsers: number | null | undefined;
+  /**
+   * Conta sem ciclo de plano: modo free/créditos e plano sem preço (Individual
+   * grátis) ou sem plano. Nessas contas não existe teste nem vencimento — os
+   * campos legados `is_trial`/`plan_expires_at` podem chegar preenchidos por um
+   * cadastro que passou pelo caminho de trial, e não podem virar faixa.
+   */
+  contaGratuita: boolean;
 };
 
 type Estado =
@@ -41,6 +48,7 @@ export function BillingBanner({
   billingExempt,
   currentPlanCode,
   activeUsers,
+  contaGratuita,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -48,10 +56,14 @@ export function BillingBanner({
     setPickerOpen(true);
   }
 
+  // Conta gratuita não tem teste nem data de vencimento: ignora os campos
+  // legados em vez de anunciar um prazo que não existe para ela.
+  const emTeste = !!isTrial && !contaGratuita;
+
   let resolvido: Estado | null = null;
-  if (isTrial && status === "suspended") {
+  if (emTeste && status === "suspended") {
     resolvido = "trial_expirado";
-  } else if (isTrial && !billingExempt) {
+  } else if (emTeste && !billingExempt) {
     resolvido = "trial_ativo";
   } else if (
     status === "suspended" &&
@@ -65,8 +77,9 @@ export function BillingBanner({
   } else if (status === "past_due") {
     resolvido = "past_due";
   } else if (
-    !isTrial &&
+    !emTeste &&
     !billingExempt &&
+    !contaGratuita &&
     planExpiresAt &&
     diasAte(planExpiresAt) <= DIAS_AVISO_VENCIMENTO
   ) {
