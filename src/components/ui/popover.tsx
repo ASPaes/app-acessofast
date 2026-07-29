@@ -12,13 +12,23 @@ const PopoverAnchor = PopoverPrimitive.Anchor;
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+>(({ className, align = "center", sideOffset = 4, onWheel, ...props }, ref) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
       data-slot="float-content"
       align={align}
       sideOffset={sideOffset}
+      onWheel={(e) => {
+        // O popover é portado para o body, fora da árvore do Dialog. O
+        // react-remove-scroll que o Radix usa para travar a rolagem escuta
+        // 'wheel' no document (sem capture) e cancela tudo que vem de fora do
+        // dialog — era isso que matava a roda do mouse nas listas de dentro do
+        // popover. Parar a propagação antes de chegar ao document devolve a
+        // rolagem sem desligar a trava do Dialog.
+        e.stopPropagation();
+        onWheel?.(e);
+      }}
       className={cn(
         "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-popover-content-transform-origin)",
         className,

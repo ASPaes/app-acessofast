@@ -14,6 +14,17 @@ export function normalizarTexto(valor: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Filtro para as listas do cmdk. Normaliza os dois lados, então a pontuação do
+ * documento deixa de importar: "14.632.051/0001-40" e "14632051000140" acham o
+ * mesmo cliente, e o nome continua achando sem acento e sem caixa.
+ */
+export function filtrarIgnorandoPontuacao(value: string, search: string): number {
+  const termo = normalizarTexto(search);
+  if (!termo) return 1;
+  return normalizarTexto(value).includes(termo) ? 1 : 0;
+}
+
 export function normalizarDocumento(
   bruto: string,
   opcoes?: { recuperarZeros?: boolean },
