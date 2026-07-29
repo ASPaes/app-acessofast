@@ -53,13 +53,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code")
+        .select("name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode")
         .eq("id", me!.tenant_id as string)
         .single();
       if (error) throw error;
       return data;
     },
   });
+
+  // Preço do plano da conta. É ele — não o campo legado `is_trial` — que diz se
+  // existe ciclo de plano: o Individual grátis custa 0 e portanto não tem teste
+  // nem vencimento, mesmo que a conta tenha nascido com esses campos gravados.
+  const { data: plano } = useQuery({
+    queryKey: ["tenant-plan-price", tenant?.plan_code],
+    enabled: !!tenant?.plan_code,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("plans")
+        .select("price_month_cents, is_custom")
+        .eq("code", tenant!.plan_code as string)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const planoPago = !!plano && (plano.is_custom || (plano.price_month_cents ?? 0) > 0);
+  const contaGratuita =
+    (tenant?.billing_mode === "free" || tenant?.billing_mode === "credits") && !planoPago;
 
   const { data: activeUsers } = useQuery({
     queryKey: ["active-users-count", me?.tenant_id],
@@ -128,6 +149,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 billingExempt={tenant?.billing_exempt}
                 currentPlanCode={tenant?.plan_code}
                 activeUsers={activeUsers}
+                contaGratuita={contaGratuita}
               />
             )}
             {children}
