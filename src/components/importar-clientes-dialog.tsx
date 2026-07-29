@@ -59,12 +59,15 @@ export function ImportarClientesDialog({
   onOpenChange,
   tenantId,
   existentes,
+  temTelefone,
   onImportado,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   tenantId: string;
   existentes: ClienteExistente[];
+  /** false enquanto a migração clients.phone não tiver sido aplicada. */
+  temTelefone: boolean;
   onImportado: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -153,7 +156,7 @@ export function ImportarClientesDialog({
           name: l.nome,
           document: l.document,
           document_type: l.document_type,
-          phone: l.phone,
+          ...(temTelefone ? { phone: l.phone } : {}),
         }));
         const { error } = await supabase.from("clients").insert(payload);
         if (error) {
@@ -178,7 +181,7 @@ export function ImportarClientesDialog({
             name: l.nome,
             document: l.document,
             document_type: l.document_type,
-            phone: l.phone,
+            ...(temTelefone ? { phone: l.phone } : {}),
           })
           .eq("id", l.existenteId!);
         if (error) falhas.push({ nome: l.nome, msg: mensagemErro(error) });
@@ -288,6 +291,18 @@ export function ImportarClientesDialog({
                 <Badge variant="destructive">{comErro.length} com erro</Badge>
               )}
             </div>
+
+            {!temTelefone && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Os telefones não serão salvos</AlertTitle>
+                <AlertDescription className="text-xs text-muted-foreground">
+                  A coluna de telefone ainda não existe no banco (migração
+                  20260729120000_clients_phone.sql pendente). Nome e CNPJ/CPF são importados
+                  normalmente; aplique a migração e importe de novo para trazer os telefones.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {duplicados.length > 0 && (
               <Alert>
