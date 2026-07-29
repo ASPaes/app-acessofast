@@ -127,6 +127,12 @@
      também veste telas fora do painel — clarear o token clarearia o
      definir-senha junto. */
   --af-glass-panel: oklch(0.229 0.048 262.37); /* #101c33 */
+  /* Diálogos e sheets. Vinham de `bg-background` — a MESMA cor do fundo da
+     página — e por isso liam como caixa chapada, sem elevação nenhuma.
+     Medido: texto apagado 5,51:1 (folga real sobre o mínimo AA de 4,5:1) e
+     1,125:1 acima do painel. Não precisa separar mais que isso porque o
+     diálogo já vem sobre a cortina escura. */
+  --af-glass-float: oklch(0.27 0.055 261.42); /* #172641 */
   --af-glass-2: oklch(0.22 0.047 261.65); /* #0e1a30 */
   --af-glass-head: oklch(0.255 0.057 261.87); /* #13223e */
 
@@ -356,4 +362,61 @@
     0 1px 2px rgb(2 6 16 / 50%),
     /* elevação, longa e macia */
     0 18px 40px -16px rgb(2 6 16 / 80%);
+}
+
+/* ==========================================================================
+ * Superfícies flutuantes: diálogo, sheet, popover, menu, select.
+ *
+ * Estas NÃO dão para escopar em `.af-app`. O Radix renderiza todas em portal
+ * preso ao <body>, fora da árvore do shell — foi por isso que o acabamento do
+ * painel nunca chegou nelas e os diálogos continuaram com a cara antiga.
+ *
+ * Sem escopo, então, a regra é global. Verificado que `routes/auth.tsx` e
+ * `routes/definir-senha.tsx` não usam nenhum destes primitivos (zero
+ * ocorrências), então as telas intocáveis seguem fora do alcance.
+ * ========================================================================== */
+@layer components {
+  [data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="float-content"] {
+    border-color: rgb(255 255 255 / 10%);
+    border-top-color: rgb(255 255 255 / 22%);
+    /* Brilho mais curto que o do painel (96px contra 150px): estas peças são
+       pequenas, e a mesma queda longa cobriria a caixa inteira e viraria
+       lavagem — o mesmo defeito que o painel tinha. */
+    background-image:
+      radial-gradient(120% 60% at 0% 0%, rgb(255 255 255 / 6%), transparent 58%),
+      linear-gradient(180deg, rgb(255 255 255 / 4.5%) 0, rgb(255 255 255 / 0%) 96px);
+  }
+}
+
+/* Fora de camada pelo mesmo motivo do painel: colidem com utilidades que os
+   primitivos trazem na classe base (`bg-background`, `bg-popover`, `shadow-lg`,
+   `sm:rounded-lg`), e utilidade ganha de qualquer camada. */
+[data-slot="dialog-content"],
+[data-slot="sheet-content"] {
+  background-color: var(--af-glass-float);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    inset 0 -1px 0 rgb(0 0 0 / 26%),
+    /* elevação bem mais longa que a do painel: o diálogo flutua sobre tudo */
+    0 24px 64px -16px rgb(2 6 16 / 85%);
+}
+
+/* Raio só a partir de `sm`, para acompanhar o `sm:rounded-lg` que o próprio
+   primitivo já usava — abaixo disso o diálogo ocupa a largura toda e canto
+   arredondado ali fica estranho. Sheet fica de fora: encosta na borda da tela. */
+@media (min-width: 640px) {
+  [data-slot="dialog-content"] {
+    border-radius: var(--radius);
+  }
+}
+
+/* Popover, menu e select mantêm a própria cor (--popover, já elevada). Só
+   ganham o acabamento e uma sombra mais curta: aparecem colados no controle
+   que os abriu, então não devem flutuar tanto quanto um diálogo. */
+[data-slot="float-content"] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    0 16px 40px -12px rgb(2 6 16 / 80%);
 }
