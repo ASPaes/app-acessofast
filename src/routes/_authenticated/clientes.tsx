@@ -93,19 +93,39 @@ function ClientesPage() {
     },
   });
 
-  const { data: clientes, isLoading } = useQuery({
+  const { data: consulta, isLoading } = useQuery({
     queryKey: ["clientes-lista", effectiveTenant],
     enabled: !!effectiveTenant,
     queryFn: async () => {
+      const colunas = "id, name, document, document_type, is_active";
+      const comTelefone = await supabase
+        .from("clients")
+        .select(`${colunas}, phone`)
+        .eq("tenant_id", effectiveTenant)
+        .order("name");
+      if (!comTelefone.error) {
+        return { rows: (comTelefone.data ?? []) as ClientRow[], temTelefone: true };
+      }
+      // 42703 = coluna inexistente. A migração 20260729120000 (clients.phone)
+      // ainda não foi aplicada neste banco: a tela segue listando os clientes
+      // normalmente, só sem o campo telefone, em vez de ficar vazia.
+      if (comTelefone.error.code !== "42703") throw comTelefone.error;
       const { data, error } = await supabase
         .from("clients")
-        .select("id, name, document, document_type, phone, is_active")
+        .select(colunas)
         .eq("tenant_id", effectiveTenant)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as ClientRow[];
+      return {
+        rows: (data ?? []).map((c) => ({ ...c, phone: null })) as ClientRow[],
+        temTelefone: false,
+      };
     },
   });
+
+  const clientes = consulta?.rows;
+  const temTelefone = consulta?.temTelefone ?? true;
+  const totalColunas = temTelefone ? 5 : 4;
 
   const { data: deviceCounts } = useQuery({
     queryKey: ["clientes-device-counts", effectiveTenant],
@@ -220,7 +240,7 @@ function ClientesPage() {
                 <TableRow>
                   <TableHead>Cliente</TableHead>
                   <TableHead>CNPJ / CPF</TableHead>
-                  <TableHead>Telefone</TableHead>
+                  {temTelefone && <TableHead>Telefone</TableHead>}
                   <TableHead>Dispositivos</TableHead>
                   <TableHead className="w-24">Ações</TableHead>
                 </TableRow>
@@ -228,7 +248,10 @@ function ClientesPage() {
               <TableBody>
                 {!effectiveTenant && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    <TableCell
+                      colSpan={totalColunas}
+                      className="text-center text-muted-foreground py-10"
+                    >
                       Selecione uma empresa para listar os clientes.
                     </TableCell>
                   </TableRow>
@@ -236,7 +259,7 @@ function ClientesPage() {
                 {effectiveTenant && isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: totalColunas }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
@@ -245,7 +268,10 @@ function ClientesPage() {
                   ))}
                 {effectiveTenant && !isLoading && (clientes?.length ?? 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    <TableCell
+                      colSpan={totalColunas}
+                      className="text-center text-muted-foreground py-10"
+                    >
                       Nenhum cliente cadastrado ainda.
                     </TableCell>
                   </TableRow>
@@ -258,9 +284,11 @@ function ClientesPage() {
                       <TableCell className="text-sm text-muted-foreground">
                         {formatarDocumento(c.document, c.document_type) ?? "—"}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatarTelefone(c.phone) ?? "—"}
-                      </TableCell>
+                      {temTelefone && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatarTelefone(c.phone) ?? "—"}
+                        </TableCell>
+                      )}
                       <TableCell>{deviceCounts?.[c.id] ?? 0}</TableCell>
                       <TableCell>
                         <Button
@@ -285,6 +313,7 @@ function ClientesPage() {
         onOpenChange={setDialogOpen}
         tenantId={effectiveTenant}
         editing={editing}
+        temTelefone={temTelefone}
         onSaved={invalidarListas}
       />
 
@@ -293,6 +322,7 @@ function ClientesPage() {
         onOpenChange={setImportOpen}
         tenantId={effectiveTenant}
         existentes={clientes ?? []}
+        temTelefone={temTelefone}
         onImportado={invalidarListas}
       />
     </div>
@@ -304,12 +334,14 @@ function ClienteDialog({
   onOpenChange,
   tenantId,
   editing,
+  temTelefone,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   tenantId: string;
   editing: ClientRow | null;
+  temTelefone: boolean;
   onSaved: () => void;
 }) {
   const [nome, setNome] = useState("");
@@ -332,11 +364,13 @@ function ClienteDialog({
       if (doc.erro) throw new Error(doc.erro);
       const tel = normalizarTelefone(telefone);
       if (tel.erro) throw new Error(tel.erro);
+      // Sem a coluna phone no banco, mandar o campo derrubaria o salvamento
+      // inteiro; o resto do cadastro continua funcionando.
       const campos = {
         name: nomeTrim,
         document: doc.document,
         document_type: doc.document_type,
-        phone: tel.phone,
+        ...(temTelefone ? { phone: tel.phone } : {}),
       };
 
       if (editing) {
@@ -400,15 +434,17 @@ function ClienteDialog({
               placeholder="Somente dígitos (14 = CNPJ, 11 = CPF)"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="cliente-tel">Telefone</Label>
-            <Input
-              id="cliente-tel"
-              value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
-              placeholder="(47) 99999-9999"
-            />
-          </div>
+          {temTelefone && (
+            <div className="space-y-2">
+              <Label htmlFor="cliente-tel">Telefone</Label>
+              <Input
+                id="cliente-tel"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                placeholder="(47) 99999-9999"
+              />
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
