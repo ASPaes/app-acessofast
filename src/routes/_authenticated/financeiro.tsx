@@ -217,7 +217,7 @@ function Financeiro() {
 
       {/* PLANO — só para contas em plano (assinatura). Plano é ilimitado: não compra crédito. */}
       {isPlan && (
-        <Card className="border-border/60">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
@@ -277,7 +277,7 @@ function Financeiro() {
       {/* CRÉDITOS — só para conta individual (free/credits). Plano não usa crédito. */}
       {isIndividual && (
         <>
-          <Card className="border-border/60">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -335,7 +335,7 @@ function Financeiro() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/60">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Histórico de créditos</CardTitle>
               <CardDescription>Compras, consumos e estornos.</CardDescription>

@@ -60,7 +60,7 @@ function EmpresasPage() {
   if (me && !isSuper) {
     return (
       <div className="p-6">
-        <Card className="border-border/60">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Empresas</CardTitle>
             <CardDescription>Acesso restrito à equipe da plataforma.</CardDescription>
@@ -84,7 +84,7 @@ function EmpresasPage() {
         </div>
       </div>
 
-      <Card className="border-border/60">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Building2 className="h-4 w-4 text-primary" />

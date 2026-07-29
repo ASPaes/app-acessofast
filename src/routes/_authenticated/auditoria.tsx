@@ -87,7 +87,7 @@ function AuditoriaPage() {
         </p>
       </div>
 
-      <Card className="border-border/60">
+      <Card>
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

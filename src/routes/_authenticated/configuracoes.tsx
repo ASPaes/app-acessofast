@@ -31,7 +31,7 @@ function ConfiguracoesPage() {
         </AlertDescription>
       </Alert>
 
-      <Card className="border-border/60">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">Recursos habilitados</CardTitle>
           <CardDescription>

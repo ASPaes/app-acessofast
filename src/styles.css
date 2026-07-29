@@ -122,6 +122,11 @@
    * não atravessa o conteúdo — e nenhum backdrop-filter precisa recalcular a
    * cada repintura. Se as manchas do fundo mudarem, remedir. */
   --af-glass: oklch(0.21 0.043 261.57); /* #0d182c */
+  /* Só dos painéis do shell autenticado (ver o bloco `.af-app` no fim do
+     arquivo). Separado de --af-glass porque aquele alimenta `bg-card`, que
+     também veste telas fora do painel — clarear o token clarearia o
+     definir-senha junto. */
+  --af-glass-panel: oklch(0.229 0.048 262.37); /* #101c33 */
   --af-glass-2: oklch(0.22 0.047 261.65); /* #0e1a30 */
   --af-glass-head: oklch(0.255 0.057 261.87); /* #13223e */
 
@@ -283,4 +288,72 @@
   tbody tr.af-linha-detalhe {
     background-color: var(--af-row-ativa);
   }
+}
+
+/* ==========================================================================
+ * Acabamento de vidro fosco dos painéis.
+ *
+ * ESCOPO: `.af-app`, que só existe no shell autenticado. A tela de login usa
+ * os MESMOS componentes de UI (`Card`), e não pode receber nada disto. A
+ * primeira versão embutiu o acabamento no próprio componente e vazou para o
+ * login — "não editei o arquivo" não é o mesmo que "não alterei a tela".
+ *
+ * A referência é vidro FOSCO, não transparente: a superfície pega luz na
+ * aresta de cima, tem canto arredondado e sombra macia, mas o que está atrás
+ * vira borrão sem detalhe. Num painel de trabalho, atrás do vidro não pode
+ * passar nada que compita com o dado — por isso a base (`bg-card` =
+ * --af-glass) é opaca, e seu valor é a média medida do que o painel mostrava
+ * quando era translúcido: mesma cor, sem a constelação por dentro.
+ * ========================================================================== */
+@layer components {
+  .af-app [data-slot="card"] {
+    /* Fio de luz na borda. Numa superfície opaca é ele que sustenta a leitura
+       de "vidro" — o painel não mostra o que está atrás, então quem conta a
+       história é a ARESTA, não a superfície. Por isso o topo é bem mais claro
+       que o resto: uma vidraça pega luz na quina de cima.
+       Fica em `components` para que um estado legítimo (`border-warning/40` num
+       card de alerta) continue ganhando — utilidade vence camada. */
+    border-color: rgb(255 255 255 / 10%);
+    border-top-color: rgb(255 255 255 / 22%);
+
+    /* Duas camadas:
+       1) luz de quina no canto superior esquerdo, como um reflexo;
+       2) queda vertical ÚNICA e suave, em medida fixa.
+
+       A versão anterior tinha uma parada intermediária (7,5% -> 2,2% em 44px
+       -> 0 em 132px). Duas inclinações diferentes criam uma QUEBRA, e a quebra
+       desenha uma linha horizontal visível logo abaixo do título: o painel
+       lia como "um degradê colado em cima", não como vidro. Comparado lado a
+       lado num render, o defeito era esse — não a intensidade.
+
+       Medida fixa, e não porcentagem: um card de 900px espalharia o brilho
+       pelos 900px e viraria lavagem. A aresta não cresce junto com a vidraça. */
+    background-image:
+      radial-gradient(120% 70% at 0% 0%, rgb(255 255 255 / 7%), transparent 58%),
+      linear-gradient(180deg, rgb(255 255 255 / 5%) 0, rgb(255 255 255 / 0%) 150px);
+  }
+}
+
+/* Estas duas propriedades ficam FORA de camada de propósito: ambas colidem com
+   utilidades que o `Card` traz na classe base (`bg-card` e `shadow`), e
+   utilidade mora em `@layer utilities`, que ganha de qualquer camada. Não dá
+   para tirar essas classes da base — `routes/definir-senha.tsx` depende delas e
+   é arquivo intocável.
+   Verificado: nenhum card do painel define fundo ou sombra próprios, então aqui
+   não há conflito legítimo sendo atropelado. Se algum passar a definir, esta
+   regra vence e o ajuste é adicionar a exceção AQUI. */
+.af-app [data-slot="card"] {
+  /* Escopado em vez de mexer em --af-glass: aquele token alimenta `bg-card`,
+     que é usado também por definir-senha.tsx. Painel muda, telas de fora não.
+     Fica um pouco mais claro e mais azul que --af-glass; medido, o texto
+     apagado dá 6,20:1 e a linha zebrada 5,80:1, ambos acima do mínimo AA. */
+  background-color: var(--af-glass-panel);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    /* fio escuro embaixo: dá espessura, a vidraça deixa de ser um decalque */
+    inset 0 -1px 0 rgb(0 0 0 / 26%),
+    /* sombra de contato, curta, para a peça encostar no fundo */
+    0 1px 2px rgb(2 6 16 / 50%),
+    /* elevação, longa e macia */
+    0 18px 40px -16px rgb(2 6 16 / 80%);
 }

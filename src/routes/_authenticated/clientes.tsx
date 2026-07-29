@@ -145,7 +145,7 @@ function ClientesPage() {
   if (me && !isSuper && !me.tenant_id) {
     return (
       <div className="p-6">
-        <Card className="border-border/60">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Clientes</CardTitle>
             <CardDescription>Nenhuma empresa vinculada ao seu perfil.</CardDescription>
@@ -186,7 +186,7 @@ function ClientesPage() {
         </div>
       </div>
 
-      <Card className="border-border/60">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Store className="h-4 w-4 text-primary" />

@@ -954,7 +954,7 @@ function DispositivosPage() {
         </div>
 
         {metered && carteira && (
-          <Card className="border-border/60">
+          <Card>
             <CardContent className="flex items-stretch divide-x divide-border/60 p-0">
               {carteira.billingMode === "free" && (
                 <div className="flex items-center gap-3 px-5 py-3">
@@ -994,7 +994,7 @@ function DispositivosPage() {
         )}
       </div>
 
-      <Card className="border-border/60">
+      <Card>
         <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-success" />
@@ -1014,18 +1014,14 @@ function DispositivosPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-border/60">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <MonitorSmartphone className="h-4 w-4 text-primary" />
-              Address book
-            </CardTitle>
-            <CardDescription>
-              {data ? `${data.length} dispositivo(s)` : "Carregando…"}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
+      {/* Barra de controles em bloco próprio: buscar | filtrar | visualizar.
+          Estava dentro do cabeçalho do painel, na mesma linha do título — e aí
+          os filtros liam como parte da lista, um bloco só com duas funções
+          misturadas. Separados, cada bloco diz uma coisa: aqui se opera a
+          busca, embaixo estão os dados. */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div className="relative w-72">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1136,7 +1132,7 @@ function DispositivosPage() {
                 `shrink-0` no ícone não é enfeite: sem ele o SVG é item flexível
                 e o navegador o espreme para caber na caixa de conteúdo, em
                 silêncio. */}
-            <div className="flex items-center rounded-lg border border-border/60 p-0.5 gap-0.5">
+            <div className="ml-auto flex items-center rounded-lg border border-border/60 p-0.5 gap-0.5">
               <Button
                 size="icon"
                 variant={viewMode === "list" ? "secondary" : "ghost"}
@@ -1172,6 +1168,18 @@ function DispositivosPage() {
               />
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <MonitorSmartphone className="h-4 w-4 text-primary" />
+            Address book
+          </CardTitle>
+          <CardDescription>
+            {data ? `${data.length} dispositivo(s)` : "Carregando…"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {viewMode === "list" ? (

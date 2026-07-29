@@ -541,7 +541,7 @@ function MonitoramentoPage() {
           do bloco {canSecao && (...)}. Reusa latest, ageSec, netMbps, isSuper e os ícones
           Cpu/Gauge/HardDrive/Network já importados. */}
       {isSuper && (
-        <Card className="border-border/60">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -597,7 +597,7 @@ function MonitoramentoPage() {
       {canSecao && (
         <div className="space-y-6">
           {show("agentes") && (
-          <Card className="border-border/60">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Saúde dos agentes</CardTitle>
               <CardDescription>
@@ -682,7 +682,7 @@ function MonitoramentoPage() {
           )}
 
           {show("sessoes") && (
-          <Card className="border-border/60">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Resumo de sessões (por dia)</CardTitle>
               <CardDescription>Últimos 14 dias.</CardDescription>
@@ -810,7 +810,7 @@ function MonitoramentoPage() {
             <p className="text-sm text-muted-foreground">Relay compartilhado.</p>
           </div>
 
-          <Card className="border-border/60">
+          <Card>
             <CardContent className="py-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <Server className="h-4 w-4 text-muted-foreground" />
@@ -864,7 +864,7 @@ function MonitoramentoPage() {
           )}
 
           {show("vps_containers") && (
-            <Card className="border-border/60">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Boxes className="h-4 w-4 text-primary" />
@@ -882,7 +882,7 @@ function MonitoramentoPage() {
           )}
 
           {show("vps_cpu") && (
-            <Card className="border-border/60">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-viz-cyan" /> CPU & Load
@@ -915,7 +915,7 @@ function MonitoramentoPage() {
           )}
 
           {show("vps_mem") && (
-            <Card className="border-border/60">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <MemoryStick className="h-4 w-4 text-viz-violet" /> Memória
@@ -950,7 +950,7 @@ function MonitoramentoPage() {
           )}
 
           {show("vps_disco") && (
-            <Card className="border-border/60">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <HardDrive className="h-4 w-4 text-warning" /> Disco
@@ -973,7 +973,7 @@ function MonitoramentoPage() {
           )}
 
           {show("vps_rede") && (
-            <Card className="border-border/60">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Network className="h-4 w-4 text-success" /> Rede (eth0 = relay)
@@ -1023,7 +1023,7 @@ function MonitoramentoPage() {
                   <Skeleton className="h-[240px] w-full" />
                 </div>
               ) : !series.data || series.data.length === 0 ? (
-                <Card className="border-border/60">
+                <Card>
                   <CardContent className="py-8 text-center text-sm text-muted-foreground">
                     Sem dados no período.
                   </CardContent>
@@ -1224,7 +1224,7 @@ function TrendCard({
   children: React.ReactElement;
 }) {
   return (
-    <Card className="border-border/60">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           {icon}

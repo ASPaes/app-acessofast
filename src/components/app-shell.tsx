@@ -83,7 +83,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Camada de ambiente: `fixed`, atrás de tudo, sem eventos. Só existe
           dentro do shell autenticado — a tela de login não a recebe. */}
       <AmbientBackground />
-      <div className="min-h-screen flex w-full text-foreground relative z-10">
+      {/* `af-app` é o escopo do acabamento visual do painel (ver styles.css).
+          Fica AQUI, e não no <html>, para que a tela de login — que usa os
+          mesmos componentes de UI — não herde nada disso. */}
+      <div className="af-app min-h-screen flex w-full text-foreground relative z-10">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           {/* Translúcida, para a barra ler como parte do fundo em vez de uma
