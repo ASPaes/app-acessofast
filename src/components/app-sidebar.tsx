@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
+import { useSolicitacoesAcesso } from "@/hooks/use-solicitacoes-acesso";
 
 type NavItem = {
   title: string;
@@ -81,6 +82,14 @@ export function AppSidebar() {
   });
   const isSuper = me?.role === "super_admin";
 
+  // Único aviso de que existem pedidos de acesso esperando: não há e-mail para
+  // o admin, então a contagem precisa aparecer sem ele abrir a tela.
+  const podeDecidir = me?.role === "super_admin" || me?.role === "admin";
+  const { data: solicitacoes } = useSolicitacoesAcesso(!!podeDecidir);
+  const badges = solicitacoes?.length
+    ? { "/usuarios": solicitacoes.length }
+    : undefined;
+
   return (
     <Sidebar
       collapsible="icon"
@@ -120,7 +129,13 @@ export function AppSidebar() {
       <SidebarContent className="px-2 py-3 gap-1">
         <NavGroup label="Operação" items={operacao} collapsed={collapsed} isActive={isActive} />
         <div className="my-1 h-px bg-border-subtle mx-2" aria-hidden />
-        <NavGroup label="Gestão" items={gestao} collapsed={collapsed} isActive={isActive} />
+        <NavGroup
+          label="Gestão"
+          items={gestao}
+          collapsed={collapsed}
+          isActive={isActive}
+          badges={badges}
+        />
         {isSuper && (
           <>
             <div className="my-1 h-px bg-border-subtle mx-2" aria-hidden />
@@ -142,11 +157,13 @@ function NavGroup({
   items,
   collapsed,
   isActive,
+  badges,
 }: {
   label: string;
   items: NavItem[];
   collapsed: boolean;
   isActive: (url: string) => boolean;
+  badges?: Partial<Record<NavItem["url"], number>>;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -158,6 +175,7 @@ function NavGroup({
       <TooltipProvider delayDuration={0}>
         {items.map((item) => {
           const active = isActive(item.url);
+          const badge = badges?.[item.url];
           const link = (
             <Link
               to={item.url}
@@ -171,11 +189,23 @@ function NavGroup({
               {active && (
                 <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary" aria-hidden />
               )}
-              <item.icon
-                className={`h-4 w-4 shrink-0 ${active ? "text-primary" : ""}`}
-                strokeWidth={1.75}
-              />
+              <span className="relative shrink-0">
+                <item.icon
+                  className={`h-4 w-4 ${active ? "text-primary" : ""}`}
+                  strokeWidth={1.75}
+                />
+                {/* Recolhida, o número não cabe: sobra um ponto para indicar
+                    que há algo esperando ali. */}
+                {badge != null && collapsed && (
+                  <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary" />
+                )}
+              </span>
               {!collapsed && <span className="truncate">{item.title}</span>}
+              {badge != null && !collapsed && (
+                <span className="ml-auto rounded-full bg-primary px-1.5 text-[10px] font-medium leading-[16px] text-primary-foreground">
+                  {badge}
+                </span>
+              )}
             </Link>
           );
           if (collapsed) {
@@ -184,6 +214,7 @@ function NavGroup({
                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                 <TooltipContent side="right" className="text-[12px]">
                   {item.title}
+                  {badge != null && ` — ${badge} solicitação(ões)`}
                 </TooltipContent>
               </Tooltip>
             );

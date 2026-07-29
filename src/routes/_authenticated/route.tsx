@@ -12,6 +12,17 @@ export const Route = createFileRoute("/_authenticated")({
     if (error || !data.user) {
       throw redirect({ to: "/auth" });
     }
+    // Quem se cadastrou pelo fluxo público e ainda não foi aprovado tem conta
+    // válida mas nenhuma empresa — o painel inteiro leria vazio. Manda para a
+    // sala de espera. `super_admin` também não tem empresa, e esse é legítimo.
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select("tenant_id, role")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    if (perfil && !perfil.tenant_id && perfil.role !== "super_admin") {
+      throw redirect({ to: "/aguardando-autorizacao" });
+    }
     return { user: data.user };
   },
   component: AuthenticatedLayout,

@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { SolicitacoesAcesso } from "@/components/solicitacoes-acesso";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -200,6 +201,11 @@ function UsuariosPage() {
           )}
         </div>
       </div>
+
+      <SolicitacoesAcesso
+        habilitado={!!me && (me.role === "super_admin" || me.role === "admin")}
+        mostrarEmpresa={me?.role === "super_admin"}
+      />
 
       <Card>
         <CardHeader>
