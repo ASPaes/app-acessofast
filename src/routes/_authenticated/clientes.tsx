@@ -30,8 +30,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Store, Pencil, Plus } from "lucide-react";
+import { Store, Pencil, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { ImportarClientesDialog } from "@/components/importar-clientes-dialog";
+import {
+  formatarDocumento,
+  formatarTelefone,
+  normalizarDocumento,
+  normalizarTelefone,
+} from "@/lib/clientes";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   head: () => ({
@@ -45,20 +52,9 @@ type ClientRow = {
   name: string;
   document: string | null;
   document_type: string | null;
+  phone: string | null;
   is_active: boolean;
 };
-
-function formatarDocumento(document: string | null, document_type: string | null): string | null {
-  if (!document) return null;
-  const d = document.replace(/\D/g, "");
-  if (document_type === "cnpj" && d.length === 14) {
-    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
-  }
-  if (document_type === "cpf" && d.length === 11) {
-    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-  }
-  return document;
-}
 
 function ClientesPage() {
   const queryClient = useQueryClient();
@@ -103,7 +99,7 @@ function ClientesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, name, document, document_type, is_active")
+        .select("id, name, document, document_type, phone, is_active")
         .eq("tenant_id", effectiveTenant)
         .order("name");
       if (error) throw error;
@@ -131,7 +127,15 @@ function ClientesPage() {
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<ClientRow | null>(null);
+
+  const invalidarListas = () => {
+    queryClient.invalidateQueries({ queryKey: ["clientes-lista", effectiveTenant] });
+    queryClient.invalidateQueries({ queryKey: ["clientes-device-counts", effectiveTenant] });
+    queryClient.invalidateQueries({ queryKey: ["clients_lista"] });
+    queryClient.invalidateQueries({ queryKey: ["address_book"] });
+  };
 
   const abrirCriar = () => {
     setEditing(null);
@@ -179,6 +183,15 @@ function ClientesPage() {
               </SelectContent>
             </Select>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            disabled={!effectiveTenant}
+          >
+            <Upload className="h-4 w-4 mr-1" />
+            Importar planilha
+          </Button>
           <Button size="sm" onClick={abrirCriar} disabled={!effectiveTenant}>
             <Plus className="h-4 w-4 mr-1" />
             Novo cliente
@@ -207,6 +220,7 @@ function ClientesPage() {
                 <TableRow>
                   <TableHead>Cliente</TableHead>
                   <TableHead>CNPJ / CPF</TableHead>
+                  <TableHead>Telefone</TableHead>
                   <TableHead>Dispositivos</TableHead>
                   <TableHead className="w-24">Ações</TableHead>
                 </TableRow>
@@ -214,7 +228,7 @@ function ClientesPage() {
               <TableBody>
                 {!effectiveTenant && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
                       Selecione uma empresa para listar os clientes.
                     </TableCell>
                   </TableRow>
@@ -222,7 +236,7 @@ function ClientesPage() {
                 {effectiveTenant && isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 4 }).map((_, j) => (
+                      {Array.from({ length: 5 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
@@ -231,7 +245,7 @@ function ClientesPage() {
                   ))}
                 {effectiveTenant && !isLoading && (clientes?.length ?? 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
                       Nenhum cliente cadastrado ainda.
                     </TableCell>
                   </TableRow>
@@ -243,6 +257,9 @@ function ClientesPage() {
                       <TableCell className="font-medium">{c.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatarDocumento(c.document, c.document_type) ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatarTelefone(c.phone) ?? "—"}
                       </TableCell>
                       <TableCell>{deviceCounts?.[c.id] ?? 0}</TableCell>
                       <TableCell>
@@ -268,12 +285,15 @@ function ClientesPage() {
         onOpenChange={setDialogOpen}
         tenantId={effectiveTenant}
         editing={editing}
-        onSaved={() => {
-          queryClient.invalidateQueries({ queryKey: ["clientes-lista", effectiveTenant] });
-          queryClient.invalidateQueries({ queryKey: ["clientes-device-counts", effectiveTenant] });
-          queryClient.invalidateQueries({ queryKey: ["clients_lista"] });
-          queryClient.invalidateQueries({ queryKey: ["address_book"] });
-        }}
+        onSaved={invalidarListas}
+      />
+
+      <ImportarClientesDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        tenantId={effectiveTenant}
+        existentes={clientes ?? []}
+        onImportado={invalidarListas}
       />
     </div>
   );
@@ -294,11 +314,13 @@ function ClienteDialog({
 }) {
   const [nome, setNome] = useState("");
   const [documento, setDocumento] = useState("");
+  const [telefone, setTelefone] = useState("");
 
   useMemo(() => {
     if (open) {
       setNome(editing?.name ?? "");
       setDocumento(editing?.document?.replace(/\D/g, "") ?? "");
+      setTelefone(formatarTelefone(editing?.phone ?? null) ?? "");
     }
   }, [open, editing]);
 
@@ -306,33 +328,25 @@ function ClienteDialog({
     mutationFn: async () => {
       const nomeTrim = nome.trim();
       if (!nomeTrim) throw new Error("Informe o nome do cliente");
-      const digits = documento.replace(/\D/g, "");
-      let document: string | null = null;
-      let document_type: "cnpj" | "cpf" | null = null;
-      if (digits.length === 14) {
-        document = digits;
-        document_type = "cnpj";
-      } else if (digits.length === 11) {
-        document = digits;
-        document_type = "cpf";
-      } else if (digits.length === 0) {
-        document = null;
-        document_type = null;
-      } else {
-        throw new Error("Informe CNPJ (14) ou CPF (11) dígitos");
-      }
+      const doc = normalizarDocumento(documento);
+      if (doc.erro) throw new Error(doc.erro);
+      const tel = normalizarTelefone(telefone);
+      if (tel.erro) throw new Error(tel.erro);
+      const campos = {
+        name: nomeTrim,
+        document: doc.document,
+        document_type: doc.document_type,
+        phone: tel.phone,
+      };
 
       if (editing) {
-        const { error } = await supabase
-          .from("clients")
-          .update({ name: nomeTrim, document, document_type })
-          .eq("id", editing.id);
+        const { error } = await supabase.from("clients").update(campos).eq("id", editing.id);
         if (error) throw error;
       } else {
         if (!tenantId) throw new Error("Empresa não selecionada");
         const { error } = await supabase
           .from("clients")
-          .insert({ tenant_id: tenantId, name: nomeTrim, document, document_type });
+          .insert({ tenant_id: tenantId, ...campos });
         if (error) throw error;
       }
     },
@@ -384,6 +398,15 @@ function ClienteDialog({
               value={documento}
               onChange={(e) => setDocumento(e.target.value)}
               placeholder="Somente dígitos (14 = CNPJ, 11 = CPF)"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cliente-tel">Telefone</Label>
+            <Input
+              id="cliente-tel"
+              value={telefone}
+              onChange={(e) => setTelefone(e.target.value)}
+              placeholder="(47) 99999-9999"
             />
           </div>
           <DialogFooter>
