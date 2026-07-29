@@ -30,7 +30,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Store, Pencil, Plus, Upload } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Store, Pencil, Plus, Upload, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { ImportarClientesDialog } from "@/components/importar-clientes-dialog";
 import {
@@ -218,6 +219,20 @@ function ClientesPage() {
           </Button>
         </div>
       </div>
+
+      {effectiveTenant && !isLoading && !temTelefone && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Campo de telefone indisponível</AlertTitle>
+          <AlertDescription className="text-sm text-muted-foreground">
+            A coluna <code>phone</code> ainda não existe no banco, então telefone não é exibido
+            nem gravado — inclusive na importação de planilha. Aplique a migração
+            <code className="mx-1">supabase/migrations/20260729120000_clients_phone.sql</code>
+            e importe a planilha de novo escolhendo “Atualizar cadastro” para preencher os
+            telefones dos clientes já cadastrados.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>

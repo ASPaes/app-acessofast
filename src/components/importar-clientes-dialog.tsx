@@ -174,19 +174,29 @@ export function ImportarClientesDialog({
         setProgresso(Math.round((processados / total) * 100));
       }
 
-      for (const l of paraAtualizar) {
-        const { error } = await supabase
-          .from("clients")
-          .update({
-            name: l.nome,
-            document: l.document,
-            document_type: l.document_type,
-            ...(temTelefone ? { phone: l.phone } : {}),
-          })
-          .eq("id", l.existenteId!);
-        if (error) falhas.push({ nome: l.nome, msg: mensagemErro(error) });
-        else atualizados++;
-        processados++;
+      // Atualização em lote (upsert pela chave primária). Um a um, reimportar
+      // uma base inteira de centenas de clientes levaria minutos.
+      for (let i = 0; i < paraAtualizar.length; i += LOTE) {
+        const fatia = paraAtualizar.slice(i, i + LOTE);
+        const payload = fatia.map((l) => ({
+          id: l.existenteId!,
+          tenant_id: tenantId,
+          name: l.nome,
+          document: l.document,
+          document_type: l.document_type,
+          ...(temTelefone ? { phone: l.phone } : {}),
+        }));
+        const { error } = await supabase.from("clients").upsert(payload);
+        if (error) {
+          for (const [idx, linha] of payload.entries()) {
+            const { error: e } = await supabase.from("clients").upsert(linha);
+            if (e) falhas.push({ nome: fatia[idx]!.nome, msg: mensagemErro(e) });
+            else atualizados++;
+          }
+        } else {
+          atualizados += fatia.length;
+        }
+        processados += fatia.length;
         setProgresso(Math.round((processados / total) * 100));
       }
 
