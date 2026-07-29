@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Store, Pencil, Plus, Upload, AlertTriangle } from "lucide-react";
+import { Store, Pencil, Plus, Upload, AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { ImportarClientesDialog } from "@/components/importar-clientes-dialog";
 import {
@@ -39,6 +39,7 @@ import {
   formatarTelefone,
   normalizarDocumento,
   normalizarTelefone,
+  normalizarTexto,
 } from "@/lib/clientes";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
@@ -127,6 +128,26 @@ function ClientesPage() {
   const clientes = consulta?.rows;
   const temTelefone = consulta?.temTelefone ?? true;
   const totalColunas = temTelefone ? 5 : 4;
+
+  const [busca, setBusca] = useState("");
+
+  const visiveis = useMemo(() => {
+    const lista = clientes ?? [];
+    const termo = busca.trim();
+    if (!termo) return lista;
+    const texto = normalizarTexto(termo);
+    const digitos = termo.replace(/\D/g, "");
+    return lista.filter((c) => {
+      if (texto && normalizarTexto(c.name).includes(texto)) return true;
+      // Documento e telefone comparam só dígito contra dígito: assim "47 99682"
+      // acha o mesmo que "4799682" e a máscara exibida na tela não atrapalha.
+      if (!digitos) return false;
+      return (
+        (c.document ?? "").replace(/\D/g, "").includes(digitos) ||
+        (c.phone ?? "").replace(/\D/g, "").includes(digitos)
+      );
+    });
+  }, [clientes, busca]);
 
   const { data: deviceCounts } = useQuery({
     queryKey: ["clientes-device-counts", effectiveTenant],
@@ -236,17 +257,33 @@ function ClientesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Store className="h-4 w-4 text-primary" />
-            Clientes cadastrados
-          </CardTitle>
-          <CardDescription>
-            {!effectiveTenant
-              ? "Selecione uma empresa"
-              : clientes
-              ? `${clientes.length} cliente(s)`
-              : "Carregando…"}
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Store className="h-4 w-4 text-primary" />
+                Clientes cadastrados
+              </CardTitle>
+              <CardDescription>
+                {!effectiveTenant
+                  ? "Selecione uma empresa"
+                  : !clientes
+                  ? "Carregando…"
+                  : busca.trim()
+                  ? `${visiveis.length} de ${clientes.length} cliente(s)`
+                  : `${clientes.length} cliente(s)`}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-[288px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Buscar por nome, CNPJ/CPF ou telefone…"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                disabled={!effectiveTenant}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border border-border/60 overflow-hidden">
@@ -281,19 +318,21 @@ function ClientesPage() {
                       ))}
                     </TableRow>
                   ))}
-                {effectiveTenant && !isLoading && (clientes?.length ?? 0) === 0 && (
+                {effectiveTenant && !isLoading && visiveis.length === 0 && (
                   <TableRow>
                     <TableCell
                       colSpan={totalColunas}
                       className="text-center text-muted-foreground py-10"
                     >
-                      Nenhum cliente cadastrado ainda.
+                      {busca.trim()
+                        ? `Nenhum cliente encontrado para “${busca.trim()}”.`
+                        : "Nenhum cliente cadastrado ainda."}
                     </TableCell>
                   </TableRow>
                 )}
                 {effectiveTenant &&
                   !isLoading &&
-                  clientes?.map((c) => (
+                  visiveis.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">{c.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
