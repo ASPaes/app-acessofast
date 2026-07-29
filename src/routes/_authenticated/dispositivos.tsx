@@ -994,35 +994,42 @@ function DispositivosPage() {
         )}
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-success" />
-            <span className="text-lg font-semibold tabular-nums">{contagem.online}</span>
-            <span className="text-sm text-muted-foreground">online</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-warning" />
-            <span className="text-lg font-semibold tabular-nums">{contagem.atendimento}</span>
-            <span className="text-sm text-muted-foreground">em atendimento</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-            <span className="text-lg font-semibold tabular-nums">{contagem.offline}</span>
-            <span className="text-sm text-muted-foreground">offline</span>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Bloco único de operação: o estado do parque e os controles que agem
+          sobre ele. Eram duas faixas empilhadas, cada uma com uma linha só de
+          conteúdo e muita folga à direita — duas barras quase vazias custam
+          mais altura do que informam. Juntas, a folga de uma acomoda a outra.
 
-      {/* Barra de controles em bloco próprio: buscar | filtrar | visualizar.
-          Estava dentro do cabeçalho do painel, na mesma linha do título — e aí
-          os filtros liam como parte da lista, um bloco só com duas funções
-          misturadas. Separados, cada bloco diz uma coisa: aqui se opera a
-          busca, embaixo estão os dados. */}
+          A leitura é: quanto tem (contadores) | o que filtrar | como ver e agir.
+          O tracinho separa o que é leitura do que é controle. */}
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="relative w-72">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-success" />
+                <span className="text-lg font-semibold tabular-nums">{contagem.online}</span>
+                <span className="text-sm text-muted-foreground">online</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-warning" />
+                <span className="text-lg font-semibold tabular-nums">{contagem.atendimento}</span>
+                <span className="text-sm text-muted-foreground">em atendimento</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+                <span className="text-lg font-semibold tabular-nums">{contagem.offline}</span>
+                <span className="text-sm text-muted-foreground">offline</span>
+              </div>
+            </div>
+
+            <span aria-hidden className="mx-1 hidden h-6 w-px bg-border/60 xl:block" />
+            {/* A busca é o item ELÁSTICO da barra, não um campo fixo.
+                Com largura fixa a linha fechava com 13px de folga em 1900px
+                (medido) — qualquer nome de empresa mais longo no filtro ao lado
+                já jogava a barra para duas linhas, que é justamente o que
+                juntar os blocos veio resolver. Elástica, ela cede espaço
+                primeiro e o resto continua na mesma linha. */}
+            <div className="relative min-w-[180px] max-w-[288px] flex-1">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
@@ -1033,7 +1040,7 @@ function DispositivosPage() {
             </div>
             {isSuper && (
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="w-56">
+                <SelectTrigger className="w-48">
                   <SelectValue placeholder="Empresa" />
                 </SelectTrigger>
                 <SelectContent>
