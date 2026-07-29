@@ -284,3 +284,52 @@
     background-color: var(--af-row-ativa);
   }
 }
+
+/* ==========================================================================
+ * Acabamento de vidro fosco dos painéis.
+ *
+ * ESCOPO: `.af-app`, que só existe no shell autenticado. A tela de login usa
+ * os MESMOS componentes de UI (`Card`), e não pode receber nada disto. A
+ * primeira versão embutiu o acabamento no próprio componente e vazou para o
+ * login — "não editei o arquivo" não é o mesmo que "não alterei a tela".
+ *
+ * A referência é vidro FOSCO, não transparente: a superfície pega luz na
+ * aresta de cima, tem canto arredondado e sombra macia, mas o que está atrás
+ * vira borrão sem detalhe. Num painel de trabalho, atrás do vidro não pode
+ * passar nada que compita com o dado — por isso a base (`bg-card` =
+ * --af-glass) é opaca, e seu valor é a média medida do que o painel mostrava
+ * quando era translúcido: mesma cor, sem a constelação por dentro.
+ * ========================================================================== */
+@layer components {
+  .af-app [data-slot="card"] {
+    /* fio de luz na borda: numa superfície opaca é ele que sustenta a leitura
+       de "vidro". Fica em `components` para que um estado legítimo
+       (`border-warning/40` num card de alerta) continue ganhando — utilidade
+       vence camada. */
+    border-color: rgb(255 255 255 / 9%);
+
+    /* Brilho de topo em MEDIDAS FIXAS, não em porcentagem.
+       Com paradas em %, um card de 900px espalha o brilho pelos 900px e o
+       resultado lê como uma lavagem de degradê, não como vidro pegando luz —
+       foi exatamente o que apareceu na primeira aplicação. Vidro real acende na
+       aresta, e a aresta não cresce junto com a vidraça. */
+    background-image: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 7.5%) 0,
+      rgb(255 255 255 / 2.2%) 44px,
+      rgb(255 255 255 / 0%) 132px
+    );
+  }
+}
+
+/* A sombra fica FORA de camada de propósito. O `Card` traz a utilidade
+   `shadow` na classe base, e utilidade mora em `@layer utilities`, que ganha
+   de qualquer camada — em `components` esta regra seria ignorada. Não dá para
+   simplesmente tirar o `shadow` da base: `routes/definir-senha.tsx` depende
+   dele e é arquivo intocável. Aqui não há conflito legítimo: nenhum card do
+   painel define sombra própria. */
+.af-app [data-slot="card"] {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 7%),
+    0 12px 32px -12px rgb(2 6 16 / 75%);
+}

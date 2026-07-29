@@ -954,7 +954,7 @@ function DispositivosPage() {
         </div>
 
         {metered && carteira && (
-          <Card className="border-border/60">
+          <Card>
             <CardContent className="flex items-stretch divide-x divide-border/60 p-0">
               {carteira.billingMode === "free" && (
                 <div className="flex items-center gap-3 px-5 py-3">
@@ -994,7 +994,7 @@ function DispositivosPage() {
         )}
       </div>
 
-      <Card className="border-border/60">
+      <Card>
         <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-success" />
@@ -1014,7 +1014,7 @@ function DispositivosPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-border/60">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-base flex items-center gap-2">

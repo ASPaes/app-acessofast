@@ -332,7 +332,7 @@ function Dashboard() {
 
       {isSuper && (
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-border/60">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -386,7 +386,7 @@ function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/60">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Status do sistema</CardTitle>
             <CardDescription>Componentes essenciais</CardDescription>
@@ -401,7 +401,7 @@ function Dashboard() {
       </div>
       )}
 
-      <Card className="border-border/60">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-base">Dispositivos recentes</CardTitle>
@@ -518,7 +518,7 @@ function StatCard({
   color?: keyof typeof STAT_COLORS;
 }) {
   return (
-    <Card className="border-border/60">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3 space-y-0">
         <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
           {title}
