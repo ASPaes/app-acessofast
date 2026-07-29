@@ -79,12 +79,19 @@ export function ImportarClientesDialog({
   const [arrastando, setArrastando] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [aceitaPerderTelefones, setAceitaPerderTelefones] = useState(false);
 
   const novos = linhas.filter((l) => l.status === "novo");
   const duplicados = linhas.filter((l) => l.status === "duplicado");
   const repetidos = linhas.filter((l) => l.status === "repetido");
   const comErro = linhas.filter((l) => l.status === "erro");
   const totalAImportar = novos.length + (modoDuplicados === "atualizar" ? duplicados.length : 0);
+
+  // A planilha traz telefone mas o banco não tem onde guardar: importar assim
+  // joga fora o dado sem o usuário perceber. Trava até ele decidir.
+  const telefonesNaPlanilha = linhas.filter((l) => l.phone).length;
+  const perderiaTelefones = !temTelefone && telefonesNaPlanilha > 0;
+  const bloqueado = perderiaTelefones && !aceitaPerderTelefones;
 
   const reset = () => {
     setEtapa("upload");
@@ -93,6 +100,7 @@ export function ImportarClientesDialog({
     setModoDuplicados("ignorar");
     setProgresso(0);
     setResultado(null);
+    setAceitaPerderTelefones(false);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -174,19 +182,29 @@ export function ImportarClientesDialog({
         setProgresso(Math.round((processados / total) * 100));
       }
 
-      for (const l of paraAtualizar) {
-        const { error } = await supabase
-          .from("clients")
-          .update({
-            name: l.nome,
-            document: l.document,
-            document_type: l.document_type,
-            ...(temTelefone ? { phone: l.phone } : {}),
-          })
-          .eq("id", l.existenteId!);
-        if (error) falhas.push({ nome: l.nome, msg: mensagemErro(error) });
-        else atualizados++;
-        processados++;
+      // Atualização em lote (upsert pela chave primária). Um a um, reimportar
+      // uma base inteira de centenas de clientes levaria minutos.
+      for (let i = 0; i < paraAtualizar.length; i += LOTE) {
+        const fatia = paraAtualizar.slice(i, i + LOTE);
+        const payload = fatia.map((l) => ({
+          id: l.existenteId!,
+          tenant_id: tenantId,
+          name: l.nome,
+          document: l.document,
+          document_type: l.document_type,
+          ...(temTelefone ? { phone: l.phone } : {}),
+        }));
+        const { error } = await supabase.from("clients").upsert(payload);
+        if (error) {
+          for (const [idx, linha] of payload.entries()) {
+            const { error: e } = await supabase.from("clients").upsert(linha);
+            if (e) falhas.push({ nome: fatia[idx]!.nome, msg: mensagemErro(e) });
+            else atualizados++;
+          }
+        } else {
+          atualizados += fatia.length;
+        }
+        processados += fatia.length;
         setProgresso(Math.round((processados / total) * 100));
       }
 
@@ -292,14 +310,27 @@ export function ImportarClientesDialog({
               )}
             </div>
 
-            {!temTelefone && (
-              <Alert>
+            {perderiaTelefones && (
+              <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Os telefones não serão salvos</AlertTitle>
-                <AlertDescription className="text-xs text-muted-foreground">
-                  A coluna de telefone ainda não existe no banco (migração
-                  20260729120000_clients_phone.sql pendente). Nome e CNPJ/CPF são importados
-                  normalmente; aplique a migração e importe de novo para trazer os telefones.
+                <AlertTitle>
+                  Importação bloqueada: os {telefonesNaPlanilha} telefones seriam descartados
+                </AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p className="text-xs">
+                    A coluna <code>phone</code> não existe no banco, então não há onde gravar os
+                    telefones. Aplique a migração{" "}
+                    <code>supabase/migrations/20260729120000_clients_phone.sql</code>, recarregue
+                    esta página e importe de novo — aí os telefones entram.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAceitaPerderTelefones(true)}
+                  >
+                    Importar mesmo assim, só nome e CNPJ
+                  </Button>
                 </AlertDescription>
               </Alert>
             )}
@@ -447,7 +478,7 @@ export function ImportarClientesDialog({
               <Button
                 type="button"
                 onClick={() => importacao.mutate()}
-                disabled={importacao.isPending || totalAImportar === 0}
+                disabled={importacao.isPending || totalAImportar === 0 || bloqueado}
               >
                 <Upload className="h-4 w-4 mr-1" />
                 {importacao.isPending
