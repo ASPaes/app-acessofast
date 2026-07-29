@@ -699,6 +699,59 @@ export type Database = {
         }
         Relationships: []
       }
+      join_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_role: Database["public"]["Enums"]["user_role"] | null
+          email: string
+          full_name: string | null
+          id: string
+          status: Database["public"]["Enums"]["join_request_status"]
+          tenant_id: string
+          tenant_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_role?: Database["public"]["Enums"]["user_role"] | null
+          email: string
+          full_name?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["join_request_status"]
+          tenant_id: string
+          tenant_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_role?: Database["public"]["Enums"]["user_role"] | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["join_request_status"]
+          tenant_id?: string
+          tenant_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "join_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           company: string | null
@@ -1672,6 +1725,7 @@ export type Database = {
       credit_entry_type: "purchase" | "consume" | "adjust" | "refund" | "expire"
       document_type: "cnpj" | "cpf"
       enrollment_status: "pending" | "approved" | "rejected"
+      join_request_status: "pending" | "approved" | "rejected"
       lead_status: "novo" | "em_contato" | "qualificado" | "ganho" | "perdido"
       session_status: "active" | "ended" | "failed"
       trial_state: "trialing" | "converted" | "expired" | "blocked"

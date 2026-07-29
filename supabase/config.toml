@@ -20,3 +20,18 @@ verify_jwt = false
 
 [functions.register-device]
 verify_jwt = true
+
+# Cadastro publico: quem chama e um visitante anonimo na tela de login.
+[functions.signup-publico]
+verify_jwt = false
+
+[functions.join-request]
+verify_jwt = true
+
+# Funil do site comercial. O codigo delas vivia so no Supabase; trazido para o
+# repo em 29/07/2026 junto com a correcao da reserva de documento (v2).
+[functions.start-free-prod]
+verify_jwt = false
+
+[functions.start-trial-prod]
+verify_jwt = false

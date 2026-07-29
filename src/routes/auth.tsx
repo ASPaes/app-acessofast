@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -200,6 +200,13 @@ function AuthPage() {
                 </>
               )}
             </Button>
+
+            <div className="text-center text-sm text-muted-foreground">
+              Ainda não tem conta?{" "}
+              <Link to="/cadastro" className="text-primary hover:underline">
+                Cadastre-se
+              </Link>
+            </div>
 
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
               <ShieldCheck className="h-4 w-4 text-primary" />
