@@ -1,7 +1,9 @@
 // invite-user — bootstrap/convite/reenvio de usuários do AcessoFast.
 // Modos: bootstrap_msp | add_member | resend_invite.
-// Link de senha: usa o fluxo token_hash (PKCE) apontando para o PROPRIO app (/definir-senha?token_hash=...&type=...),
-// para que pre-visualizadores de link (WhatsApp/e-mail) NAO consumam o token de uso unico. Fallback: action_link direto.
+// bootstrap_msp/add_member DEVOLVEM o link para a UI: usam o fluxo token_hash (PKCE) apontando para o
+// PROPRIO app (/definir-senha?token_hash=...&type=...), para que pre-visualizadores de link (WhatsApp/e-mail)
+// NAO consumam o token de uso unico. Fallback: action_link direto.
+// resend_invite ENVIA e-mail pelo mailer do projeto; o formato do link vem do template do dashboard.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -79,7 +81,7 @@ Deno.serve(async (req) => {
     .from("profiles").select("role, tenant_id").eq("id", callerId).single();
   if (profErr || !callerProfile) return json({ error: "caller_has_no_profile" }, 403);
 
-  // ---- RESEND: link fresco para usuario existente ----
+  // ---- RESEND: e-mail de redefinicao para usuario existente ----
   if (mode === "resend_invite") {
     const rTenant = body?.tenant_id ?? null;
     if (!rTenant) return json({ error: "missing_tenant_id" }, 400);
@@ -93,19 +95,27 @@ Deno.serve(async (req) => {
     const isTenantAdmin = callerProfile.role === "admin" && callerProfile.tenant_id === rTenant;
     if (!isSuper && !isTenantAdmin) return json({ error: "forbidden", detail: "apenas super_admin ou admin do proprio tenant" }, 403);
 
-    let link: string | null = null;
-    try {
-      const { data: gl, error: glErr } = await admin.auth.admin.generateLink({
-        type: "recovery", email, options: redirectTo ? { redirectTo } : undefined,
-      });
-      if (glErr) return json({ error: "generate_link_failed", detail: glErr.message }, 400);
-      link = buildAppLink(redirectTo, (gl as any)?.properties, "recovery");
-    } catch (e) {
-      return json({ error: "generate_link_failed", detail: String((e as any)?.message ?? e) }, 400);
+    // Dispara o e-mail pelo mailer do projeto (GoTrue /recover).
+    // NAO usar admin.generateLink aqui: ele so DEVOLVE o link, nunca envia e-mail.
+    // O formato do link (token_hash vs action_link) vem do template "Reset Password" no dashboard.
+    const mailer = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+    const { error: sendErr } = await mailer.auth.resetPasswordForEmail(
+      email,
+      redirectTo ? { redirectTo } : undefined,
+    );
+    if (sendErr) {
+      const msg = sendErr.message ?? "";
+      const rateLimited = (sendErr as any)?.status === 429 || /rate|too many|seconds/i.test(msg);
+      return json({
+        error: rateLimited ? "rate_limited" : "send_failed",
+        detail: rateLimited
+          ? "Muitas solicitacoes para esse e-mail. Aguarde um minuto e tente de novo."
+          : msg || "falha ao enviar o e-mail",
+      }, rateLimited ? 429 : 400);
     }
     return json({
-      ok: true, mode, user_id: target.id, tenant_id: rTenant, role: target.role, invite_link: link,
-      note: "Link de redefinicao de senha gerado. Envie ao usuario; ele define a senha em /definir-senha.",
+      ok: true, mode, user_id: target.id, tenant_id: rTenant, role: target.role,
+      note: "E-mail de redefinicao de senha enviado; o usuario define a senha em /definir-senha.",
     });
   }
 
