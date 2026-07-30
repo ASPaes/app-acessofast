@@ -163,10 +163,12 @@ export type Database = {
           ended_at: string | null
           hard_cap_at: string | null
           id: string
+          origin: string
+          peer_ip: unknown
           rustdesk_id: string
           source: Database["public"]["Enums"]["atendimento_source"]
           started_at: string
-          technician_id: string
+          technician_id: string | null
           tenant_id: string
           window_expires_at: string
         }
@@ -178,10 +180,12 @@ export type Database = {
           ended_at?: string | null
           hard_cap_at?: string | null
           id?: string
+          origin?: string
+          peer_ip?: unknown
           rustdesk_id: string
           source: Database["public"]["Enums"]["atendimento_source"]
           started_at?: string
-          technician_id: string
+          technician_id?: string | null
           tenant_id: string
           window_expires_at: string
         }
@@ -193,10 +197,12 @@ export type Database = {
           ended_at?: string | null
           hard_cap_at?: string | null
           id?: string
+          origin?: string
+          peer_ip?: unknown
           rustdesk_id?: string
           source?: Database["public"]["Enums"]["atendimento_source"]
           started_at?: string
-          technician_id?: string
+          technician_id?: string | null
           tenant_id?: string
           window_expires_at?: string
         }
@@ -883,6 +889,227 @@ export type Database = {
           },
         ]
       }
+      promo_code_redemptions: {
+        Row: {
+          admin_email: string | null
+          applied_discount_months: number | null
+          applied_discount_percent: number | null
+          applied_extra_trial_days: number
+          code: string
+          doc_hash: string | null
+          id: string
+          promo_code_id: string
+          redeemed_at: string
+          signup_intent_id: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          admin_email?: string | null
+          applied_discount_months?: number | null
+          applied_discount_percent?: number | null
+          applied_extra_trial_days?: number
+          code: string
+          doc_hash?: string | null
+          id?: string
+          promo_code_id: string
+          redeemed_at?: string
+          signup_intent_id?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          admin_email?: string | null
+          applied_discount_months?: number | null
+          applied_discount_percent?: number | null
+          applied_extra_trial_days?: number
+          code?: string
+          doc_hash?: string | null
+          id?: string
+          promo_code_id?: string
+          redeemed_at?: string
+          signup_intent_id?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_code_redemptions_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "promo_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_code_redemptions_signup_intent_id_fkey"
+            columns: ["signup_intent_id"]
+            isOneToOne: false
+            referencedRelation: "signup_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_code_redemptions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promo_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          discount_months: number | null
+          discount_percent: number | null
+          extra_trial_days: number
+          id: string
+          is_active: boolean
+          max_redemptions: number | null
+          plan_codes: string[] | null
+          redemptions_count: number
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_months?: number | null
+          discount_percent?: number | null
+          extra_trial_days?: number
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          plan_codes?: string[] | null
+          redemptions_count?: number
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_months?: number | null
+          discount_percent?: number | null
+          extra_trial_days?: number
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          plan_codes?: string[] | null
+          redemptions_count?: number
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_codes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promo_subscription_windows: {
+        Row: {
+          asaas_subscription_id: string | null
+          attempts: number
+          created_at: string
+          discount_months: number
+          discounted_value_cents: number
+          environment: string
+          full_value_cents: number
+          id: string
+          last_error: string | null
+          payments_counted: number
+          redemption_id: string
+          restored_at: string | null
+          signup_intent_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asaas_subscription_id?: string | null
+          attempts?: number
+          created_at?: string
+          discount_months: number
+          discounted_value_cents: number
+          environment?: string
+          full_value_cents: number
+          id?: string
+          last_error?: string | null
+          payments_counted?: number
+          redemption_id: string
+          restored_at?: string | null
+          signup_intent_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asaas_subscription_id?: string | null
+          attempts?: number
+          created_at?: string
+          discount_months?: number
+          discounted_value_cents?: number
+          environment?: string
+          full_value_cents?: number
+          id?: string
+          last_error?: string | null
+          payments_counted?: number
+          redemption_id?: string
+          restored_at?: string | null
+          signup_intent_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_subscription_windows_redemption_id_fkey"
+            columns: ["redemption_id"]
+            isOneToOne: false
+            referencedRelation: "promo_code_redemptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_subscription_windows_signup_intent_id_fkey"
+            columns: ["signup_intent_id"]
+            isOneToOne: false
+            referencedRelation: "signup_intents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promo_window_payments: {
+        Row: {
+          asaas_payment_id: string
+          counted_at: string
+          window_id: string
+        }
+        Insert: {
+          asaas_payment_id: string
+          counted_at?: string
+          window_id: string
+        }
+        Update: {
+          asaas_payment_id?: string
+          counted_at?: string
+          window_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_window_payments_window_id_fkey"
+            columns: ["window_id"]
+            isOneToOne: false
+            referencedRelation: "promo_subscription_windows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signup_intents: {
         Row: {
           admin_email: string
@@ -1512,6 +1739,14 @@ export type Database = {
     Functions: {
       apply_paid_plan: { Args: { p_intent_id: string }; Returns: string }
       approve_device: { Args: { p_device_id: string }; Returns: undefined }
+      approve_join_request: {
+        Args: {
+          p_actor: string
+          p_request_id: string
+          p_role: Database["public"]["Enums"]["user_role"]
+        }
+        Returns: undefined
+      }
       assign_member: {
         Args: {
           p_role: Database["public"]["Enums"]["user_role"]
@@ -1538,6 +1773,19 @@ export type Database = {
       attach_trial_tenant: {
         Args: { p_doc_hash: string; p_tenant_id: string }
         Returns: boolean
+      }
+      auto_adopt_direct: {
+        Args: {
+          p_agent_token_hash: string
+          p_controller_rustdesk_id: string
+          p_rustdesk_id: string
+        }
+        Returns: {
+          adopted: boolean
+          device_id: string
+          reason: string
+          tenant_id: string
+        }[]
       }
       billing_eligibility: {
         Args: { p_actor: string; p_device_id: string }
@@ -1598,12 +1846,136 @@ export type Database = {
           secret_id: string
         }[]
       }
+      create_join_request: {
+        Args: {
+          p_email?: string
+          p_full_name?: string
+          p_tenant_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_promo_code: {
+        Args: {
+          p_code: string
+          p_description?: string
+          p_discount_months?: number
+          p_discount_percent?: number
+          p_extra_trial_days?: number
+          p_max_redemptions?: number
+          p_plan_codes?: string[]
+          p_valid_until?: string
+        }
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          discount_months: number | null
+          discount_percent: number | null
+          extra_trial_days: number
+          id: string
+          is_active: boolean
+          max_redemptions: number | null
+          plan_codes: string[] | null
+          redemptions_count: number
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "promo_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      find_tenant_by_document: {
+        Args: { p_cnpj?: string; p_doc_hash: string }
+        Returns: {
+          active_users: number
+          doc_reservado: boolean
+          seat_limit: number
+          tenant_id: string
+          tenant_name: string
+        }[]
+      }
       get_device_secret: {
         Args: { p_device_id: string }
         Returns: {
           ciphertext: string
           iv: string
           key_version: number
+        }[]
+      }
+      meter_external_session: {
+        Args: {
+          p_connection_log_id: string
+          p_peer_ip?: string
+          p_rustdesk_id: string
+        }
+        Returns: {
+          atendimento_id: string
+          blocked: boolean
+          hard_cap_at: string
+          reason: string
+          source: string
+        }[]
+      }
+      promo_code_attach_tenant: {
+        Args: { p_redemption_id: string; p_tenant_id: string }
+        Returns: undefined
+      }
+      promo_code_preview: {
+        Args: { p_code: string; p_plan_code?: string }
+        Returns: {
+          code: string
+          description: string
+          discount_months: number
+          discount_percent: number
+          extra_trial_days: number
+          ok: boolean
+          reason: string
+        }[]
+      }
+      promo_window_mark_failed: {
+        Args: { p_error: string; p_max_attempts?: number; p_window_id: string }
+        Returns: undefined
+      }
+      promo_window_mark_restored: {
+        Args: { p_window_id: string }
+        Returns: undefined
+      }
+      promo_window_open: {
+        Args: {
+          p_discount_months: number
+          p_discounted_value_cents: number
+          p_environment?: string
+          p_full_value_cents: number
+          p_redemption_id: string
+          p_signup_intent_id: string
+        }
+        Returns: string
+      }
+      promo_window_register_payment: {
+        Args: {
+          p_payment_id: string
+          p_signup_intent_id: string
+          p_subscription_id: string
+        }
+        Returns: {
+          full_value_cents: number
+          needs_restore: boolean
+          window_id: string
+        }[]
+      }
+      promo_windows_due_restore: {
+        Args: { p_limit?: number }
+        Returns: {
+          asaas_subscription_id: string
+          attempts: number
+          full_value_cents: number
+          window_id: string
         }[]
       }
       provision_from_intent: {
@@ -1622,6 +1994,7 @@ export type Database = {
         }
         Returns: string
       }
+      purge_old_join_requests: { Args: never; Returns: number }
       redeem_claim: {
         Args: {
           p_actor: string
@@ -1650,7 +2023,34 @@ export type Database = {
           r_tenant_id: string
         }[]
       }
+      redeem_promo_code: {
+        Args: {
+          p_admin_email?: string
+          p_code: string
+          p_doc_hash?: string
+          p_plan_code?: string
+          p_signup_intent_id?: string
+        }
+        Returns: {
+          discount_months: number
+          discount_percent: number
+          extra_trial_days: number
+          ok: boolean
+          reason: string
+          redemption_id: string
+        }[]
+      }
       reject_device: { Args: { p_device_id: string }; Returns: undefined }
+      reject_join_request: {
+        Args: { p_actor: string; p_request_id: string }
+        Returns: undefined
+      }
+      release_promo_code: {
+        Args: { p_redemption_id: string }
+        Returns: undefined
+      }
+      release_trial_document: { Args: { p_doc_hash: string }; Returns: boolean }
+      reopen_join_request: { Args: { p_user_id: string }; Returns: string }
       revoke_access_grant: { Args: { p_grant_id: string }; Returns: undefined }
       revoke_enrollment_secret: {
         Args: { p_secret_id: string }
@@ -1672,6 +2072,10 @@ export type Database = {
           p_iv: string
           p_key_version: number
         }
+        Returns: undefined
+      }
+      set_promo_code_active: {
+        Args: { p_active: boolean; p_id: string }
         Returns: undefined
       }
       set_user_active: {
@@ -1871,6 +2275,7 @@ export const Constants = {
       credit_entry_type: ["purchase", "consume", "adjust", "refund", "expire"],
       document_type: ["cnpj", "cpf"],
       enrollment_status: ["pending", "approved", "rejected"],
+      join_request_status: ["pending", "approved", "rejected"],
       lead_status: ["novo", "em_contato", "qualificado", "ganho", "perdido"],
       session_status: ["active", "ended", "failed"],
       trial_state: ["trialing", "converted", "expired", "blocked"],

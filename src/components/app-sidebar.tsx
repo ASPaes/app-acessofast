@@ -12,6 +12,7 @@ import {
   Store,
   Wallet,
   SlidersHorizontal,
+  TicketPercent,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,7 +36,8 @@ type NavItem = {
     | "/financeiro"
     | "/configuracoes"
     | "/empresas"
-    | "/planos";
+    | "/planos"
+    | "/cupons";
   icon: typeof LayoutDashboard;
 };
 
@@ -56,6 +58,7 @@ const gestao: NavItem[] = [
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Planos", url: "/planos", icon: SlidersHorizontal },
+  { title: "Cupons", url: "/cupons", icon: TicketPercent },
 ];
 
 export function AppSidebar() {
