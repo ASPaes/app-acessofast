@@ -22,9 +22,18 @@
 -- 1. Tabela
 -- ---------------------------------------------------------------------------
 
-create type public.join_request_status as enum ('pending', 'approved', 'rejected');
+-- Guarda de idempotencia: esta migration foi aplicada direto no banco antes de
+-- entrar no controle de migrations, entao o tipo e a tabela ja existem em prod.
+-- Sem isto, o proximo `db push` morre aqui com "type already exists".
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'join_request_status') then
+    create type public.join_request_status as enum ('pending', 'approved', 'rejected');
+  end if;
+end;
+$$;
 
-create table public.join_requests (
+create table if not exists public.join_requests (
   id            uuid primary key default gen_random_uuid(),
   tenant_id     uuid not null references public.tenants(id) on delete cascade,
   -- Copia do nome da empresa no momento do pedido. O solicitante pendente tem
@@ -48,16 +57,17 @@ comment on table public.join_requests is
 
 -- Um usuario nunca tem duas solicitacoes em aberto. Recusadas/aprovadas ficam
 -- como historico e nao disputam esse indice.
-create unique index uq_join_requests_pendente on public.join_requests (user_id)
+create unique index if not exists uq_join_requests_pendente on public.join_requests (user_id)
   where status = 'pending';
 
-create index ix_join_requests_tenant_status on public.join_requests (tenant_id, status);
+create index if not exists ix_join_requests_tenant_status on public.join_requests (tenant_id, status);
 
 alter table public.join_requests enable row level security;
 
 -- Leitura: super_admin ve tudo; admin ve as da propria empresa; o solicitante
 -- ve a dele (e ele quem precisa da tela "aguardando autorizacao"). O
 -- solicitante pendente tem tenant_id null, entao so casa pelo user_id.
+drop policy if exists join_requests_select on public.join_requests;
 create policy join_requests_select on public.join_requests
   for select to authenticated
   using (

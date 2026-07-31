@@ -107,7 +107,7 @@ begin
      and v_limit is not null and v_count >= v_limit then
     raise exception 'quota_exceeded'
       using errcode = 'P0001',
-            detail  = format('limite de %s sessão(ões) simultânea(s) do tenant atingido', v_limit);
+            detail  = format('limite de %s sessao(oes) simultanea(s) do tenant atingido', v_limit);
   end if;
 
   -- ---- RECONEXAO dentro da janela — UNIFICADA por rustdesk_id (ignora tecnico/

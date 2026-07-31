@@ -344,7 +344,9 @@ $$;
 comment on function public.revoke_access_grant(uuid) is
   'Desfaz um grant emitido pelo connect quando a emissao falha depois (cripto/segredo): remove atendimento criado por este grant, estorna credito (refund) ou devolve o acesso free (daily_access-1), e deleta a linha de connection_logs. Reconexoes nao geram estorno. So service_role executa.';
 
-revoke all on function public.revoke_access_grant(uuid) from public, anon, authenticated;
-grant execute on function public.revoke_access_grant(uuid) to service_role;
+-- NOTA: o revoke/grant de revoke_access_grant NAO entra aqui de proposito.
+-- Esta migration foi aplicada em producao sem eles; quem fecha essas permissoes
+-- e a 20260726193701_billing_b1_fix_revoke_grant_perms, 19 segundos depois.
+-- Manter o arquivo fiel ao que rodou preserva a historia real do banco.
 
 commit;
