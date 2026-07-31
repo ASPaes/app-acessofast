@@ -7,7 +7,6 @@ import {
   History,
   Users,
   Activity,
-  Settings,
   Building2,
   Store,
   Wallet,
@@ -34,7 +33,6 @@ type NavItem = {
     | "/usuarios"
     | "/monitoramento"
     | "/financeiro"
-    | "/configuracoes"
     | "/empresas"
     | "/planos"
     | "/cupons";
@@ -48,11 +46,13 @@ const operacao: NavItem[] = [
   { title: "Auditoria", url: "/auditoria", icon: History },
 ];
 
+// Configurações saiu: a tela só tinha um aviso de "em construção" e um bloco
+// vazio. Um item de menu que abre uma tela sem conteúdo ensina que o menu não é
+// confiável — custa mais do que não ter o item. Volta quando houver o quê pôr.
 const gestao: NavItem[] = [
   { title: "Usuários", url: "/usuarios", icon: Users },
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
-  { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 
 const plataforma: NavItem[] = [
