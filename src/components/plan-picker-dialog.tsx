@@ -19,6 +19,8 @@ type Props = {
   currentPlanCode: string | null | undefined;
   activeUsers: number;
   reason: "assinar" | "renovar";
+  /** Conta que está contratando. Sem ela o cupom reservado não é consultado. */
+  tenantId?: string | null;
 };
 
 type Ciclo = "monthly" | "annual";
@@ -85,6 +87,7 @@ export function PlanPickerDialog({
   currentPlanCode,
   activeUsers,
   reason,
+  tenantId = null,
 }: Props) {
   const [cycle, setCycle] = useState<Ciclo>("annual");
   const [pendente, setPendente] = useState<string | null>(null);
@@ -108,6 +111,26 @@ export function PlanPickerDialog({
       return data as Plano[];
     },
   });
+
+  // Cupom já aplicado na conta, esperando uma cobrança. Quem desconta de fato é
+  // a create-renewal-prod, no servidor; aqui é só o preço que a pessoa vê antes
+  // de clicar — se a tela mostrasse o valor cheio, o checkout pareceria errado.
+  const { data: cupom } = useQuery({
+    queryKey: ["cupom-reservado", tenantId],
+    enabled: open && !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("tenant_pending_promo", {
+        p_tenant_id: tenantId as string,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data[0] : data) ?? null;
+    },
+  });
+
+  // O cupom pode valer só para alguns planos. A conferência final é do servidor;
+  // esta aqui evita prometer desconto no card errado.
+  const cupomVale = (planCode: string) =>
+    !!cupom && (cupom.plan_codes === null || cupom.plan_codes.includes(planCode));
 
   const emCheckout = pendente !== null;
 
@@ -220,17 +243,35 @@ export function PlanPickerDialog({
                   {semPreco ? (
                     <p className="text-sm text-muted-foreground">Preço indisponível</p>
                   ) : (
-                    <div>
-                      <p className="text-xl font-semibold">
-                        {emReais(cycle === "annual" ? preco / 12 : preco)}
-                        <span className="text-sm font-normal text-muted-foreground">/mês</span>
-                      </p>
-                      {cycle === "annual" && (
-                        <p className="text-xs text-muted-foreground">
-                          cobrado {emReais(preco)}/ano
-                        </p>
-                      )}
-                    </div>
+                    (() => {
+                      const comCupom = cupomVale(plano.code) && cupom!.discount_percent !== null;
+                      const cobrado = comCupom
+                        ? Math.round((preco * (100 - cupom!.discount_percent)) / 100)
+                        : preco;
+                      return (
+                        <div>
+                          <p className="text-xl font-semibold">
+                            {emReais(cycle === "annual" ? cobrado / 12 : cobrado)}
+                            <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                          </p>
+                          {comCupom && (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="line-through">
+                                {emReais(cycle === "annual" ? preco / 12 : preco)}
+                              </span>{" "}
+                              <span className="text-primary">
+                                cupom {cupom!.code} · {cupom!.discount_percent}% OFF
+                              </span>
+                            </p>
+                          )}
+                          {cycle === "annual" && (
+                            <p className="text-xs text-muted-foreground">
+                              cobrado {emReais(cobrado)}/ano
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()
                   )}
 
                   <p className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -262,6 +303,16 @@ export function PlanPickerDialog({
               );
             })}
           </div>
+        )}
+
+        {cupom && (
+          <p className="text-xs text-muted-foreground">
+            Cupom <span className="font-mono">{cupom.code}</span>:{" "}
+            {cupom.discount_months === null || cycle === "annual"
+              ? // No anual a cobrança é única — o prazo em meses não tem onde valer.
+                `${cupom.discount_percent}% de desconto nesta cobrança.`
+              : `${cupom.discount_percent}% de desconto nas primeiras ${cupom.discount_months} cobranças; depois o valor volta ao normal.`}
+          </p>
         )}
 
         <p className="text-xs text-muted-foreground">

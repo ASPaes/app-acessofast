@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
@@ -16,8 +16,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PlanPickerDialog } from "@/components/plan-picker-dialog";
+import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
 import { toast } from "sonner";
-import { Coins, CreditCard, Loader2, ExternalLink, Clock } from "lucide-react";
+import { Coins, CreditCard, Loader2, ExternalLink, Clock, TicketPercent } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
   head: () => ({
@@ -405,14 +406,119 @@ function Financeiro() {
         </>
       )}
 
+      {/* CUPOM — o código que o comercial passou. Fica depois de plano/créditos
+          porque é acessório: quase toda visita a esta tela é para ver saldo ou
+          fatura, não para digitar cupom. */}
+      {isAdmin && tenantId && <CartaoCupom tenantId={tenantId} />}
+
       <PlanPickerDialog
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         currentPlanCode={tenant?.plan_code}
         activeUsers={activeUsers ?? 0}
         reason={reason}
+        tenantId={tenantId}
       />
     </div>
+  );
+}
+
+/**
+ * Cupom da conta: onde a empresa digita o código que recebeu.
+ *
+ * Dois estados. Sem nada reservado, é só o botão. Com um desconto reservado, a
+ * conta precisa saber que ele existe e QUANDO entra — senão a pessoa aplica o
+ * cupom, olha a fatura de hoje, não vê desconto nenhum e abre suporte. Dias
+ * extras não aparecem aqui: eles já entraram na data de vencimento lá em cima.
+ */
+function CartaoCupom({ tenantId }: { tenantId: string }) {
+  const queryClient = useQueryClient();
+  const [aberto, setAberto] = useState(false);
+
+  const { data: reservado } = useQuery({
+    queryKey: ["cupom-reservado", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("tenant_pending_promo", {
+        p_tenant_id: tenantId,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data[0] : data) ?? null;
+    },
+  });
+
+  const remover = useMutation({
+    mutationFn: async (redemptionId: string) => {
+      const { data, error } = await supabase.rpc("cancel_pending_promo", {
+        p_redemption_id: redemptionId,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data[0] : data) ?? null;
+    },
+    onSuccess: (r) => {
+      if (!r?.ok) {
+        toast.error(
+          r?.reason === "checkout_open"
+            ? "Há um checkout aberto com este cupom. Conclua ou aguarde a expiração do link para remover."
+            : r?.reason === "already_used"
+              ? "Este cupom já foi usado numa cobrança."
+              : "Não foi possível remover o cupom.",
+        );
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["cupom-reservado", tenantId] });
+      toast.success("Cupom removido. O código volta a ficar disponível.");
+    },
+    onError: () => toast.error("Não foi possível remover o cupom."),
+  });
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TicketPercent className="h-4 w-4 text-primary" />
+              Cupom
+            </CardTitle>
+            <CardDescription>
+              Recebeu um código promocional? Aplique aqui na sua conta.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setAberto(true)}>
+            Aplicar cupom
+          </Button>
+        </CardHeader>
+        {reservado && (
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="font-mono">
+                {reservado.code}
+              </Badge>
+              <span>
+                <strong>{reservado.discount_percent}% de desconto</strong>{" "}
+                {reservado.discount_months === null
+                  ? "em todas as cobranças"
+                  : `nas primeiras ${reservado.discount_months} cobranças`}{" "}
+                <span className="text-muted-foreground">
+                  — entra na próxima contratação ou renovação feita aqui.
+                </span>
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={remover.isPending}
+              onClick={() => remover.mutate(reservado.redemption_id)}
+            >
+              {remover.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Remover
+            </Button>
+          </CardContent>
+        )}
+      </Card>
+
+      <AplicarCupomDialog open={aberto} onOpenChange={setAberto} tenantId={tenantId} />
+    </>
   );
 }
 
