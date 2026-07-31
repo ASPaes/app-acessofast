@@ -126,7 +126,10 @@ Deno.serve(async (req) => {
     if (error) {
       console.error("leitura do cupom reservado falhou (nao-fatal):", error.message);
     } else if (data) {
-      const planos = data.promo_codes?.plan_codes ?? null;
+      // O embed de um-para-muitos volta objeto; aceitar array tambem custa uma
+      // linha e evita quebrar se o PostgREST mudar de ideia.
+      const rel = Array.isArray(data.promo_codes) ? data.promo_codes[0] : data.promo_codes;
+      const planos = rel?.plan_codes ?? null;
       if (planos !== null && !planos.includes(plan_code)) {
         promo_skipped = "plan_not_eligible";
       } else {

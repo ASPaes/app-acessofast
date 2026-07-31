@@ -74,9 +74,13 @@ comment on column public.promo_code_redemptions.consumed_intent_id is
 
 -- Resgate antigo (do site) nao tem nada pendente: o desconto ja foi para dentro
 -- do checkout no momento em que nasceu.
+-- O filtro por source deixa esta migracao segura para rodar duas vezes: sem ele,
+-- uma segunda execucao carimbaria como usado o desconto que uma empresa acabou
+-- de reservar pelo painel.
 update public.promo_code_redemptions
    set consumed_at = redeemed_at
- where consumed_at is null;
+ where consumed_at is null
+   and source = 'signup';
 
 -- Um desconto reservado por vez, por empresa. So resgates do painel entram na
 -- conta: o do site ja nasce consumido (ver redeem_promo_code adiante) e o
