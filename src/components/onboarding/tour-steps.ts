@@ -67,7 +67,7 @@ const PASSOS: TourStep[] = [
     target: "nav:/auditoria",
     route: "/auditoria",
     title: "Auditoria",
-    body: "O registro de todas as sessões de suporte: quem conectou, em qual máquina e quando. É append-only — nenhum técnico apaga um log, nem você.",
+    body: "O registro de todas as sessões de suporte: quem conectou, em qual máquina, de qual cliente e por qual caminho. Dá para buscar por nome do técnico, da máquina ou do cliente. É append-only — nenhum técnico apaga um log, nem você.",
   },
   {
     id: "usuarios",
@@ -82,13 +82,15 @@ const PASSOS: TourStep[] = [
     route: "/financeiro",
     title: "Financeiro",
     body: "Plano, faturas e consumo da empresa. Dá para acompanhar quanto do pacote já foi usado antes de a conta apertar.",
+    roles: ["super_admin", "admin", "head"],
   },
   {
     id: "monitoramento",
     target: "nav:/monitoramento",
     route: "/monitoramento",
     title: "Monitoramento",
-    body: "Sessões em andamento, agentes instalados e acessos externos. Antes de abrir um chamado achando que “o AcessoFast caiu”, é aqui que você confere.",
+    body: "Saúde do relay compartilhado, agentes instalados e sessões de todas as empresas. Antes de acatar um chamado de que “o AcessoFast caiu”, é aqui que você confere.",
+    roles: ["super_admin"],
   },
   {
     id: "empresas",

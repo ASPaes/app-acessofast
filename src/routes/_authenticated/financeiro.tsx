@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PlanPickerDialog } from "@/components/plan-picker-dialog";
+import { AcessoRestrito } from "@/components/acesso-restrito";
+import { useMe } from "@/hooks/use-me";
 import { toast } from "sonner";
 import { Coins, CreditCard, Loader2, ExternalLink, Clock } from "lucide-react";
 
@@ -60,30 +62,16 @@ function Financeiro() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [comprando, setComprando] = useState<string | null>(null);
 
-  const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: async () => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
-      const uid = userData.user?.id;
-      if (!uid) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, role, tenant_id")
-        .eq("id", uid)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: me } = useMe();
 
   const isSuper = me?.role === "super_admin";
   const isAdmin = me?.role === "admin";
+  const isTech = me?.role === "tech";
   const tenantId = me?.tenant_id ?? null;
 
   const { data: tenant } = useQuery({
     queryKey: ["financeiro-tenant", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
@@ -113,7 +101,7 @@ function Financeiro() {
 
   const { data: activeUsers } = useQuery({
     queryKey: ["financeiro-active-users", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     queryFn: async () => {
       const { count, error } = await supabase
         .from("profiles")
@@ -128,7 +116,7 @@ function Financeiro() {
 
   const { data: saldo } = useQuery({
     queryKey: ["financeiro-saldo", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     refetchInterval: 20000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -142,7 +130,7 @@ function Financeiro() {
 
   const { data: historico, isLoading: histLoading } = useQuery({
     queryKey: ["financeiro-historico", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("credit_ledger")
@@ -157,7 +145,7 @@ function Financeiro() {
 
   const { data: pacotes } = useQuery({
     queryKey: ["financeiro-pacotes"],
-    enabled: !isSuper,
+    enabled: !isSuper && !isTech,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("credit_packages")
@@ -184,6 +172,18 @@ function Financeiro() {
       toast.error(await mensagemDeErro(err));
       setComprando(null);
     }
+  }
+
+  // Técnico não decide compra nem assinatura, e o saldo da conta não muda o que
+  // ele faz no dia. A tela só servia para ele descobrir quanto a empresa gasta.
+  if (isTech) {
+    return (
+      <AcessoRestrito
+        titulo="Financeiro"
+        motivo="Plano, faturas e créditos são da administração da conta."
+        onde="Se um atendimento foi barrado por falta de saldo ou por limite do plano, fale com o administrador da sua empresa."
+      />
+    );
   }
 
   if (isSuper) {

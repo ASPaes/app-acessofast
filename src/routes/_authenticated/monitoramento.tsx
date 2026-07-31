@@ -35,8 +35,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useMe } from "@/hooks/use-me";
+import { AcessoRestrito } from "@/components/acesso-restrito";
 import {
   CartesianGrid,
   Line,
@@ -192,26 +195,9 @@ const PANEL_GROUPS = [
 const HIDDEN_LS_KEY = "acessofast:monitor:hidden";
 
 function MonitoramentoPage() {
-  const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: async () => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
-      const uid = userData.user?.id;
-      if (!uid) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, role, tenant_id")
-        .eq("id", uid)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: me } = useMe();
 
   const isSuper = me?.role === "super_admin";
-  const isTech = me?.role === "tech";
-  const canSecao = !!me && !isTech;
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["vps-metrics-latest"],
@@ -231,15 +217,14 @@ function MonitoramentoPage() {
 
   const agentHealth = useQuery({
     queryKey: ["mon-agent-health", me?.role, me?.tenant_id],
-    enabled: canSecao,
+    enabled: isSuper,
     queryFn: async () => {
-      let q = supabase
+      const q = supabase
         .from("v_agent_health" as never)
         .select(
           "tenant_id,rustdesk_id,address_book_id,tentativas_totais,sessoes_reais,falhas,abertas_agora,ultimo_heartbeat,ultima_atividade,agente_vivo_24h",
         )
         .order("ultima_atividade", { ascending: false });
-      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as AgentHealth[];
@@ -248,16 +233,15 @@ function MonitoramentoPage() {
 
   const sessionsSummary = useQuery({
     queryKey: ["mon-sessions-summary", me?.role, me?.tenant_id],
-    enabled: canSecao,
+    enabled: isSuper,
     queryFn: async () => {
-      let q = supabase
+      const q = supabase
         .from("v_sessions_summary" as never)
         .select(
           "tenant_id,dia,sessoes,fim_limpo,quedas,acessos_externos,dur_media_s,dur_p50_s,dur_p95_s",
         )
         .order("dia", { ascending: false })
         .limit(14);
-      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as SessionsSummary[];
@@ -266,16 +250,15 @@ function MonitoramentoPage() {
 
   const externalAccess = useQuery({
     queryKey: ["mon-external-access", me?.role, me?.tenant_id],
-    enabled: canSecao,
+    enabled: isSuper,
     queryFn: async () => {
-      let q = supabase
+      const q = supabase
         .from("v_external_access" as never)
         .select(
           "tenant_id,rustdesk_id,address_book_id,session_start,session_end,duration_seconds,last_heartbeat_at,technician_ip,created_at",
         )
         .order("created_at", { ascending: false })
         .limit(20);
-      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as ExternalAccess[];
@@ -284,10 +267,9 @@ function MonitoramentoPage() {
 
   const devices = useQuery({
     queryKey: ["mon-devices-ref", me?.role, me?.tenant_id],
-    enabled: canSecao,
+    enabled: isSuper,
     queryFn: async () => {
-      let q = supabase.from("address_book").select("id, alias, rustdesk_id, tenants(name)");
-      if (!isSuper) q = q.eq("tenant_id", me!.tenant_id as string);
+      const q = supabase.from("address_book").select("id, alias, rustdesk_id, tenants(name)");
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as DeviceRef[];
@@ -338,7 +320,7 @@ function MonitoramentoPage() {
   }, [refetch]);
 
   useEffect(() => {
-    if (!canSecao) return;
+    if (!isSuper) return;
     const channel = supabase
       .channel("mon_conn_logs_rt")
       .on(
@@ -355,7 +337,7 @@ function MonitoramentoPage() {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canSecao]);
+  }, [isSuper]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -389,9 +371,8 @@ function MonitoramentoPage() {
       else next.add(id);
       return next;
     });
-  const availableGroups = PANEL_GROUPS.filter((g) =>
-    g.scope === "vps" ? isSuper : canSecao,
-  );
+  // A tela inteira é super_admin: não sobrou grupo com escopo restrito.
+  const availableGroups = PANEL_GROUPS;
   const show = (id: string) => !hidden.has(id);
 
   const latest = data?.[0];
@@ -502,6 +483,31 @@ function MonitoramentoPage() {
     );
   }
 
+  // Depois de todos os hooks, nunca antes: retorno antecipado acima daqui
+  // mudaria a quantidade de hooks entre renders.
+  if (me && !isSuper) {
+    return (
+      <AcessoRestrito
+        titulo="Monitoramento"
+        motivo="Esta tela acompanha a saúde da infraestrutura compartilhada — relay, agentes e sessões de todas as empresas."
+        onde={
+          <>
+            Os acessos iniciados fora do painel, que ficavam aqui, agora aparecem em{" "}
+            <Link to="/auditoria" className="font-medium text-primary hover:underline">
+              Auditoria
+            </Link>
+            , junto do registro que permite investigar cada um. Se uma máquina sua está offline,
+            veja em{" "}
+            <Link to="/dispositivos" className="font-medium text-primary hover:underline">
+              Dispositivos
+            </Link>
+            .
+          </>
+        }
+      />
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -510,7 +516,7 @@ function MonitoramentoPage() {
           Monitoramento
         </h1>
         <p className="text-sm text-muted-foreground">
-          Sessões, agentes {isSuper ? "e saúde do relay compartilhado." : "e acessos externos."}
+          Sessões, agentes e saúde do relay compartilhado.
         </p>
       </div>
 
@@ -538,7 +544,7 @@ function MonitoramentoPage() {
           h-5 w-5, animate-pulse e cor por métrica (CPU sky, Memória violet, Disco amber,
           Rede emerald), layout centralizado.
           POSIÇÃO: logo ABAIXO da barra de botões de seções (Agentes/Sessões/…) e ACIMA
-          do bloco {canSecao && (...)}. Reusa latest, ageSec, netMbps, isSuper e os ícones
+          do bloco {isSuper && (...)}. Reusa latest, ageSec, netMbps, isSuper e os ícones
           Cpu/Gauge/HardDrive/Network já importados. */}
       {isSuper && (
         <Card>
@@ -594,7 +600,7 @@ function MonitoramentoPage() {
         </Card>
       )}
 
-      {canSecao && (
+      {isSuper && (
         <div className="space-y-6">
           {show("agentes") && (
           <Card>
