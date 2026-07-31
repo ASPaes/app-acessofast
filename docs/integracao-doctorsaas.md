@@ -32,7 +32,7 @@ Tudo isso já está pronto e funcionando do lado do AcessoFast. Vocês só abrem
 Troque `PAINEL` pelo endereço do painel do AcessoFast:
 
 ```js
-const PAINEL = "https://COLOQUE-AQUI-O-ENDERECO-DO-PAINEL";
+const PAINEL = "https://app.acessofast.com.br";
 
 function abrirAcessoFast(conversationId) {
   window.open(
@@ -147,7 +147,7 @@ Quando a conexão é disparada, a janelinha **fecha sozinha**.
 Não precisa esperar o botão ficar pronto. Cole o endereço direto no navegador:
 
 ```
-https://COLOQUE-AQUI-O-ENDERECO-DO-PAINEL/conectar?conv=teste-123
+https://app.acessofast.com.br/conectar?conv=teste-123
 ```
 
 Estando logado no painel do AcessoFast, deve aparecer a tela de escolher o cliente.
@@ -163,7 +163,7 @@ Se forem gerar o botão com IA, este prompt basta:
 No cabeçalho da conversa do chat, adicione um botão "Conectar".
 
 Ao clicar, ele deve abrir uma janela popup com esta URL:
-  https://COLOQUE-AQUI-O-ENDERECO-DO-PAINEL/conectar?conv=<ID_DA_CONVERSA>
+  https://app.acessofast.com.br/conectar?conv=<ID_DA_CONVERSA>
 
 Onde <ID_DA_CONVERSA> é o identificador estável da conversa aberta,
 passado com encodeURIComponent.
