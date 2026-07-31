@@ -24,7 +24,6 @@ import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authent
 import { Route as AuthenticatedEmpresasRouteImport } from './routes/_authenticated/empresas'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
 import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
-import { Route as AuthenticatedPlanosRouteImport } from './routes/_authenticated/planos'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 
 const IndexRoute = IndexRouteImport.update({
@@ -103,11 +102,6 @@ const AuthenticatedMonitoramentoRoute =
     path: '/monitoramento',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedPlanosRoute = AuthenticatedPlanosRouteImport.update({
-  id: '/planos',
-  path: '/planos',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
@@ -129,7 +123,6 @@ export interface FileRoutesByFullPath {
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
-  '/planos': typeof AuthenticatedPlanosRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesByTo {
@@ -147,7 +140,6 @@ export interface FileRoutesByTo {
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
-  '/planos': typeof AuthenticatedPlanosRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesById {
@@ -167,7 +159,6 @@ export interface FileRoutesById {
   '/_authenticated/empresas': typeof AuthenticatedEmpresasRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
-  '/_authenticated/planos': typeof AuthenticatedPlanosRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRouteTypes {
@@ -187,7 +178,6 @@ export interface FileRouteTypes {
     | '/empresas'
     | '/financeiro'
     | '/monitoramento'
-    | '/planos'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -205,7 +195,6 @@ export interface FileRouteTypes {
     | '/empresas'
     | '/financeiro'
     | '/monitoramento'
-    | '/planos'
     | '/usuarios'
   id:
     | '__root__'
@@ -224,7 +213,6 @@ export interface FileRouteTypes {
     | '/_authenticated/empresas'
     | '/_authenticated/financeiro'
     | '/_authenticated/monitoramento'
-    | '/_authenticated/planos'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
 }
@@ -345,13 +333,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMonitoramentoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/planos': {
-      id: '/_authenticated/planos'
-      path: '/planos'
-      fullPath: '/planos'
-      preLoaderRoute: typeof AuthenticatedPlanosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/usuarios': {
       id: '/_authenticated/usuarios'
       path: '/usuarios'
@@ -371,7 +352,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedEmpresasRoute: typeof AuthenticatedEmpresasRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
   AuthenticatedMonitoramentoRoute: typeof AuthenticatedMonitoramentoRoute
-  AuthenticatedPlanosRoute: typeof AuthenticatedPlanosRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
 
@@ -384,7 +364,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEmpresasRoute: AuthenticatedEmpresasRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
   AuthenticatedMonitoramentoRoute: AuthenticatedMonitoramentoRoute,
-  AuthenticatedPlanosRoute: AuthenticatedPlanosRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
 
