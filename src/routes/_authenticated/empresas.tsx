@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Building2, ChevronRight, User } from "lucide-react";
 import { ProvisionTenantDialog } from "@/components/provision-tenant-dialog";
+import { PlanoEmpresaDialog, type EmpresaPlano } from "@/components/plano-empresa-dialog";
 
 export const Route = createFileRoute("/_authenticated/empresas")({
   head: () => ({
@@ -39,6 +40,7 @@ const rotuloPapel: Record<string, string> = {
 
 function EmpresasPage() {
   const [aberta, setAberta] = useState<string | null>(null);
+  const [planoEmEdicao, setPlanoEmEdicao] = useState<EmpresaPlano | null>(null);
 
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -66,7 +68,7 @@ function EmpresasPage() {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "id, name, seat_limit, is_active, created_at, plan_code, billing_mode, billing_status, is_trial, profiles(count), address_book(count)",
+          "id, name, seat_limit, max_concurrent_per_tech, is_active, created_at, plan_code, billing_mode, billing_status, is_trial, profiles(count), address_book(count)",
         )
         .order("name");
       if (error) throw error;
@@ -168,6 +170,16 @@ function EmpresasPage() {
                         individual={individual}
                         aberta={on}
                         onToggle={() => setAberta(on ? null : t.id)}
+                        onAlterarPlano={() =>
+                          setPlanoEmEdicao({
+                            id: t.id,
+                            name: t.name,
+                            plan_code: t.plan_code,
+                            seat_limit: t.seat_limit,
+                            max_concurrent_per_tech: t.max_concurrent_per_tech,
+                            usuarios: membros,
+                          })
+                        }
                       />
                     );
                   })}
@@ -176,6 +188,8 @@ function EmpresasPage() {
           </div>
         </CardContent>
       </Card>
+
+      <PlanoEmpresaDialog empresa={planoEmEdicao} onClose={() => setPlanoEmEdicao(null)} />
     </div>
   );
 }
@@ -184,6 +198,7 @@ type TenantLinha = {
   id: string;
   name: string;
   seat_limit: number;
+  max_concurrent_per_tech: number | null;
   is_active: boolean;
   created_at: string;
   plan_code: string | null;
@@ -206,6 +221,7 @@ function LinhaConta({
   individual,
   aberta,
   onToggle,
+  onAlterarPlano,
 }: {
   tenant: TenantLinha;
   membros: number;
@@ -213,6 +229,7 @@ function LinhaConta({
   individual: boolean;
   aberta: boolean;
   onToggle: () => void;
+  onAlterarPlano: () => void;
 }) {
   // Só busca os usuários quando a linha abre: em uma plataforma com muitas
   // contas, trazer todos de antemão seria uma consulta por linha sem ninguém ter
@@ -269,7 +286,18 @@ function LinhaConta({
           </div>
         </TableCell>
         <TableCell className="text-sm">
-          {tenant.plan_code ?? <span className="text-muted-foreground">sem plano</span>}
+          <span className="flex items-center gap-1">
+            {tenant.plan_code ?? <span className="text-muted-foreground">sem plano</span>}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={onAlterarPlano}
+              aria-label={`Alterar plano de ${tenant.name}`}
+            >
+              Alterar
+            </Button>
+          </span>
         </TableCell>
         <TableCell>
           <Badge variant="outline">

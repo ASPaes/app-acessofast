@@ -10,7 +10,6 @@ import {
   Building2,
   Store,
   Wallet,
-  SlidersHorizontal,
   TicketPercent,
 } from "lucide-react";
 import {
@@ -34,7 +33,6 @@ type NavItem = {
     | "/monitoramento"
     | "/financeiro"
     | "/empresas"
-    | "/planos"
     | "/cupons";
   icon: typeof LayoutDashboard;
 };
@@ -55,9 +53,11 @@ const gestao: NavItem[] = [
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
 ];
 
+// Planos saiu: a tela existia para listar empresas e dar acesso ao formulário de
+// atribuição de plano — a mesma lista de Empresas, duplicada. A atribuição
+// passou a viver na linha da empresa, que é onde a pergunta nasce.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
-  { title: "Planos", url: "/planos", icon: SlidersHorizontal },
   { title: "Cupons", url: "/cupons", icon: TicketPercent },
 ];
 
