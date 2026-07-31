@@ -12,8 +12,7 @@ export type TourRoute =
   | "/usuarios"
   | "/monitoramento"
   | "/financeiro"
-  | "/empresas"
-  | "/planos";
+  | "/empresas";
 
 export type TourStep = {
   id: string;
@@ -96,15 +95,7 @@ const PASSOS: TourStep[] = [
     target: "nav:/empresas",
     route: "/empresas",
     title: "Empresas",
-    body: "Todas as empresas da plataforma, com provisionamento de novos tenants e o estado de cobrança de cada uma.",
-    roles: ["super_admin"],
-  },
-  {
-    id: "planos",
-    target: "nav:/planos",
-    route: "/planos",
-    title: "Planos",
-    body: "Catálogo de planos: limites de usuários, sessões simultâneas e preços que valem para todas as empresas.",
+    body: "Todas as contas da plataforma. Abra uma linha para ver os usuários dela, e altere o plano, os assentos e as sessões simultâneas ali mesmo.",
     roles: ["super_admin"],
   },
   {

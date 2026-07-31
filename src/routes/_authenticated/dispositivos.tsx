@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { filtrarIgnorandoPontuacao } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
@@ -606,6 +606,19 @@ function DispositivosPage() {
     },
   });
 
+  const [gerenciarMarcadores, setGerenciarMarcadores] = useState(false);
+
+  // Em quantas máquinas cada marcador está aplicado. É o número que a
+  // confirmação de exclusão precisa mostrar: "remove de 14 dispositivos"
+  // responde a pergunta que um "tem certeza?" genérico ignora.
+  const usoPorMarcador = useMemo(() => {
+    const contagem = new Map<string, number>();
+    for (const lista of markersByDevice?.values() ?? []) {
+      for (const id of lista) contagem.set(id, (contagem.get(id) ?? 0) + 1);
+    }
+    return contagem;
+  }, [markersByDevice]);
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const t = q.trim().toLowerCase();
@@ -1115,8 +1128,8 @@ function DispositivosPage() {
                         );
                       })}
                     </CommandGroup>
-                    {markerFilter.size > 0 && (
-                      <CommandGroup>
+                    <CommandGroup>
+                      {markerFilter.size > 0 && (
                         <CommandItem
                           value="__limpar__"
                           onSelect={() => setMarkerFilter(new Set())}
@@ -1125,12 +1138,41 @@ function DispositivosPage() {
                           <X className="h-4 w-4 mr-2" />
                           Limpar filtro
                         </CommandItem>
-                      </CommandGroup>
-                    )}
+                      )}
+                      {/* Gerenciar mora aqui, e não numa tela à parte, porque é
+                          onde a pessoa percebe que o marcador está errado: ao
+                          procurá-lo. */}
+                      <CommandItem
+                        value="__gerenciar__"
+                        onSelect={() => {
+                          setMarkerFilterOpen(false);
+                          setGerenciarMarcadores(true);
+                        }}
+                        className="text-muted-foreground"
+                      >
+                        <Settings2 className="h-4 w-4 mr-2" />
+                        Gerenciar marcadores
+                      </CommandItem>
+                    </CommandGroup>
                   </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>
+
+            <GerenciarMarcadoresDialog
+              open={gerenciarMarcadores}
+              onOpenChange={setGerenciarMarcadores}
+              marcadores={markersList ?? []}
+              uso={usoPorMarcador}
+              onExcluido={(id) =>
+                setMarkerFilter((prev) => {
+                  if (!prev.has(id)) return prev;
+                  const next = new Set(prev);
+                  next.delete(id);
+                  return next;
+                })
+              }
+            />
             {/* Seletor de visão: botão de 36px com glifo de 20px.
                 O glifo é maior do que a proporção usual pede porque num seletor
                 sem rótulo ele é a única informação — e há um motivo concreto:
@@ -2814,5 +2856,244 @@ function MarcadoresField({ device }: { device: AddressBookRow }) {
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+/**
+ * Gerenciador de marcadores: renomear, trocar a cor e excluir.
+ *
+ * Renomear existe por um motivo prático, não como conveniência: o caso que
+ * originou o pedido é erro de digitação. Sem renomear, a única saída seria
+ * excluir e reetiquetar as máquinas na mão — exatamente o trabalho que se
+ * queria evitar. Excluir fica para o marcador que perdeu o sentido.
+ *
+ * As vinculações somem junto por conta do `on delete cascade` na FK de
+ * device_marker_assignments; não é preciso apagá-las antes.
+ */
+function GerenciarMarcadoresDialog({
+  open,
+  onOpenChange,
+  marcadores,
+  uso,
+  onExcluido,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  marcadores: DeviceMarker[];
+  uso: Map<string, number>;
+  onExcluido: (id: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editando, setEditando] = useState<string | null>(null);
+  const [rascunho, setRascunho] = useState("");
+  const [cor, setCor] = useState<string>(MARKER_COLOR_TOKENS[0]);
+  const [excluindo, setExcluindo] = useState<DeviceMarker | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setEditando(null);
+      setExcluindo(null);
+    }
+  }, [open]);
+
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["device_markers"] });
+    queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
+  };
+
+  const renomear = useMutation({
+    mutationFn: async (vars: { id: string; label: string; color: string }) => {
+      const { error } = await supabase
+        .from("device_markers")
+        .update({ label: vars.label, color: vars.color })
+        .eq("id", vars.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Marcador atualizado");
+      invalidar();
+      setEditando(null);
+    },
+    onError: (err: { code?: string; message: string }) => {
+      // Índice único case-insensitive por tenant: renomear para um nome que já
+      // existe cai aqui. A mensagem crua do Postgres não ajudaria ninguém.
+      if (err.code === "23505") {
+        toast.error("Já existe um marcador com esse nome.");
+        return;
+      }
+      toast.error(err.message);
+    },
+  });
+
+  const excluir = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("device_markers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, id) => {
+      toast.success("Marcador excluído");
+      onExcluido(id);
+      invalidar();
+      setExcluindo(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const abrirEdicao = (m: DeviceMarker) => {
+    setEditando(m.id);
+    setRascunho(m.label);
+    setCor(m.color ?? MARKER_COLOR_TOKENS[0]);
+  };
+
+  const salvar = () => {
+    const label = rascunho.trim();
+    if (!editando || !label) return;
+    renomear.mutate({ id: editando, label, color: cor });
+  };
+
+  const pedirExclusao = (m: DeviceMarker) => {
+    // Marcador sem uso não tem o que perder: some direto, sem confirmação.
+    if ((uso.get(m.id) ?? 0) === 0) {
+      excluir.mutate(m.id);
+      return;
+    }
+    setExcluindo(m);
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gerenciar marcadores</DialogTitle>
+            <DialogDescription>
+              Renomeie para corrigir um erro de digitação sem desvincular as máquinas. Exclua
+              quando o marcador não fizer mais sentido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+            {marcadores.length === 0 && (
+              <p className="rounded-md border border-border/60 bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
+                Nenhum marcador cadastrado ainda.
+              </p>
+            )}
+            {marcadores.map((m) => {
+              const emUso = uso.get(m.id) ?? 0;
+              const emEdicao = editando === m.id;
+              return (
+                <div key={m.id} className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
+                  {emEdicao ? (
+                    <div className="space-y-2.5">
+                      <Input
+                        autoFocus
+                        value={rascunho}
+                        maxLength={40}
+                        disabled={renomear.isPending}
+                        aria-label={`Novo nome para ${m.label}`}
+                        onChange={(e) => setRascunho(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") salvar();
+                          if (e.key === "Escape") setEditando(null);
+                        }}
+                      />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {MARKER_COLOR_TOKENS.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setCor(c)}
+                            aria-label={`Cor ${c}`}
+                            aria-pressed={cor === c}
+                            className={`grid h-7 w-7 place-items-center rounded-md border transition-colors ${
+                              cor === c ? "border-primary bg-primary/10" : "border-border/60"
+                            }`}
+                          >
+                            <span className={`h-2.5 w-2.5 rounded-full ${markerDotClass(c)}`} />
+                          </button>
+                        ))}
+                        <div className="ml-auto flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditando(null)}
+                            disabled={renomear.isPending}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={salvar}
+                            disabled={!rascunho.trim() || renomear.isPending}
+                          >
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${markerDotClass(m.color)}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm">{m.label}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {emUso === 0 ? "sem uso" : `${emUso} máquina${emUso === 1 ? "" : "s"}`}
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => abrirEdicao(m)}
+                        aria-label={`Renomear ${m.label}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => pedirExclusao(m)}
+                        disabled={excluir.isPending}
+                        aria-label={`Excluir ${m.label}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={excluindo !== null} onOpenChange={(v) => !v && setExcluindo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir «{excluindo?.label}»?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O marcador será removido de {uso.get(excluindo?.id ?? "") ?? 0} dispositivo(s). As
+              máquinas continuam cadastradas — só perdem esta etiqueta. Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => excluindo && excluir.mutate(excluindo.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir marcador
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
