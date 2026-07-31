@@ -18,7 +18,6 @@ import { Route as ConectarRouteImport } from './routes/conectar'
 import { Route as DefinirSenhaRouteImport } from './routes/definir-senha'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
-import { Route as AuthenticatedCuponsRouteImport } from './routes/_authenticated/cupons'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authenticated/dispositivos'
 import { Route as AuthenticatedEmpresasRouteImport } from './routes/_authenticated/empresas'
@@ -70,11 +69,6 @@ const AuthenticatedClientesRoute = AuthenticatedClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedCuponsRoute = AuthenticatedCuponsRouteImport.update({
-  id: '/cupons',
-  path: '/cupons',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -117,7 +111,6 @@ export interface FileRoutesByFullPath {
   '/definir-senha': typeof DefinirSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
-  '/cupons': typeof AuthenticatedCuponsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
@@ -134,7 +127,6 @@ export interface FileRoutesByTo {
   '/definir-senha': typeof DefinirSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
-  '/cupons': typeof AuthenticatedCuponsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
@@ -153,7 +145,6 @@ export interface FileRoutesById {
   '/definir-senha': typeof DefinirSenhaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
-  '/_authenticated/cupons': typeof AuthenticatedCuponsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dispositivos': typeof AuthenticatedDispositivosRoute
   '/_authenticated/empresas': typeof AuthenticatedEmpresasRoute
@@ -172,7 +163,6 @@ export interface FileRouteTypes {
     | '/definir-senha'
     | '/auditoria'
     | '/clientes'
-    | '/cupons'
     | '/dashboard'
     | '/dispositivos'
     | '/empresas'
@@ -189,7 +179,6 @@ export interface FileRouteTypes {
     | '/definir-senha'
     | '/auditoria'
     | '/clientes'
-    | '/cupons'
     | '/dashboard'
     | '/dispositivos'
     | '/empresas'
@@ -207,7 +196,6 @@ export interface FileRouteTypes {
     | '/definir-senha'
     | '/_authenticated/auditoria'
     | '/_authenticated/clientes'
-    | '/_authenticated/cupons'
     | '/_authenticated/dashboard'
     | '/_authenticated/dispositivos'
     | '/_authenticated/empresas'
@@ -291,13 +279,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/cupons': {
-      id: '/_authenticated/cupons'
-      path: '/cupons'
-      fullPath: '/cupons'
-      preLoaderRoute: typeof AuthenticatedCuponsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -346,7 +327,6 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
-  AuthenticatedCuponsRoute: typeof AuthenticatedCuponsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDispositivosRoute: typeof AuthenticatedDispositivosRoute
   AuthenticatedEmpresasRoute: typeof AuthenticatedEmpresasRoute
@@ -358,7 +338,6 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
-  AuthenticatedCuponsRoute: AuthenticatedCuponsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDispositivosRoute: AuthenticatedDispositivosRoute,
   AuthenticatedEmpresasRoute: AuthenticatedEmpresasRoute,

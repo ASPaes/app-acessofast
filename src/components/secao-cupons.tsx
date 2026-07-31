@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -31,12 +30,7 @@ import { Building2, Copy, Info, TicketPercent, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
 
-export const Route = createFileRoute("/_authenticated/cupons")({
-  head: () => ({
-    meta: [{ title: "Cupons — Acessofast" }, { name: "robots", content: "noindex" }],
-  }),
-  component: CuponsPage,
-});
+
 
 // Espelha public.promo_codes. Nao confundir com a tabela `vouchers`, que e outra
 // coisa (cortesia 1/CNPJ pos-venda). Aqui e o codigo aberto que o visitante digita
@@ -117,33 +111,25 @@ function mensagemDeErro(err: unknown, padrao: string) {
   return e?.message || padrao;
 }
 
-function CuponsPage() {
+/**
+ * Cupons, antes uma tela própria em /cupons.
+ *
+ * Virou seção do Financeiro porque a decisão que ela apoia é a mesma: cupom,
+ * plano e pacote de crédito são todos alavancas de receita, e escolher entre
+ * "dar 30 dias de teste" e "dar 20% por três meses" exige olhar o que já está
+ * entrando. Em telas separadas, essa comparação não acontecia.
+ *
+ * Não faz mais a própria verificação de papel: quem monta a seção já é a visão
+ * de super_admin do Financeiro. Verificar duas vezes daria a impressão de que
+ * este componente é seguro sozinho — a proteção real é o RLS de promo_codes.
+ */
+export function SecaoCupons() {
   const [criando, setCriando] = useState(false);
   const [verResgatesDe, setVerResgatesDe] = useState<Cupom | null>(null);
   const [aplicarEm, setAplicarEm] = useState<Cupom | null>(null);
 
-  const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: async () => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
-      const uid = userData.user?.id;
-      if (!uid) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, role, tenant_id")
-        .eq("id", uid)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const isSuper = me?.role === "super_admin";
-
   const { data: cupons, isLoading } = useQuery({
     queryKey: ["cupons"],
-    enabled: !!isSuper,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("promo_codes")
@@ -158,7 +144,6 @@ function CuponsPage() {
 
   const { data: planos } = useQuery({
     queryKey: ["planos-catalogo"],
-    enabled: !!isSuper,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("plans")
@@ -170,32 +155,16 @@ function CuponsPage() {
     },
   });
 
-  if (me && !isSuper) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Cupons</CardTitle>
-            <CardDescription>Acesso restrito à equipe da plataforma.</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
   const agora = Date.now();
   const nomePorPlano = new Map((planos ?? []).map((p) => [p.code, p.name]));
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cupons</h1>
-          <p className="text-sm text-muted-foreground">
-            Códigos abertos que o visitante digita no site ao contratar: dias extras de teste e/ou
-            desconto percentual.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Códigos abertos que o visitante digita no site ao contratar: dias extras de teste e/ou
+          desconto percentual.
+        </p>
         <Button onClick={() => setCriando(true)}>Novo cupom</Button>
       </div>
 

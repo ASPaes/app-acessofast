@@ -10,7 +10,6 @@ import {
   Building2,
   Store,
   Wallet,
-  TicketPercent,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,8 +31,7 @@ type NavItem = {
     | "/usuarios"
     | "/monitoramento"
     | "/financeiro"
-    | "/empresas"
-    | "/cupons";
+    | "/empresas";
   icon: typeof LayoutDashboard;
 };
 
@@ -47,18 +45,30 @@ const operacao: NavItem[] = [
 // Configurações saiu: a tela só tinha um aviso de "em construção" e um bloco
 // vazio. Um item de menu que abre uma tela sem conteúdo ensina que o menu não é
 // confiável — custa mais do que não ter o item. Volta quando houver o quê pôr.
-const gestao: NavItem[] = [
-  { title: "Usuários", url: "/usuarios", icon: Users },
-  { title: "Financeiro", url: "/financeiro", icon: Wallet },
-  { title: "Monitoramento", url: "/monitoramento", icon: Activity },
-];
+//
+// Financeiro saiu da lista do técnico: plano, fatura e crédito são decisão da
+// administração da conta, e ele não toma nenhuma delas.
+const gestao: NavItem[] = [{ title: "Usuários", url: "/usuarios", icon: Users }];
+
+const gestaoAdmin: NavItem[] = [{ title: "Financeiro", url: "/financeiro", icon: Wallet }];
 
 // Planos saiu: a tela existia para listar empresas e dar acesso ao formulário de
 // atribuição de plano — a mesma lista de Empresas, duplicada. A atribuição
 // passou a viver na linha da empresa, que é onde a pergunta nasce.
+//
+// Monitoramento veio para cá: a tela acompanha a infraestrutura COMPARTILHADA
+// (relay, agentes, sessões de todas as empresas), que é assunto de plataforma e
+// não de conta. O que o admin de tenant realmente usava dali — acesso iniciado
+// fora do painel — passou a viver na Auditoria, junto do registro que permite
+// investigar cada caso.
+//
+// Cupons saiu: virou aba do Financeiro. Cupom, plano e pacote de crédito são
+// todas alavancas de receita, e escolher entre "30 dias de teste" e "20% por
+// três meses" exige olhar o que já está entrando — em telas separadas, essa
+// comparação não acontecia.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
-  { title: "Cupons", url: "/cupons", icon: TicketPercent },
+  { title: "Monitoramento", url: "/monitoramento", icon: Activity },
 ];
 
 export function AppSidebar() {
@@ -84,6 +94,8 @@ export function AppSidebar() {
     },
   });
   const isSuper = me?.role === "super_admin";
+  const isTech = me?.role === "tech";
+  const itensGestao = isTech ? gestao : [...gestao, ...gestaoAdmin];
 
   // Único aviso de que existem pedidos de acesso esperando: não há e-mail para
   // o admin, então a contagem precisa aparecer sem ele abrir a tela.
@@ -134,7 +146,7 @@ export function AppSidebar() {
         <div className="my-1 h-px bg-border-subtle mx-2" aria-hidden />
         <NavGroup
           label="Gestão"
-          items={gestao}
+          items={itensGestao}
           collapsed={collapsed}
           isActive={isActive}
           badges={badges}

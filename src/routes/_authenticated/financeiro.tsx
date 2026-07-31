@@ -15,10 +15,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlanPickerDialog } from "@/components/plan-picker-dialog";
 import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
+import { AcessoRestrito } from "@/components/acesso-restrito";
+import { SecaoCupons } from "@/components/secao-cupons";
+import { StatCard } from "@/components/stat-card";
+import { useMe } from "@/hooks/use-me";
 import { toast } from "sonner";
-import { Coins, CreditCard, Loader2, ExternalLink, Clock, TicketPercent } from "lucide-react";
+import {
+  AlertTriangle,
+  Coins,
+  CreditCard,
+  Loader2,
+  ExternalLink,
+  Clock,
+  TicketPercent,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
   head: () => ({
@@ -61,30 +74,16 @@ function Financeiro() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [comprando, setComprando] = useState<string | null>(null);
 
-  const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: async () => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
-      const uid = userData.user?.id;
-      if (!uid) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, role, tenant_id")
-        .eq("id", uid)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: me } = useMe();
 
   const isSuper = me?.role === "super_admin";
   const isAdmin = me?.role === "admin";
+  const isTech = me?.role === "tech";
   const tenantId = me?.tenant_id ?? null;
 
   const { data: tenant } = useQuery({
     queryKey: ["financeiro-tenant", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
@@ -114,7 +113,7 @@ function Financeiro() {
 
   const { data: activeUsers } = useQuery({
     queryKey: ["financeiro-active-users", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     queryFn: async () => {
       const { count, error } = await supabase
         .from("profiles")
@@ -129,7 +128,7 @@ function Financeiro() {
 
   const { data: saldo } = useQuery({
     queryKey: ["financeiro-saldo", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     refetchInterval: 20000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -143,7 +142,7 @@ function Financeiro() {
 
   const { data: historico, isLoading: histLoading } = useQuery({
     queryKey: ["financeiro-historico", tenantId],
-    enabled: !!tenantId && !isSuper,
+    enabled: !!tenantId && !isSuper && !isTech,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("credit_ledger")
@@ -158,7 +157,7 @@ function Financeiro() {
 
   const { data: pacotes } = useQuery({
     queryKey: ["financeiro-pacotes"],
-    enabled: !isSuper,
+    enabled: !isSuper && !isTech,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("credit_packages")
@@ -187,16 +186,19 @@ function Financeiro() {
     }
   }
 
-  if (isSuper) {
+  // Técnico não decide compra nem assinatura, e o saldo da conta não muda o que
+  // ele faz no dia. A tela só servia para ele descobrir quanto a empresa gasta.
+  if (isTech) {
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          A cobrança é por empresa. Selecione uma empresa para ver o financeiro dela.
-        </p>
-      </div>
+      <AcessoRestrito
+        titulo="Financeiro"
+        motivo="Plano, faturas e créditos são da administração da conta."
+        onde="Se um atendimento foi barrado por falta de saldo ou por limite do plano, fale com o administrador da sua empresa."
+      />
     );
   }
+
+  if (isSuper) return <FinanceiroPlataforma />;
 
   const mode = tenant?.billing_mode;
   const isPlan = mode === "plan";
@@ -563,3 +565,238 @@ function BillingStatusBadge({
     </Badge>
   );
 }
+
+/**
+ * Financeiro na visão de quem opera a plataforma.
+ *
+ * Antes esta rota devolvia uma frase ("selecione uma empresa") e nada mais — o
+ * super_admin não tinha onde ver quanto a operação inteira arrecada. Os dados
+ * para responder isso já existiam, espalhados entre `tenants`, `plans` e o
+ * razão de créditos.
+ *
+ * Sobre os números: o que a tela chama de RECEITA CONTRATADA é a soma do preço
+ * mensal dos planos das contas ativas — é o que foi contratado, não o que foi
+ * recebido. Quem recebe é o Asaas, e o painel não tem esse extrato. Chamar isso
+ * de faturamento seria mentira no instante em que alguém deixasse de pagar, e
+ * por isso as contas em atraso aparecem separadas em vez de somadas.
+ */
+function FinanceiroPlataforma() {
+  const { data: empresas, isLoading } = useQuery({
+    queryKey: ["financeiro-plataforma-tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select(
+          "id, name, billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_exempt, past_due_since, is_active",
+        )
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: planos } = useQuery({
+    queryKey: ["financeiro-plataforma-planos"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("plans").select("code, name, price_month_cents");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  /** Compras de crédito nos últimos 30 dias, direto do razão. */
+  const { data: creditos } = useQuery({
+    queryKey: ["financeiro-plataforma-creditos"],
+    queryFn: async () => {
+      const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("credit_ledger")
+        .select("credits, package_code")
+        .eq("entry_type", "purchase")
+        .gte("created_at", desde);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: pacotes } = useQuery({
+    queryKey: ["financeiro-plataforma-pacotes"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("credit_packages").select("code, price_cents");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const precoPorPlano = new Map((planos ?? []).map((p) => [p.code, p.price_month_cents ?? 0]));
+  const nomePorPlano = new Map((planos ?? []).map((p) => [p.code, p.name]));
+  const precoPorPacote = new Map((pacotes ?? []).map((p) => [p.code, p.price_cents]));
+
+  const ativas = (empresas ?? []).filter((t) => t.is_active);
+
+  /**
+   * Conta paga: ativa, em plano, fora do teste e sem isenção. Teste e isenção
+   * ficam de fora porque nenhuma das duas gera cobrança — incluí-las inflaria a
+   * receita com dinheiro que ninguém vai receber.
+   */
+  const pagantes = ativas.filter(
+    (t) => t.billing_mode === "plan" && !t.is_trial && !t.billing_exempt,
+  );
+  const receitaMes = pagantes.reduce((s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0), 0);
+
+  const emAtraso = ativas.filter(
+    (t) =>
+      t.billing_status === "dunning" ||
+      t.billing_status === "blocked_billing" ||
+      !!t.past_due_since,
+  );
+  const receitaEmRisco = emAtraso.reduce(
+    (s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0),
+    0,
+  );
+
+  const emTeste = ativas.filter((t) => t.is_trial).length;
+
+  const creditosVendidos = (creditos ?? []).reduce(
+    (s, c) => s + (precoPorPacote.get(c.package_code ?? "") ?? 0),
+    0,
+  );
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
+        <p className="text-sm text-muted-foreground">
+          Receita, inadimplência e alavancas comerciais da plataforma inteira.
+        </p>
+      </div>
+
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Receita contratada"
+          value={emReais(receitaMes)}
+          icon={CreditCard}
+          hint={`${pagantes.length} conta(s) pagante(s) · por mês`}
+          loading={isLoading}
+          color="emerald"
+        />
+        <StatCard
+          title="Em atraso"
+          value={emReais(receitaEmRisco)}
+          icon={AlertTriangle}
+          hint={`${emAtraso.length} conta(s) com pagamento pendente`}
+          loading={isLoading}
+          color="amber"
+        />
+        <StatCard
+          title="Em teste"
+          value={emTeste}
+          icon={Clock}
+          hint="Contas em teste grátis agora"
+          loading={isLoading}
+          color="violet"
+        />
+        <StatCard
+          title="Créditos vendidos"
+          value={emReais(creditosVendidos)}
+          icon={Coins}
+          hint="Compras lançadas nos últimos 30 dias"
+          loading={isLoading}
+          color="lime"
+        />
+      </div>
+
+      <Tabs defaultValue="contas">
+        <TabsList>
+          <TabsTrigger value="contas">Contas</TabsTrigger>
+          <TabsTrigger value="cupons">Cupons</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="contas" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Cobrança por conta</CardTitle>
+              <CardDescription>
+                {empresas ? `${ativas.length} conta(s) ativa(s)` : "Carregando…"} · para trocar o
+                plano de uma conta, use a coluna Plano em Empresas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-border/60 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Conta</TableHead>
+                      <TableHead>Plano</TableHead>
+                      <TableHead>Cobrança</TableHead>
+                      <TableHead>Situação</TableHead>
+                      <TableHead>Vence</TableHead>
+                      <TableHead className="text-right">Valor/mês</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading && (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <Skeleton className="h-8 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoading && ativas.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                          Nenhuma conta ativa.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoading &&
+                      ativas.map((t) => {
+                        const preco = precoPorPlano.get(t.plan_code ?? "");
+                        const cobra = t.billing_mode === "plan" && !t.is_trial && !t.billing_exempt;
+                        return (
+                          <TableRow key={t.id}>
+                            <TableCell className="font-medium">{t.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {nomePorPlano.get(t.plan_code ?? "") ?? t.plan_code ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {MODO_COBRANCA[t.billing_mode] ?? t.billing_mode}
+                            </TableCell>
+                            <TableCell>
+                              <BillingStatusBadge status={t.billing_status} isTrial={t.is_trial} />
+                            </TableCell>
+                            <TableCell className="text-sm tabular-nums text-muted-foreground">
+                              {t.plan_expires_at
+                                ? new Date(t.plan_expires_at).toLocaleDateString("pt-BR")
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {/* Isenta e em teste mostram traço, não zero: zero
+                                  lê como "plano sem preço" e manda investigar um
+                                  problema que não existe. */}
+                              {cobra && preco ? emReais(preco) : "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cupons" className="mt-4">
+          <SecaoCupons />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+/** Rótulos do enum billing_mode. */
+const MODO_COBRANCA: Record<string, string> = {
+  plan: "Assinatura",
+  credits: "Créditos",
+  free: "Grátis",
+};
