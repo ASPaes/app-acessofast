@@ -20,6 +20,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Protótipos de design fora do app (só no disco, não versionados).
+# O protótipo versionado é redesign-preview/.
+design/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
