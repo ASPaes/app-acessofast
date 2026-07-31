@@ -31,7 +31,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Store, Pencil, Plus, Upload, AlertTriangle, Search } from "lucide-react";
+import {
+  Store,
+  Pencil,
+  Plus,
+  Upload,
+  AlertTriangle,
+  Search,
+  ChevronRight,
+  MonitorSmartphone,
+} from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ImportarClientesDialog } from "@/components/importar-clientes-dialog";
 import {
@@ -57,6 +68,193 @@ type ClientRow = {
   phone: string | null;
   is_active: boolean;
 };
+
+/** Mesma janela que a tela de Dispositivos usa para considerar uma máquina online. */
+const JANELA_ONLINE_MS = 120_000;
+
+/**
+ * Linha de cliente + detalhe com as máquinas dele.
+ *
+ * A tela listava nome, documento e uma contagem — dava para saber que o cliente
+ * tem 4 máquinas, não QUAIS. Abrir a linha responde isso sem sair da tela.
+ *
+ * Não há botão Conectar aqui de propósito: conectar passa por elegibilidade,
+ * escolha entre grátis e crédito e cinco estados de bloqueio, tudo já resolvido
+ * em Dispositivos. Duplicar esse fluxo criaria uma segunda implementação da
+ * regra de cobrança — o link leva para lá, onde ela mora.
+ */
+function LinhaCliente({
+  cliente,
+  tenantId,
+  totalDispositivos,
+  temTelefone,
+  totalColunas,
+  aberta,
+  onToggle,
+  onEditar,
+}: {
+  cliente: ClientRow;
+  tenantId: string;
+  totalDispositivos: number;
+  temTelefone: boolean;
+  totalColunas: number;
+  aberta: boolean;
+  onToggle: () => void;
+  onEditar: () => void;
+}) {
+  // Só busca quando a linha abre: uma consulta por cliente carregada de antemão
+  // seria dezenas de idas ao banco que ninguém pediu.
+  const { data: maquinas, isLoading } = useQuery({
+    queryKey: ["cliente-dispositivos", cliente.id],
+    enabled: aberta,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("address_book")
+        .select("id, alias, rustdesk_id, os, last_online, is_active")
+        .eq("tenant_id", tenantId)
+        .eq("client_id", cliente.id)
+        .order("alias");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const agora = Date.now();
+  const online = (maquinas ?? []).filter(
+    (m) => m.last_online && agora - new Date(m.last_online).getTime() < JANELA_ONLINE_MS,
+  ).length;
+
+  return (
+    <>
+      <TableRow className={aberta ? "bg-muted/40" : undefined}>
+        <TableCell className="pr-0">
+          {totalDispositivos > 0 && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onToggle}
+              aria-expanded={aberta}
+              aria-label={
+                aberta ? `Recolher ${cliente.name}` : `Ver máquinas de ${cliente.name}`
+              }
+            >
+              <ChevronRight
+                className={`h-4 w-4 transition-transform ${aberta ? "rotate-90" : ""}`}
+              />
+            </Button>
+          )}
+        </TableCell>
+        <TableCell className="font-medium">{cliente.name}</TableCell>
+        <TableCell className="text-sm text-muted-foreground">
+          {formatarDocumento(cliente.document, cliente.document_type) ?? "—"}
+        </TableCell>
+        {temTelefone && (
+          <TableCell className="text-sm text-muted-foreground">
+            {formatarTelefone(cliente.phone) ?? "—"}
+          </TableCell>
+        )}
+        <TableCell>
+          <span className="flex items-center gap-2">
+            {totalDispositivos}
+            {aberta && online > 0 && (
+              <Badge variant="outline" className="text-emerald-500">
+                {online} online
+              </Badge>
+            )}
+          </span>
+        </TableCell>
+        <TableCell>
+          <Button size="sm" variant="outline" onClick={onEditar}>
+            <Pencil className="h-3.5 w-3.5 mr-1" />
+            Editar
+          </Button>
+        </TableCell>
+      </TableRow>
+
+      {aberta && (
+        <TableRow className="bg-muted/40 hover:bg-muted/40">
+          <TableCell colSpan={totalColunas} className="p-0">
+            <div className="px-4 py-3">
+              {isLoading && <Skeleton className="h-16 w-full" />}
+              {!isLoading && (maquinas?.length ?? 0) === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Nenhuma máquina vinculada a {cliente.name}. O vínculo é feito em Dispositivos,
+                  ao editar a máquina.
+                </p>
+              )}
+              {!isLoading && (maquinas?.length ?? 0) > 0 && (
+                <div className="rounded-md border border-border/60 bg-background overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Máquina</TableHead>
+                        <TableHead>Situação</TableHead>
+                        <TableHead>Sistema</TableHead>
+                        <TableHead className="text-right">Último acesso</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {maquinas?.map((m) => {
+                        const ativa =
+                          m.last_online &&
+                          agora - new Date(m.last_online).getTime() < JANELA_ONLINE_MS;
+                        return (
+                          <TableRow key={m.id}>
+                            <TableCell>
+                              <span className="flex items-center gap-2">
+                                <MonitorSmartphone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span className="min-w-0">
+                                  <span className="block text-sm">
+                                    {m.alias?.trim() || (
+                                      <span className="text-muted-foreground">sem apelido</span>
+                                    )}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {m.rustdesk_id}
+                                  </span>
+                                </span>
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {!m.is_active ? (
+                                <Badge variant="secondary">inativa</Badge>
+                              ) : ativa ? (
+                                <Badge variant="default">online</Badge>
+                              ) : (
+                                <Badge variant="outline">offline</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {m.os ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              {m.last_online
+                                ? new Date(m.last_online).toLocaleString("pt-BR")
+                                : "nunca"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <div className="border-t border-border/60 px-3 py-2">
+                    <Link
+                      to="/dispositivos"
+                      className="text-xs text-primary underline-offset-4 hover:underline"
+                    >
+                      Abrir em Dispositivos para conectar
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
 
 function ClientesPage() {
   const queryClient = useQueryClient();
@@ -127,7 +325,10 @@ function ClientesPage() {
 
   const clientes = consulta?.rows;
   const temTelefone = consulta?.temTelefone ?? true;
-  const totalColunas = temTelefone ? 5 : 4;
+  // +1 da coluna do chevron que abre a linha.
+  const totalColunas = (temTelefone ? 5 : 4) + 1;
+
+  const [clienteAberto, setClienteAberto] = useState<string | null>(null);
 
   const [busca, setBusca] = useState("");
 
@@ -290,6 +491,7 @@ function ClientesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-9" />
                   <TableHead>Cliente</TableHead>
                   <TableHead>CNPJ / CPF</TableHead>
                   {temTelefone && <TableHead>Telefone</TableHead>}
@@ -333,28 +535,19 @@ function ClientesPage() {
                 {effectiveTenant &&
                   !isLoading &&
                   visiveis.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatarDocumento(c.document, c.document_type) ?? "—"}
-                      </TableCell>
-                      {temTelefone && (
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatarTelefone(c.phone) ?? "—"}
-                        </TableCell>
-                      )}
-                      <TableCell>{deviceCounts?.[c.id] ?? 0}</TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => abrirEditar(c)}
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1" />
-                          Editar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <LinhaCliente
+                      key={c.id}
+                      cliente={c}
+                      tenantId={effectiveTenant}
+                      totalDispositivos={deviceCounts?.[c.id] ?? 0}
+                      temTelefone={temTelefone}
+                      totalColunas={totalColunas}
+                      aberta={clienteAberto === c.id}
+                      onToggle={() =>
+                        setClienteAberto((a) => (a === c.id ? null : c.id))
+                      }
+                      onEditar={() => abrirEditar(c)}
+                    />
                   ))}
               </TableBody>
             </Table>
