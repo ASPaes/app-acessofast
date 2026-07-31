@@ -895,12 +895,16 @@ export type Database = {
           applied_discount_months: number | null
           applied_discount_percent: number | null
           applied_extra_trial_days: number
+          applied_by: string | null
           code: string
+          consumed_at: string | null
+          consumed_intent_id: string | null
           doc_hash: string | null
           id: string
           promo_code_id: string
           redeemed_at: string
           signup_intent_id: string | null
+          source: string
           tenant_id: string | null
         }
         Insert: {
@@ -908,12 +912,16 @@ export type Database = {
           applied_discount_months?: number | null
           applied_discount_percent?: number | null
           applied_extra_trial_days?: number
+          applied_by?: string | null
           code: string
+          consumed_at?: string | null
+          consumed_intent_id?: string | null
           doc_hash?: string | null
           id?: string
           promo_code_id: string
           redeemed_at?: string
           signup_intent_id?: string | null
+          source?: string
           tenant_id?: string | null
         }
         Update: {
@@ -921,12 +929,16 @@ export type Database = {
           applied_discount_months?: number | null
           applied_discount_percent?: number | null
           applied_extra_trial_days?: number
+          applied_by?: string | null
           code?: string
+          consumed_at?: string | null
+          consumed_intent_id?: string | null
           doc_hash?: string | null
           id?: string
           promo_code_id?: string
           redeemed_at?: string
           signup_intent_id?: string | null
+          source?: string
           tenant_id?: string | null
         }
         Relationships: [
@@ -1738,6 +1750,18 @@ export type Database = {
     }
     Functions: {
       apply_paid_plan: { Args: { p_intent_id: string }; Returns: string }
+      apply_promo_code_to_tenant: {
+        Args: { p_code: string; p_tenant_id: string }
+        Returns: {
+          dias_aplicados: number
+          discount_months: number
+          discount_percent: number
+          novo_vencimento: string
+          ok: boolean
+          reason: string
+          redemption_id: string
+        }[]
+      }
       approve_device: { Args: { p_device_id: string }; Returns: undefined }
       approve_join_request: {
         Args: {
@@ -1814,6 +1838,13 @@ export type Database = {
           p_rustdesk_id: string
         }
         Returns: string
+      }
+      cancel_pending_promo: {
+        Args: { p_redemption_id: string }
+        Returns: {
+          ok: boolean
+          reason: string
+        }[]
       }
       claim_trial_document: {
         Args: { p_doc_hash: string; p_doc_type: string; p_tenant_id?: string }
@@ -1935,6 +1966,21 @@ export type Database = {
           discount_percent: number
           extra_trial_days: number
           ok: boolean
+          reason: string
+        }[]
+      }
+      promo_code_preview_tenant: {
+        Args: { p_code: string; p_tenant_id: string }
+        Returns: {
+          code: string
+          description: string
+          dias_aplicaveis: boolean
+          discount_months: number
+          discount_percent: number
+          extra_trial_days: number
+          novo_vencimento: string
+          ok: boolean
+          plan_codes: string[]
           reason: string
         }[]
       }
@@ -2090,6 +2136,18 @@ export type Database = {
       tenant_has_feature: {
         Args: { p_feature_key: string; p_tenant_id: string }
         Returns: boolean
+      }
+      tenant_pending_promo: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          code: string
+          description: string
+          discount_months: number
+          discount_percent: number
+          plan_codes: string[]
+          redeemed_at: string
+          redemption_id: string
+        }[]
       }
       tenant_seat_usage: {
         Args: { p_tenant: string }

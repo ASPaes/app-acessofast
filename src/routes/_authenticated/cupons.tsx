@@ -27,8 +27,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, Info, TicketPercent, Users } from "lucide-react";
+import { Building2, Copy, Info, TicketPercent, Users } from "lucide-react";
 import { toast } from "sonner";
+import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
 
 export const Route = createFileRoute("/_authenticated/cupons")({
   head: () => ({
@@ -65,6 +66,8 @@ type Resgate = {
   applied_extra_trial_days: number;
   applied_discount_percent: number | null;
   applied_discount_months: number | null;
+  source: string;
+  consumed_at: string | null;
   tenants: { name: string } | null;
 };
 
@@ -117,6 +120,7 @@ function mensagemDeErro(err: unknown, padrao: string) {
 function CuponsPage() {
   const [criando, setCriando] = useState(false);
   const [verResgatesDe, setVerResgatesDe] = useState<Cupom | null>(null);
+  const [aplicarEm, setAplicarEm] = useState<Cupom | null>(null);
 
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -218,13 +222,14 @@ function CuponsPage() {
                   <TableHead>Validade</TableHead>
                   <TableHead>Situação</TableHead>
                   <TableHead className="text-right">Ativo</TableHead>
+                  <TableHead className="w-px" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading &&
                   Array.from({ length: 3 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 7 }).map((_, j) => (
+                      {Array.from({ length: 8 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-24" />
                         </TableCell>
@@ -233,7 +238,7 @@ function CuponsPage() {
                   ))}
                 {!isLoading && (cupons?.length ?? 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                       Nenhum cupom criado ainda.
                     </TableCell>
                   </TableRow>
@@ -293,6 +298,25 @@ function CuponsPage() {
                         <TableCell className="text-right">
                           <ChaveAtivo cupom={c} situacao={situacao} />
                         </TableCell>
+                        <TableCell className="pl-0">
+                          {/* O comercial fecha por telefone e aplica o código na
+                              conta do cliente sem depender de o cliente digitar. */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="whitespace-nowrap"
+                            disabled={situacao !== "ativo"}
+                            title={
+                              situacao === "ativo"
+                                ? "Aplicar este cupom em uma empresa"
+                                : `Cupom ${situacao}: não dá para aplicar.`
+                            }
+                            onClick={() => setAplicarEm(c)}
+                          >
+                            <Building2 className="mr-2 h-3.5 w-3.5" />
+                            Aplicar a uma empresa
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -304,6 +328,11 @@ function CuponsPage() {
 
       <NovoCupomDialog aberto={criando} planos={planos ?? []} onClose={() => setCriando(false)} />
       <ResgatesDialog cupom={verResgatesDe} onClose={() => setVerResgatesDe(null)} />
+      <AplicarCupomDialog
+        open={aplicarEm !== null}
+        onOpenChange={(v) => !v && setAplicarEm(null)}
+        codigoFixo={aplicarEm?.code}
+      />
     </div>
   );
 }
@@ -669,7 +698,7 @@ function ResgatesDialog({ cupom, onClose }: { cupom: Cupom | null; onClose: () =
       const { data, error } = await supabase
         .from("promo_code_redemptions")
         .select(
-          "id, code, admin_email, tenant_id, redeemed_at, applied_extra_trial_days, applied_discount_percent, applied_discount_months, tenants(name)",
+          "id, code, admin_email, tenant_id, redeemed_at, applied_extra_trial_days, applied_discount_percent, applied_discount_months, source, consumed_at, tenants(name)",
         )
         .eq("promo_code_id", cupom!.id)
         .order("redeemed_at", { ascending: false });
@@ -731,6 +760,18 @@ function ResgatesDialog({ cupom, onClose }: { cupom: Cupom | null; onClose: () =
                       {!r.tenant_id && (
                         <Badge variant="outline" className="mt-1 font-normal">
                           sem empresa provisionada
+                        </Badge>
+                      )}
+                      {r.source === "app" && (
+                        <Badge variant="secondary" className="mt-1 font-normal">
+                          aplicado no painel
+                        </Badge>
+                      )}
+                      {/* Desconto que ainda não entrou em cobrança nenhuma: o uso
+                          já conta no teto da campanha, mas o dinheiro não mudou. */}
+                      {r.consumed_at === null && r.applied_discount_percent !== null && (
+                        <Badge variant="outline" className="mt-1 font-normal">
+                          desconto reservado
                         </Badge>
                       )}
                     </TableCell>
