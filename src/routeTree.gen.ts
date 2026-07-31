@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DefinirSenhaRouteImport } from './routes/definir-senha'
+import { Route as ConectarRouteImport } from './routes/conectar'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AguardandoAutorizacaoRouteImport } from './routes/aguardando-autorizacao'
@@ -30,6 +31,11 @@ import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authentica
 const DefinirSenhaRoute = DefinirSenhaRouteImport.update({
   id: '/definir-senha',
   path: '/definir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConectarRoute = ConectarRouteImport.update({
+  id: '/conectar',
+  path: '/conectar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CadastroRoute = CadastroRouteImport.update({
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/aguardando-autorizacao': typeof AguardandoAutorizacaoRoute
   '/auth': typeof AuthRoute
   '/cadastro': typeof CadastroRoute
+  '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/aguardando-autorizacao': typeof AguardandoAutorizacaoRoute
   '/auth': typeof AuthRoute
   '/cadastro': typeof CadastroRoute
+  '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/aguardando-autorizacao': typeof AguardandoAutorizacaoRoute
   '/auth': typeof AuthRoute
   '/cadastro': typeof CadastroRoute
+  '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
@@ -178,6 +187,7 @@ export interface FileRouteTypes {
     | '/aguardando-autorizacao'
     | '/auth'
     | '/cadastro'
+    | '/conectar'
     | '/definir-senha'
     | '/auditoria'
     | '/clientes'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/aguardando-autorizacao'
     | '/auth'
     | '/cadastro'
+    | '/conectar'
     | '/definir-senha'
     | '/auditoria'
     | '/clientes'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/aguardando-autorizacao'
     | '/auth'
     | '/cadastro'
+    | '/conectar'
     | '/definir-senha'
     | '/_authenticated/auditoria'
     | '/_authenticated/clientes'
@@ -235,6 +247,7 @@ export interface RootRouteChildren {
   AguardandoAutorizacaoRoute: typeof AguardandoAutorizacaoRoute
   AuthRoute: typeof AuthRoute
   CadastroRoute: typeof CadastroRoute
+  ConectarRoute: typeof ConectarRoute
   DefinirSenhaRoute: typeof DefinirSenhaRoute
 }
 
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       path: '/definir-senha'
       fullPath: '/definir-senha'
       preLoaderRoute: typeof DefinirSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conectar': {
+      id: '/conectar'
+      path: '/conectar'
+      fullPath: '/conectar'
+      preLoaderRoute: typeof ConectarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cadastro': {
@@ -399,6 +419,7 @@ const rootRouteChildren: RootRouteChildren = {
   AguardandoAutorizacaoRoute: AguardandoAutorizacaoRoute,
   AuthRoute: AuthRoute,
   CadastroRoute: CadastroRoute,
+  ConectarRoute: ConectarRoute,
   DefinirSenhaRoute: DefinirSenhaRoute,
 }
 export const routeTree = rootRouteImport
