@@ -30,6 +30,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Building2, Copy, Info, TicketPercent, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
+import { mensagemDoMotivo } from "@/lib/cupom-motivos";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/cupons")({
   head: () => ({
@@ -77,6 +85,9 @@ type Plano = { code: string; name: string };
 // erro no campo em vez de um 23514 cru vindo do banco.
 const CODIGO_REGEX = /^[A-Z0-9._-]{3,32}$/;
 const MAX_DIAS_TESTE = 365;
+
+// Fora do formato de codigo aceito pelo banco, entao nunca colide com um id real.
+const NENHUMA_EMPRESA = "__nenhuma__";
 
 // Estado derivado, na mesma ordem em que o backend recusa o resgate. Serve para o
 // comercial entender por que um codigo parou de funcionar sem abrir o suporte.
@@ -416,6 +427,23 @@ function NovoCupomDialog({
   const [planosEscolhidos, setPlanosEscolhidos] = useState<string[]>([]);
   const [teto, setTeto] = useState("");
   const [validoAte, setValidoAte] = useState("");
+  // "" = só cria o cupom. Com empresa escolhida, o cupom nasce já aplicado nela:
+  // é o caso do comercial que fecha por telefone e cria o código para um cliente
+  // específico — sem isso ele criaria aqui e teria de aplicar de novo na lista.
+  const [empresaAlvo, setEmpresaAlvo] = useState("");
+
+  const { data: empresas } = useQuery({
+    queryKey: ["tenants-para-cupom"],
+    enabled: aberto,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name, plan_code")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const limpar = () => {
     setCodigo("");
@@ -427,6 +455,7 @@ function NovoCupomDialog({
     setPlanosEscolhidos([]);
     setTeto("");
     setValidoAte("");
+    setEmpresaAlvo("");
   };
 
   const fechar = () => {
@@ -438,8 +467,9 @@ function NovoCupomDialog({
     mutationFn: async () => {
       const dias = diasTeste.trim() === "" ? 0 : Number(diasTeste);
       const pct = percentual.trim() === "" ? undefined : Number(percentual);
+      const code = codigo.trim().toUpperCase();
       const { error } = await supabase.rpc("create_promo_code", {
-        p_code: codigo.trim().toUpperCase(),
+        p_code: code,
         p_extra_trial_days: dias,
         p_discount_percent: pct,
         // discount_months so existe junto de um percentual; "permanente" e o NULL.
@@ -451,10 +481,44 @@ function NovoCupomDialog({
         p_valid_until: validoAte === "" ? undefined : new Date(validoAte).toISOString(),
       });
       if (error) throw error;
+
+      if (empresaAlvo === "") return null;
+
+      // O cupom já existe: uma recusa aqui (conta sem vencimento, plano fora da
+      // lista) não desfaz a criação, só deixa de aplicar. Por isso a aplicação
+      // reporta separado em vez de virar erro do formulário.
+      const { data, error: aplicaErr } = await supabase.rpc("apply_promo_code_to_tenant", {
+        p_tenant_id: empresaAlvo,
+        p_code: code,
+      });
+      if (aplicaErr) throw aplicaErr;
+      const linha = (Array.isArray(data) ? data[0] : data) ?? null;
+      return {
+        ...linha,
+        empresa: (empresas ?? []).find((t) => t.id === empresaAlvo)?.name ?? "a empresa",
+      };
     },
-    onSuccess: () => {
+    onSuccess: (aplicacao) => {
       queryClient.invalidateQueries({ queryKey: ["cupons"] });
-      toast.success("Cupom criado.");
+
+      if (!aplicacao) {
+        toast.success("Cupom criado.");
+      } else if (!aplicacao.ok) {
+        toast.warning(
+          `Cupom criado, mas não foi aplicado em ${aplicacao.empresa}: ${mensagemDoMotivo(aplicacao.reason)} Use o botão da lista para tentar em outra conta.`,
+        );
+      } else {
+        const partes: string[] = [];
+        if (aplicacao.dias_aplicados > 0 && aplicacao.novo_vencimento) {
+          partes.push(
+            `+${aplicacao.dias_aplicados} dias (vence ${formatarData(aplicacao.novo_vencimento)})`,
+          );
+        }
+        if (aplicacao.discount_percent !== null) {
+          partes.push(`${aplicacao.discount_percent}% reservado para a próxima cobrança`);
+        }
+        toast.success(`Cupom criado e aplicado em ${aplicacao.empresa}: ${partes.join(" · ")}`);
+      }
       fechar();
     },
     onError: (err) => {
@@ -673,6 +737,36 @@ function NovoCupomDialog({
             O limite é o teto da campanha inteira. A mesma empresa nunca resgata o mesmo cupom duas
             vezes, mas pode usar outro cupom.
           </p>
+
+          <div className="space-y-2 rounded-md border border-border/60 p-3">
+            <Label htmlFor="cupom-empresa-alvo">Aplicar já a uma empresa (opcional)</Label>
+            <Select
+              value={empresaAlvo}
+              // O Radix não aceita item de valor vazio, então "nenhuma" vira um
+              // sentinela. Sem ele não daria para desfazer a escolha.
+              onValueChange={(v) => setEmpresaAlvo(v === NENHUMA_EMPRESA ? "" : v)}
+            >
+              <SelectTrigger id="cupom-empresa-alvo">
+                <SelectValue placeholder="Nenhuma — só criar o cupom" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NENHUMA_EMPRESA}>Nenhuma — só criar o cupom</SelectItem>
+                {(empresas ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {t.plan_code ?? "sem plano"}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              O cupom nasce já aplicado nessa conta e consome um resgate. Dias extras entram na
+              hora; desconto fica reservado para a próxima cobrança dela. Depois, a mesma conta não
+              usa este cupom de novo.
+            </p>
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={fechar}>

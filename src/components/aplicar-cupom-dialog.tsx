@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CalendarPlus, CircleAlert, Loader2, Percent, TicketPercent } from "lucide-react";
 import { toast } from "sonner";
+import { mensagemDoMotivo } from "@/lib/cupom-motivos";
 
 /**
  * Aplica um cupom (promo_codes) numa empresa que JÁ EXISTE.
@@ -66,26 +67,6 @@ type Aplicacao = {
   discount_percent: number | null;
   discount_months: number | null;
 };
-
-// Os mesmos motivos que o banco devolve, na língua de quem lê a tela.
-const MOTIVO: Record<string, string> = {
-  not_found: "Cupom não encontrado. Confira o código.",
-  inactive: "Este cupom está desativado.",
-  not_started: "Este cupom ainda não começou a valer.",
-  expired: "Este cupom está vencido.",
-  exhausted: "Este cupom já atingiu o limite de resgates.",
-  plan_not_eligible: "Este cupom não vale para o plano desta conta.",
-  already_used: "Esta conta já usou este cupom.",
-  discount_pending:
-    "Já existe um desconto de cupom reservado nesta conta. Use na próxima cobrança ou remova antes de aplicar outro.",
-  no_effect:
-    "Este cupom só dá dias extras, e esta conta não tem data de vencimento para estender. Dias só valem em teste ou plano anual.",
-};
-
-function mensagemDoMotivo(reason: string | null | undefined) {
-  if (!reason) return "Não foi possível usar este cupom.";
-  return MOTIVO[reason] ?? "Não foi possível usar este cupom.";
-}
 
 function mensagemDeErro(err: unknown) {
   const e = err as { code?: string; message?: string } | null;
