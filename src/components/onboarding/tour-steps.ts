@@ -12,7 +12,6 @@ export type TourRoute =
   | "/usuarios"
   | "/monitoramento"
   | "/financeiro"
-  | "/configuracoes"
   | "/empresas"
   | "/planos";
 
@@ -91,13 +90,6 @@ const PASSOS: TourStep[] = [
     route: "/monitoramento",
     title: "Monitoramento",
     body: "Sessões em andamento, agentes instalados e acessos externos. Antes de abrir um chamado achando que “o AcessoFast caiu”, é aqui que você confere.",
-  },
-  {
-    id: "configuracoes",
-    target: "nav:/configuracoes",
-    route: "/configuracoes",
-    title: "Configurações",
-    body: "Preferências operacionais da sua empresa: fuso horário, retenção de logs e alertas.",
   },
   {
     id: "empresas",

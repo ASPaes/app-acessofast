@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Send, UserX, UserCheck } from "lucide-react";
+import { Users, UserPlus, Send, UserX, UserCheck, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -168,6 +168,37 @@ function UsuariosPage() {
     return false;
   };
 
+  // Editar nome não precisa de RPC nem de migration: a policy profiles_update
+  // já cobre super_admin, o próprio usuário e o admin dentro do seu tenant, e o
+  // lockdown de colunas concede update APENAS de full_name ao authenticated.
+  // Qualquer tentativa de escrever outra coluna por aqui é barrada no banco.
+  const podeEditarNome = (u: { id: string; role: string; tenant_id: string | null }) => {
+    if (!me) return false;
+    if (u.id === me.id) return true;
+    if (me.role === "super_admin") return true;
+    if (me.role === "admin" && me.tenant_id && u.tenant_id === me.tenant_id) return true;
+    return false;
+  };
+
+  const renomearMutation = useMutation({
+    mutationFn: async (vars: { id: string; nome: string }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: vars.nome })
+        .eq("id", vars.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Nome atualizado");
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  const semNome = (data ?? []).filter((u) => !u.full_name?.trim()).length;
+
   const toggleAtivoMutation = useMutation({
     mutationFn: async (vars: { id: string; ativar: boolean }) => {
       const { error } = await supabase.rpc("set_user_active", {
@@ -215,6 +246,14 @@ function UsuariosPage() {
           </CardTitle>
           <CardDescription>
             {data ? `${filteredData.length} usuário(s)` : "Carregando…"}
+            {semNome > 0 && (
+              <>
+                {" · "}
+                <span className="text-amber-500">
+                  {semNome} sem nome — passe o mouse na linha para corrigir
+                </span>
+              </>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -285,7 +324,17 @@ function UsuariosPage() {
                 {!isLoading &&
                   filteredData.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell>{u.full_name ?? "—"}</TableCell>
+                      <TableCell>
+                        <NomeCell
+                          nome={u.full_name}
+                          editavel={podeEditarNome(u)}
+                          salvando={
+                            renomearMutation.isPending &&
+                            renomearMutation.variables?.id === u.id
+                          }
+                          onSalvar={(nome) => renomearMutation.mutate({ id: u.id, nome })}
+                        />
+                      </TableCell>
                       <TableCell className="text-xs">{u.email ?? "—"}</TableCell>
                       <TableCell>
                         {u.tenant_id ? (
@@ -362,6 +411,100 @@ function UsuariosPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Nome do usuário, editável na própria linha.
+ *
+ * Sem modal de propósito: é um campo só, e abrir uma janela para corrigir uma
+ * palavra custa mais atenção do que a correção. Quem está sem nome ganha marca
+ * visível — antes era um travessão, indistinguível de dado que faltou carregar.
+ */
+function NomeCell({
+  nome,
+  editavel,
+  salvando,
+  onSalvar,
+}: {
+  nome: string | null;
+  editavel: boolean;
+  salvando: boolean;
+  onSalvar: (nome: string) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [rascunho, setRascunho] = useState(nome ?? "");
+
+  const confirmar = () => {
+    const v = rascunho.trim();
+    if (v && v !== nome) onSalvar(v);
+    setEditando(false);
+  };
+
+  if (editando) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          autoFocus
+          value={rascunho}
+          disabled={salvando}
+          className="h-8 w-44"
+          aria-label="Nome do usuário"
+          placeholder="Nome completo"
+          onChange={(e) => setRascunho(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") confirmar();
+            if (e.key === "Escape") setEditando(false);
+          }}
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={confirmar}
+          disabled={salvando}
+          aria-label="Salvar nome"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={() => setEditando(false)}
+          disabled={salvando}
+          aria-label="Cancelar edição"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-1.5">
+      {nome?.trim() ? (
+        <span>{nome}</span>
+      ) : (
+        <Badge variant="outline" className="text-muted-foreground">
+          sem nome
+        </Badge>
+      )}
+      {editavel && (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+          onClick={() => {
+            setRascunho(nome ?? "");
+            setEditando(true);
+          }}
+          aria-label={nome?.trim() ? `Editar nome de ${nome}` : "Definir nome"}
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   );
 }
