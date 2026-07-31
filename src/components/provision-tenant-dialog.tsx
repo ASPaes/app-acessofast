@@ -93,8 +93,12 @@ export function ProvisionTenantDialog() {
       return data;
     },
     onSuccess: (data) => {
-      toast.success("Tenant provisionado com sucesso");
+      toast.success("Empresa criada com sucesso");
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      // A lista de Empresas lê desta chave. Sem invalidar, a empresa recém-criada
+      // só aparecia depois de recarregar a página na mão.
+      queryClient.invalidateQueries({ queryKey: ["tenants-empresas"] });
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
       if (data.invite_link) {
         setInviteLink(data.invite_link);
       } else {
@@ -117,7 +121,7 @@ export function ProvisionTenantDialog() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error("Informe o nome do tenant");
+      toast.error("Informe o nome da empresa");
       return;
     }
     if (!emailRegex.test(email.trim())) {
@@ -142,19 +146,22 @@ export function ProvisionTenantDialog() {
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           <Building2 className="h-4 w-4 mr-1" />
-          Provisionar novo tenant
+          Nova empresa
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Provisionar novo tenant</DialogTitle>
+          {/* "Tenant" é vocabulário de arquitetura, não de quem usa o painel.
+              Multi-tenant é como o sistema foi construído — não é assunto de
+              quem cadastra um cliente novo. */}
+          <DialogTitle>Nova empresa</DialogTitle>
           <DialogDescription>
-            Cria um novo tenant e convida o usuário informado como admin.
+            Cria a empresa e convida o e-mail informado como administrador dela.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="tenant-name">Nome do tenant *</Label>
+            <Label htmlFor="tenant-name">Nome da empresa *</Label>
             <Input
               id="tenant-name"
               value={name}
@@ -163,7 +170,7 @@ export function ProvisionTenantDialog() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="tenant-admin-email">E-mail do admin *</Label>
+            <Label htmlFor="tenant-admin-email">E-mail do administrador *</Label>
             <Input
               id="tenant-admin-email"
               type="email"
