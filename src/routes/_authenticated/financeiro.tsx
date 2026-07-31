@@ -23,7 +23,9 @@ import { SecaoCupons } from "@/components/secao-cupons";
 import { StatCard } from "@/components/stat-card";
 import { useMe } from "@/hooks/use-me";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
 import {
+  Activity,
   AlertTriangle,
   Coins,
   CreditCard,
@@ -31,6 +33,7 @@ import {
   ExternalLink,
   Clock,
   TicketPercent,
+  Users,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
@@ -88,7 +91,7 @@ function Financeiro() {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_invoice_url, billing_exempt, past_due_since",
+          "billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_invoice_url, billing_exempt, past_due_since, seat_limit, max_concurrent_per_tech",
         )
         .eq("id", tenantId as string)
         .single();
@@ -97,17 +100,45 @@ function Financeiro() {
     },
   });
 
-  const { data: planName } = useQuery({
-    queryKey: ["financeiro-plan-name", tenant?.plan_code],
+  const { data: plano } = useQuery({
+    queryKey: ["financeiro-plano", tenant?.plan_code],
     enabled: !!tenant?.plan_code,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("plans")
-        .select("name")
+        .select("name, price_month_cents, max_concurrent_per_tech")
         .eq("code", tenant!.plan_code as string)
         .maybeSingle();
       if (error) throw error;
-      return data?.name ?? null;
+      return data;
+    },
+  });
+  const planName = plano?.name ?? null;
+
+  /**
+   * Atendimentos dos últimos 30 dias — deliberadamente NÃO "do ciclo".
+   *
+   * O ciclo de cobrança tem fim (`plan_expires_at`) mas não tem início gravado,
+   * e existe plano anual (`plans.price_year_cents`), então deduzir o começo
+   * subtraindo um mês daria número errado justamente para quem paga mais. 30
+   * dias é uma janela que o rótulo consegue descrever sem mentir.
+   */
+  const { data: uso } = useQuery({
+    queryKey: ["financeiro-uso-30d", tenantId],
+    enabled: !!tenantId && !isSuper && !isTech,
+    queryFn: async () => {
+      const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("atendimentos")
+        .select("id, technician_id")
+        .eq("tenant_id", tenantId as string)
+        .gte("started_at", desde);
+      if (error) throw error;
+      const linhas = data ?? [];
+      return {
+        atendimentos: linhas.length,
+        tecnicos: new Set(linhas.map((a) => a.technician_id).filter(Boolean)).size,
+      };
     },
   });
 
@@ -207,6 +238,17 @@ function Financeiro() {
   const dias = tenant?.plan_expires_at ? diasAte(tenant.plan_expires_at) : null;
   const reason: "assinar" | "renovar" = isPlan && !isTrial ? "renovar" : "assinar";
 
+  /**
+   * Ocupação de assentos. O override do tenant (`seat_limit`) manda sobre o
+   * padrão do plano — é o valor que a RPC assign_plan gravou e o que o backend
+   * usa para recusar convite, então é o único que pode aparecer aqui.
+   */
+  const assentos = tenant?.seat_limit ?? null;
+  const usados = activeUsers ?? 0;
+  const pctAssentos = assentos && assentos > 0 ? Math.round((usados / assentos) * 100) : null;
+  const assentosApertados = pctAssentos !== null && pctAssentos >= 90;
+  const vencendo = dias !== null && dias <= 5;
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -217,6 +259,58 @@ function Financeiro() {
             : "Créditos e faturas da sua conta."}
         </p>
       </div>
+
+      {/* Antes desta faixa a tela de plano trazia três dados soltos — situação,
+          vencimento e link da fatura. Nenhum deles responde o que o admin
+          realmente pergunta: quanto a empresa usou e se os assentos apertam. */}
+      {isPlan && (
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Plano"
+            value={planName ?? tenant?.plan_code ?? "—"}
+            icon={CreditCard}
+            hint={
+              tenant?.billing_exempt
+                ? "Conta isenta de cobrança"
+                : plano?.price_month_cents
+                  ? `${emReais(plano.price_month_cents)} por mês`
+                  : "Sob medida"
+            }
+            loading={!tenant}
+            color="blue"
+          />
+          <StatCard
+            title={isTrial ? "Teste termina" : "Renova em"}
+            value={dias === null ? "—" : dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `${dias} dias`}
+            icon={Clock}
+            hint={
+              tenant?.plan_expires_at
+                ? new Date(tenant.plan_expires_at).toLocaleDateString("pt-BR")
+                : "sem vencimento definido"
+            }
+            loading={!tenant}
+            color={vencendo ? "amber" : "violet"}
+          />
+          <StatCard
+            title="Atendimentos"
+            value={uso?.atendimentos ?? 0}
+            icon={Activity}
+            hint={`${uso?.tecnicos ?? 0} técnico(s) ativo(s) · últimos 30 dias`}
+            loading={!uso}
+            color="cyan"
+          />
+          <StatCard
+            title="Assentos"
+            value={assentos ? `${usados}/${assentos}` : String(usados)}
+            icon={Users}
+            hint={
+              pctAssentos === null ? "sem limite de assentos" : `${pctAssentos}% ocupados`
+            }
+            loading={!tenant}
+            color={assentosApertados ? "amber" : "emerald"}
+          />
+        </div>
+      )}
 
       {/* PLANO — só para contas em plano (assinatura). Plano é ilimitado: não compra crédito. */}
       {isPlan && (
@@ -262,6 +356,15 @@ function Financeiro() {
                 </span>
               </div>
             )}
+            <div className="flex flex-col">
+              <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                Sessões simultâneas
+              </span>
+              <span className="tabular-nums">
+                {tenant?.max_concurrent_per_tech ?? plano?.max_concurrent_per_tech ?? "sem limite"}
+                <span className="text-muted-foreground"> por técnico</span>
+              </span>
+            </div>
             {tenant?.billing_invoice_url && (
               <a
                 href={tenant.billing_invoice_url}
@@ -274,6 +377,30 @@ function Financeiro() {
               </a>
             )}
           </CardContent>
+
+          {/* A barra existe para o admin perceber o limite ANTES de convidar
+              alguém e levar a recusa — o backend recusa no ato, sem negociar. */}
+          {pctAssentos !== null && (
+            <CardContent className="pt-0">
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Ocupação de assentos
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {usados} de {assentos}
+                </span>
+              </div>
+              <Progress
+                value={Math.min(100, pctAssentos)}
+                className={assentosApertados ? "bg-warning/20 [&>div]:bg-warning" : undefined}
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {assentos! - usados <= 0
+                  ? "Sem assento livre. Convites acima do limite são recusados no ato."
+                  : `${assentos! - usados} assento(s) livre(s). Convites acima do limite são recusados no ato.`}
+              </p>
+            </CardContent>
+          )}
         </Card>
       )}
 
