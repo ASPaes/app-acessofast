@@ -69,6 +69,24 @@ const TODOS = "__todos__";
 /** Teto de linhas por consulta. Quando é atingido, a tela diz — ver `noTeto`. */
 const TETO = 500;
 
+/**
+ * Leitores de linha. Ficam no módulo, e não dentro do componente, porque são
+ * funções puras da linha: dentro do componente seriam recriadas a cada render e
+ * entrariam como dependência instável dos useMemo abaixo, invalidando o cache
+ * em todo render — exatamente o oposto do que o memo existe para fazer.
+ *
+ * Os parâmetros são tipados pela forma, não pelo tipo da consulta, para não
+ * precisarem do genérico do PostgREST.
+ */
+type ComTecnico = { profiles: { full_name: string | null } | null; technician_email: string | null };
+type ComMaquina = { address_book: { alias: string | null; clients: { name: string } | null } | null };
+
+/** Nome do técnico, com queda para e-mail quando o RLS esconde o perfil. */
+const nomeTecnico = (l: ComTecnico) => l.profiles?.full_name?.trim() || l.technician_email || null;
+const ehExterno = (l: { notes: string | null }) => (l.notes ?? "").startsWith(MARCA_EXTERNO);
+const nomeMaquina = (l: ComMaquina) => l.address_book?.alias?.trim() || null;
+const nomeCliente = (l: ComMaquina) => l.address_book?.clients?.name ?? null;
+
 function AuditoriaPage() {
   /**
    * O `select` embute técnico e máquina por chave estrangeira. As duas relações
@@ -121,12 +139,6 @@ function AuditoriaPage() {
   });
 
   type LogRow = NonNullable<typeof data>[number];
-
-  /** Nome de exibição do técnico, com a queda para e-mail explicada acima. */
-  const nomeTecnico = (l: LogRow) => l.profiles?.full_name?.trim() || l.technician_email || null;
-  const ehExterno = (l: LogRow) => (l.notes ?? "").startsWith(MARCA_EXTERNO);
-  const nomeMaquina = (l: LogRow) => l.address_book?.alias?.trim() || null;
-  const nomeCliente = (l: LogRow) => l.address_book?.clients?.name ?? null;
 
   const tecnicos = useMemo(() => {
     const set = new Set<string>();

@@ -10,7 +10,6 @@ import {
   Building2,
   Store,
   Wallet,
-  TicketPercent,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,8 +31,7 @@ type NavItem = {
     | "/usuarios"
     | "/monitoramento"
     | "/financeiro"
-    | "/empresas"
-    | "/cupons";
+    | "/empresas";
   icon: typeof LayoutDashboard;
 };
 
@@ -63,10 +61,14 @@ const gestaoAdmin: NavItem[] = [{ title: "Financeiro", url: "/financeiro", icon:
 // não de conta. O que o admin de tenant realmente usava dali — acesso iniciado
 // fora do painel — passou a viver na Auditoria, junto do registro que permite
 // investigar cada caso.
+//
+// Cupons saiu: virou aba do Financeiro. Cupom, plano e pacote de crédito são
+// todas alavancas de receita, e escolher entre "30 dias de teste" e "20% por
+// três meses" exige olhar o que já está entrando — em telas separadas, essa
+// comparação não acontecia.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
-  { title: "Cupons", url: "/cupons", icon: TicketPercent },
 ];
 
 export function AppSidebar() {
