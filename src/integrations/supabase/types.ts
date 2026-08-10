@@ -17,6 +17,7 @@ export type Database = {
       address_book: {
         Row: {
           agent_token_hash: string | null
+          agent_version: string | null
           alias: string | null
           approved_at: string | null
           approved_by: string | null
@@ -38,6 +39,7 @@ export type Database = {
         }
         Insert: {
           agent_token_hash?: string | null
+          agent_version?: string | null
           alias?: string | null
           approved_at?: string | null
           approved_by?: string | null
@@ -59,6 +61,7 @@ export type Database = {
         }
         Update: {
           agent_token_hash?: string | null
+          agent_version?: string | null
           alias?: string | null
           approved_at?: string | null
           approved_by?: string | null

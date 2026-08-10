@@ -29,7 +29,7 @@ async function sha256Hex(input: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string };
   try {
     body = await req.json();
   } catch {
@@ -45,6 +45,10 @@ Deno.serve(async (req) => {
   // Auto-adoção: rustdesk_id do CONTROLADOR (máquina do técnico) parseado do log do
   // cliente. Opcional; usado só p/ adotar um device ainda não registrado no 'start'.
   const controller_rustdesk_id = (body.controller_rustdesk_id ?? "").trim() || null;
+  // Versao do agente que esta falando. Opcional: agente anterior ao reporte nao
+  // manda, e nesse caso NAO sobrescrevemos a coluna (ver abaixo). Truncado em 40
+  // chars — e um rotulo de build, nao um campo livre.
+  const agent_version = (body.agent_version ?? "").trim().slice(0, 40) || null;
 
   if (!rustdesk_id || !agent_token || !["start", "heartbeat", "end", "presence"].includes(event)) {
     return json({ error: "missing_or_invalid_fields" }, 400);
@@ -116,9 +120,16 @@ Deno.serve(async (req) => {
   // O painel calcula online/offline por address_book.last_online > now() - 2min, e o
   // agente ocioso so manda "presence" (60s em 60s) — por isso o carimbo vem ANTES do
   // roteamento por evento, e nao so no ramo de sessao.
+  //
+  // Carona da versao do agente: o mesmo update que ja acontece a cada sinal grava
+  // agent_version, entao a visibilidade de frota sai de graca (zero requisicao a
+  // mais). So escreve quando o agente informou — um agente antigo, que nao manda o
+  // campo, nao deve apagar a versao ja conhecida do dispositivo.
+  const patch: { last_online: string; agent_version?: string } = { last_online: nowIso };
+  if (agent_version) patch.agent_version = agent_version;
   const { error: presErr } = await db
     .from("address_book")
-    .update({ last_online: nowIso })
+    .update(patch)
     .eq("id", device.id);
 
   // "presence" = maquina ligada e ociosa. Marca presenca e sai: nao abre, nao fecha

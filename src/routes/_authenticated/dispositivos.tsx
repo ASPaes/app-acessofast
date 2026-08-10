@@ -105,6 +105,7 @@ type AddressBookRow = {
   device_group: string | null;
   os: string | null;
   last_online: string | null;
+  agent_version: string | null;
   created_at: string;
   tenant_id: string | null;
   is_active: boolean;
@@ -196,6 +197,24 @@ function tempoRelativo(iso: string | null | undefined): string {
   if (h < 24) return `há ${h} h`;
   const d = Math.floor(h / 24);
   return `há ${d} d`;
+}
+
+// Versao do agente (coluna Agente). O rotulo gravado pelo agente e
+// "AAAA.MM.DD-<sha7>" (ver build-agent.yml no repo do agente): os 10 primeiros
+// caracteres sao a data do build, em largura fixa — entao comparar as strings ja
+// ordena por recencia e nao precisamos de semver aqui. Build local sai como "dev"
+// e nao casa o formato: vira null (desconhecida) e nunca e eleito "o mais novo".
+const VERSAO_AGENTE_RE = /^\d{4}\.\d{2}\.\d{2}/;
+
+function dataDaVersao(v: string | null | undefined): string | null {
+  if (!v || !VERSAO_AGENTE_RE.test(v)) return null;
+  return v.slice(0, 10);
+}
+
+// Balde de comparacao de versao. O os do address_book e gravado na matricula:
+// "Windows <build>" pelo enroll.go, "Android <versao>" pelo agente embutido.
+function plataformaDe(os: string | null | undefined): string {
+  return os?.toLowerCase().startsWith("android") ? "android" : "windows";
 }
 
 // Billing (coluna Consumo + cards). Dia corrente em America/Sao_Paulo (GMT-3),
@@ -450,7 +469,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, created_at, tenant_id, is_active, client_id, clients(name, document, document_type), tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, client_id, clients(name, document, document_type), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -711,7 +730,54 @@ function DispositivosPage() {
     return () => clearInterval(id);
   }, [atendCount]);
 
-  const colCount = (isSuper ? 6 : 5) + (showConsumo ? 1 : 0);
+  const colCount = (isSuper ? 7 : 6) + (showConsumo ? 1 : 0);
+
+  // Referencia de "em dia": a versao mais nova que a propria frota reporta.
+  // Enquanto nao existe uma versao-alvo definida no servidor, a frota e o melhor
+  // oraculo disponivel — se alguma maquina ja subiu o build novo, as que ficaram
+  // atras dela estao comprovadamente desatualizadas.
+  //
+  // Por PLATAFORMA, nao global: o agente Windows e o embutido no APK Android sao
+  // buildados por workflows e cadencias diferentes. Comparados no mesmo balde, o
+  // Android (rebuildado bem menos) apareceria eternamente atrasado — alarme falso
+  // que treinaria o operador a ignorar a coluna.
+  const versoesMaisNovas = useMemo(() => {
+    const max = new Map<string, string>();
+    for (const d of data ?? []) {
+      const dt = dataDaVersao(d.agent_version);
+      if (!dt) continue;
+      const p = plataformaDe(d.os);
+      const atual = max.get(p);
+      if (!atual || dt > atual) max.set(p, dt);
+    }
+    return max;
+  }, [data]);
+
+  // Versao do agente de um device. Mostra so a data do build (o rotulo completo,
+  // com sha, fica no title) e pinta de warning quem esta atras da sua plataforma.
+  const agenteVersao = (d: AddressBookRow) => {
+    const dt = dataDaVersao(d.agent_version);
+    if (!dt) {
+      return (
+        <span
+          className="text-muted-foreground"
+          title="Agente anterior ao reporte de versao — precisa ser atualizado"
+        >
+          desconhecida
+        </span>
+      );
+    }
+    const ref = versoesMaisNovas.get(plataformaDe(d.os));
+    const atrasada = ref !== undefined && dt < ref;
+    return (
+      <span
+        className={`font-mono ${atrasada ? "text-warning" : "text-muted-foreground"}`}
+        title={atrasada ? `${d.agent_version} — desatualizado (frota em ${ref})` : (d.agent_version ?? undefined)}
+      >
+        {dt}
+      </span>
+    );
+  };
 
   // Badge de consumo de um device (ou null se sem atendimento aberto).
   const consumoBadge = (deviceId: string) => {
@@ -822,6 +888,7 @@ function DispositivosPage() {
         <TableCell className="text-xs text-muted-foreground">
           {d.os ?? "—"}
         </TableCell>
+        <TableCell className="text-xs">{agenteVersao(d)}</TableCell>
         {isSuper && (
           <TableCell className="text-xs">
             {d.tenants?.name ?? <span className="text-muted-foreground">—</span>}
@@ -1240,6 +1307,7 @@ function DispositivosPage() {
                   <TableHead>Computador</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>SO</TableHead>
+                  <TableHead>Agente</TableHead>
                   {isSuper && <TableHead>Empresa</TableHead>}
                   <TableHead>Status</TableHead>
                   {showConsumo && <TableHead>Consumo</TableHead>}
@@ -1316,6 +1384,9 @@ function DispositivosPage() {
                     <div className="flex flex-col">
                       <span className="font-medium truncate">{d.alias ?? "—"}</span>
                       <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5">
+                        Agente {agenteVersao(d)}
+                      </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {status === "inativo" ? (
