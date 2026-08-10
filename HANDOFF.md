@@ -1,10 +1,9 @@
 # HANDOFF — AcessoFast (continuar na próxima sessão)
 
-> **Sessão 2026-08-07.** Estado: **Passo 1 da atualização de frota** (reporte da versão do agente)
-> **commitado em branch nos dois repos e verificado localmente — NÃO mergeado, NÃO deployado.**
-> **Retomar em:** o deploy, na ordem do §3. A ordem é obrigatória e o motivo está lá.
-> Substitui o handoff anterior (Fase 3 — validações §7 concluídas). A Fase 3 segue aberta:
-> virou **frente pausada no §8 deste arquivo**, com o estado do canary preservado.
+> **Sessão 2026-08-10.** Estado: **Passo 1 da atualização de frota DEPLOYADO** — migration,
+> edge function e os merges nos dois repos, na ordem do §3, todos verificados em produção.
+> **Retomar em:** o §4 (as duas branches que colidem e mergeiam limpo sem estar certas) e,
+> depois, o Passo 2 do §7. A Fase 3 segue **pausada no §8**, com o estado do canary preservado.
 
 ---
 
@@ -26,23 +25,30 @@
 
 ## 2. 📍 Onde os repos estão AGORA
 
-| Repo | Branch atual | Commit | Estado |
-|---|---|---|---|
-| painel (este) | `feat/agent-version-visibilidade-frota` | `cc2e5f4` | pushed · working tree limpo |
-| agente | `feat/agent-version-reporte` | `3eaadc9` | pushed · working tree limpo |
+| Repo | `main` em | Como chegou lá |
+|---|---|---|
+| painel (este) | `4ce7ebd` | fast-forward de `feat/agent-version-visibilidade-frota` (era `73dbb58`) |
+| agente | `3eaadc9` | fast-forward de `feat/agent-version-reporte` (era `6203f3a`) |
 
-- **`main` intacta nos dois:** painel em `73dbb58`, agente em `6203f3a` — os mesmos SHAs de antes da sessão.
-- **Nenhum PR aberto. Nada mergeado.**
-- ⚠️ O clone local do agente estava na branch `fase2-senha-efemera`, **25 commits atrás** do `origin/main`
-  (o `main.go` de lá nem lia `hard_cap_at`). Foi movido para o `main` atualizado. **Não voltar para aquela branch.**
+Os dois merges foram **fast-forward**, então não há commit de merge e as branches de feature
+apontam para o mesmo SHA da `main` — podem ser apagadas quando quiser.
+
+- ⚠️ O clone local do agente (`C:\ProjetoAcessoFast\acessofast-agent-repo`) já esteve na branch
+  `fase2-senha-efemera`, **25 commits atrás** do `origin/main` (o `main.go` de lá nem lia
+  `hard_cap_at`). **Não voltar para aquela branch.** Há um `acessofast-agent.exe` untracked
+  no clone — sobra do cross-compile de teste, não é pra commitar.
 
 ---
 
-## 3. 🎯 TAREFA — deploy do Passo 1, NESTA ORDEM
+## 3. ✅ CONCLUÍDO — deploy do Passo 1 (2026-08-10)
 
-### Passo 3.1 — Migration (PRIMEIRO, não negociável)
+As quatro etapas rodaram na ordem abaixo, cada uma verificada antes da seguinte. Fica registrado
+porque **o Passo 2 vai repetir exatamente esta sequência** (migration → function → clientes).
 
-`supabase/migrations/20260807120000_address_book_agent_version.sql` → aplicar via MCP `apply_migration`.
+### Passo 3.1 — Migration ✅
+
+`supabase/migrations/20260807120000_address_book_agent_version.sql`, aplicada via `apply_migration`.
+Conferido depois: `agent_version text`, nullable, com o `comment` no lugar.
 
 **Por que primeiro, concretamente:** `last_online` e `agent_version` viajam no **mesmo `UPDATE`** dentro
 da `session-ingest`.
@@ -54,34 +60,46 @@ da `session-ingest`.
 
 Na ordem certa cada etapa é compatível com a anterior — a coluna sozinha não incomoda ninguém.
 
-### Passo 3.2 — Edge function
+### Passo 3.2 — Edge function ✅
 
-`deploy_edge_function` da `session-ingest` (`verify_jwt=false` já está no `config.toml`).
+`session-ingest` **v48 → v49**, `verify_jwt=false` preservado.
 
-### Passo 3.3 — Painel
+Antes de sobrescrever, a v48 em produção foi baixada com `get_edge_function` e comparada com a
+`main`: **idêntica**. Vale repetir isso sempre — `deploy_edge_function` substitui a função inteira,
+então qualquer hotfix aplicado direto pelo dashboard seria descartado em silêncio.
 
-Merge de `feat/agent-version-visibilidade-frota` na `main` (o Lovable sincroniza a partir daí).
+### Passo 3.3 — Painel ✅
 
-### Passo 3.4 — Agente
+`main` do painel em `4ce7ebd` (o Lovable sincroniza a partir daí).
 
-Merge de `feat/agent-version-reporte`. O push na `main` dispara o `build-agent.yml` sozinho
-(o filtro de paths cobre `main.go`) → ~1 min → artifact `acessofast-agent-windows-x64`
-com a versão `AAAA.MM.DD-<sha7>` embutida via ldflags.
+### Passo 3.4 — Agente ✅
 
-### Verificação
+`main` do agente em `3eaadc9`. O push disparou o `build-agent.yml` (tocou `main.go` **e** o próprio
+workflow, os dois no filtro de paths) → artifact `acessofast-agent-windows-x64` com a versão
+`AAAA.MM.DD-<sha7>` embutida via ldflags.
+**Não conferido nesta sessão:** o resultado do run. Não há `gh` na máquina e o MCP do GitHub não
+expõe workflow runs — olhar em https://github.com/ASPaes/acessofast-agent/actions.
+
+### Verificação ✅
 
 ```sql
 select alias, rustdesk_id, os, agent_version, last_online
 from address_book order by last_online desc nulls last limit 20;
 ```
 
-Uma máquina ligada carimba `agent_version` em **≤ 60s** (no `presence` ocioso).
-**Esperado antes do rollout do agente: `agent_version` null em tudo.** Isso **não é bug** — é
-exatamente a lista de quem falta atualizar.
+Pós-deploy: **86 devices, 58 online, 0 com `agent_version`** — e o `last_online` continuou sendo
+carimbado com menos de 1s de atraso, que é a prova de que a v49 não regrediu a presença.
+
+Uma máquina ligada carimba `agent_version` em **≤ 60s** (no `presence` ocioso), mas só depois de
+receber o agente novo. **`agent_version` null em tudo não é bug** — é exatamente a lista de quem
+falta atualizar, e ela só encolhe com o bootstrap manual descrito no §7.
 
 ---
 
-## 4. ⚠️ Duas branches suas colidem — e mergeiam LIMPO (o git não vai avisar)
+## 4. ⚠️ PRÓXIMA TAREFA — duas branches colidem e mergeiam LIMPO (o git não vai avisar)
+
+**Re-conferido em 2026-08-10, já contra a `main` nova:** as duas seguem com **zero conflito textual**.
+É esse o problema — o git vai deixar mergear e produzir código errado nos dois casos.
 
 1. **`app-acessofast/redesign-fase2`** (+1 commit, 2026-07-31, não mergeada) adiciona
    `isMobileOs(os)` em `dispositivos.tsx` praticamente no mesmo ponto onde a minha branch adiciona
@@ -92,20 +110,27 @@ exatamente a lista de quem falta atualizar.
    `flutter build appbundle` (.aab para a Play Store) que **não tem o `--dart-define=ACESSOFAST_VERSION`**
    que a minha branch pôs no passo do `.apk`. Como está, **o bundle publicado na Play Store reportaria
    versão `dev`** e todo aparelho instalado por ali apareceria como "desconhecida" — justamente o buraco
-   que o Passo 1 existe para fechar. Uma linha resolve, depois que uma das duas mergear.
+   que o Passo 1 existe para fechar. Uma linha resolve — e agora que a `main` do agente já tem o
+   passo do `.apk`, é só mergear a branch e acrescentar o `--dart-define` no `appbundle`.
 
 ---
 
-## 5. ✅ Já verificado nesta sessão — não precisa refazer
+## 5. ✅ Já verificado — não precisa refazer
+
+Da sessão de 2026-08-07 (pré-deploy):
 
 - **Agente:** `go vet` + cross-compile Windows OK; confirmado que a string de versão **entra no binário** via ldflags.
 - **Painel:** `tsc --noEmit` limpo; `npm run build` passou. (Não havia `node_modules`; foi instalado.
   O `routeTree.gen.ts` regerado foi revertido e o `package-lock.json` do npm removido — o projeto usa bun.)
-- **Merge-tree** das duas colisões do §4: **sem conflito textual** nos dois casos.
-- **`main` não andou** em nenhum dos dois repos desde a base; **nenhum PR aberto**; nada pendente do
-  **LuizHansen** (a branch `Luiz` não existe mais no remoto; todas as outras branches remotas estão
-  com 0 commits à frente da main).
 - Conferido hunk a hunk que as mudanças no working tree eram **só as minhas**.
+- Nada pendente do **LuizHansen** (a branch `Luiz` não existe mais no remoto; todas as outras
+  branches remotas estão com 0 commits à frente da main).
+
+Da sessão do deploy (2026-08-10):
+
+- Os dois merges foram **fast-forward** — `origin/main` não tinha andado desde a base em nenhum repo.
+- **Merge-tree** das duas colisões do §4 refeito contra a `main` nova: sem conflito textual (ver §4).
+- Produção conferida depois de cada etapa (coluna, v49, presença carimbando, baseline 86/58/0).
 
 ---
 
