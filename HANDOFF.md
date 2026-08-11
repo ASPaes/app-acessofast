@@ -1,9 +1,10 @@
 # HANDOFF — AcessoFast (continuar na próxima sessão)
 
-> **Sessão 2026-08-10.** Estado: **Passo 1 da atualização de frota DEPLOYADO** — migration,
-> edge function e os merges nos dois repos, na ordem do §3, todos verificados em produção.
-> **Retomar em:** o §4 (as duas branches que colidem e mergeiam limpo sem estar certas) e,
-> depois, o Passo 2 do §7. A Fase 3 segue **pausada no §8**, com o estado do canary preservado.
+> **Sessão 2026-08-10.** Estado: **Passo 1 da atualização de frota DEPLOYADO** (§3) e as
+> **duas branches que colidiam já mergeadas e reconciliadas** (§4). Não há mais nada pendente
+> de merge em nenhum dos dois repos.
+> **Retomar em:** o **Passo 2 do §7** (auto-update do agente) — mas ler antes os dois bloqueios
+> lá, que são de infra, não de código. A Fase 3 segue **pausada no §8**, com o canary preservado.
 
 ---
 
@@ -25,13 +26,13 @@
 
 ## 2. 📍 Onde os repos estão AGORA
 
-| Repo | `main` em | Como chegou lá |
+| Repo | `main` em | Como chegou lá (nesta sessão) |
 |---|---|---|
-| painel (este) | `4ce7ebd` | fast-forward de `feat/agent-version-visibilidade-frota` (era `73dbb58`) |
-| agente | `3eaadc9` | fast-forward de `feat/agent-version-reporte` (era `6203f3a`) |
+| painel (este) | `6d1b9c4` | `73dbb58` → ff `feat/agent-version-visibilidade-frota` → merge `redesign-fase2` (§4) |
+| agente | `3205f1e` | `6203f3a` → ff `feat/agent-version-reporte` → merge `feat/mobile-acesso-desassistido` (§4) |
 
-Os dois merges foram **fast-forward**, então não há commit de merge e as branches de feature
-apontam para o mesmo SHA da `main` — podem ser apagadas quando quiser.
+**Nada pendente de merge:** todas as branches remotas dos dois repos estão com 0 commits à
+frente da `main`. As quatro branches mergeadas podem ser apagadas quando quiser.
 
 - ⚠️ O clone local do agente (`C:\ProjetoAcessoFast\acessofast-agent-repo`) já esteve na branch
   `fase2-senha-efemera`, **25 commits atrás** do `origin/main` (o `main.go` de lá nem lia
@@ -96,22 +97,35 @@ falta atualizar, e ela só encolhe com o bootstrap manual descrito no §7.
 
 ---
 
-## 4. ⚠️ PRÓXIMA TAREFA — duas branches colidem e mergeiam LIMPO (o git não vai avisar)
+## 4. ✅ RESOLVIDO — as duas branches que mergeavam LIMPO sem estar certas
 
-**Re-conferido em 2026-08-10, já contra a `main` nova:** as duas seguem com **zero conflito textual**.
-É esse o problema — o git vai deixar mergear e produzir código errado nos dois casos.
+Ambas mergeadas em 2026-08-10 **com reconciliação manual**. O git não apontou conflito em
+nenhuma das duas — era esse o risco, e é por isso que ficam registradas aqui.
 
-1. **`app-acessofast/redesign-fase2`** (+1 commit, 2026-07-31, não mergeada) adiciona
-   `isMobileOs(os)` em `dispositivos.tsx` praticamente no mesmo ponto onde a minha branch adiciona
-   `plataformaDe(os)`. Mesma lógica (`/android/i`), dois nomes. Ao mergear as duas:
-   **absorver `plataformaDe` em `isMobileOs`** (o comentário dela é melhor e já é usada no modal de conexão).
+1. **`app-acessofast/redesign-fase2`** → painel `6d1b9c4`.
+   Duas funções nascidas em paralelo faziam a **mesma pergunta com retornos diferentes**:
+   `isMobileOs(os) -> boolean` (ícone da lista, aviso do modal) e
+   `plataformaDe(os) -> "android"|"windows"` (balde da coluna Agente). Agora `plataformaDe`
+   **delega** a `isMobileOs`, que virou o único lugar onde a regra mora.
+   Ficou o teste `/android/i` no lugar do `startsWith("android")`: o agente mobile grava
+   `os = "Android <versao>"` (`_osString` em `mobile/agent.dart`), então os dois casam nos dados
+   reais e a regex é só mais tolerante. `tsc --noEmit` limpo e `vite build` OK depois.
+   **Se tivessem ficado as duas cópias**, elas divergiriam em silêncio no pior formato: a lista
+   mostrando ícone de celular enquanto a coluna Agente compara o aparelho contra builds de
+   Windows, marcando de desatualizado quem está em dia.
 
-2. **`acessofast-agent/feat/mobile-acesso-desassistido`** (+2 commits, não mergeada) adiciona um passo
-   `flutter build appbundle` (.aab para a Play Store) que **não tem o `--dart-define=ACESSOFAST_VERSION`**
-   que a minha branch pôs no passo do `.apk`. Como está, **o bundle publicado na Play Store reportaria
-   versão `dev`** e todo aparelho instalado por ali apareceria como "desconhecida" — justamente o buraco
-   que o Passo 1 existe para fechar. Uma linha resolve — e agora que a `main` do agente já tem o
-   passo do `.apk`, é só mergear a branch e acrescentar o `--dart-define` no `appbundle`.
+2. **`acessofast-agent/feat/mobile-acesso-desassistido`** → agente `3205f1e`.
+   O step `flutter build appbundle` não tinha o `--dart-define=ACESSOFAST_VERSION`, então o
+   bundle da Play Store sairia `dev` (o `session.dart` lê com
+   `String.fromEnvironment(..., defaultValue: 'dev')`).
+   Resolvido com um detalhe a mais do que "uma linha": o `AGENT_VERSION` era variável **local**
+   do shell do step do APK, invisível no step do AAB. O APK agora exporta via `GITHUB_ENV` e o
+   AAB reutiliza — recalcular lá seria uma segunda cópia do formato, livre pra divergir, e com
+   data diferente num build que cruzasse a meia-noite UTC. O AAB **falha explicitamente** se o
+   valor vier vazio.
+   ⚠️ **Ainda não exercitado:** o `.aab` só é gerado com o input `gerar_aab` marcado num
+   `workflow_dispatch` do `build-client-android.yml` (~48 min). Nenhum run foi feito nesta
+   sessão, e não há flutter/dart local — o Dart mergeado **não foi compilado**.
 
 ---
 
@@ -123,14 +137,19 @@ Da sessão de 2026-08-07 (pré-deploy):
 - **Painel:** `tsc --noEmit` limpo; `npm run build` passou. (Não havia `node_modules`; foi instalado.
   O `routeTree.gen.ts` regerado foi revertido e o `package-lock.json` do npm removido — o projeto usa bun.)
 - Conferido hunk a hunk que as mudanças no working tree eram **só as minhas**.
-- Nada pendente do **LuizHansen** (a branch `Luiz` não existe mais no remoto; todas as outras
-  branches remotas estão com 0 commits à frente da main).
 
 Da sessão do deploy (2026-08-10):
 
-- Os dois merges foram **fast-forward** — `origin/main` não tinha andado desde a base em nenhum repo.
-- **Merge-tree** das duas colisões do §4 refeito contra a `main` nova: sem conflito textual (ver §4).
+- Os merges do Passo 1 foram **fast-forward** — `origin/main` não tinha andado em nenhum repo.
 - Produção conferida depois de cada etapa (coluna, v49, presença carimbando, baseline 86/58/0).
+- **Auditoria de trabalho de terceiros** (`git log --remotes --not origin/main`, que varre todas
+  as branches remotas): antes dos merges do §4 existiam **3 commits fora da `main` nos dois repos
+  somados, todos autorados por ASPaes** — os do §4. **Todos os 30 commits do LuizHansen no painel
+  e os 9 no agente já estavam na `main`**, então não havia nada dele em risco. Nenhum PR aberto
+  em nenhum dos dois repos.
+- ⚠️ **Correção de um handoff anterior:** ele afirmava que *"a branch `Luiz` não existe mais no
+  remoto"*. **Existe** (`b67ba30`, no painel). Não muda a conclusão — o tip dela é ancestral da
+  `main`, ou seja, está inteiramente contida e não tem nada exclusivo. Mas não repetir a frase.
 
 ---
 
