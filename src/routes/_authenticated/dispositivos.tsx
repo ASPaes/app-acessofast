@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2 } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { filtrarIgnorandoPontuacao } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
@@ -187,6 +187,19 @@ function formatarDocumento(
   return document;
 }
 
+// Plataforma do endpoint, lida do `os` que o agente/matricula ja grava em
+// address_book. UNICO lugar onde mora a regra "isto e um movel" — mexer aqui
+// muda, de uma vez, o icone da lista, o aviso do modal de conexao e o balde de
+// comparacao de versao do agente (plataformaDe, abaixo).
+//
+// O aviso do modal nao e cosmetico (ver MOBILE-DESIGN.md §4): no Android o
+// acesso e ASSISTIDO — alguem precisa aceitar o compartilhamento na tela do
+// aparelho — e o tecnico tem que saber disso ANTES de gastar o atendimento.
+function isMobileOs(os: string | null | undefined): boolean {
+  if (!os) return false;
+  return /android/i.test(os);
+}
+
 function tempoRelativo(iso: string | null | undefined): string {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();
@@ -211,10 +224,17 @@ function dataDaVersao(v: string | null | undefined): string | null {
   return v.slice(0, 10);
 }
 
-// Balde de comparacao de versao. O os do address_book e gravado na matricula:
-// "Windows <build>" pelo enroll.go, "Android <versao>" pelo agente embutido.
+// Balde de comparacao de versao: Windows e Android tem cadencias de build
+// diferentes, entao "o mais novo" so faz sentido dentro de uma plataforma. O os
+// do address_book e gravado na matricula: "Windows <build>" pelo enroll.go,
+// "Android <versao>" pelo agente embutido.
+//
+// Delega a isMobileOs de proposito: sao a MESMA pergunta ("e movel?") com
+// retornos diferentes, e duas copias do teste divergiriam calado — a lista
+// mostraria icone de celular enquanto a coluna Agente comparava o aparelho
+// contra os builds de Windows.
 function plataformaDe(os: string | null | undefined): string {
-  return os?.toLowerCase().startsWith("android") ? "android" : "windows";
+  return isMobileOs(os) ? "android" : "windows";
 }
 
 // Billing (coluna Consumo + cards). Dia corrente em America/Sao_Paulo (GMT-3),
@@ -291,6 +311,9 @@ function DispositivosPage() {
     rustdesk_id: string;
     password: string;
     deep_link: string;
+    // Guardado pra resolver a plataforma no modal (aviso de acesso assistido).
+    // Usamos o id do device, nao o rustdesk_id, pra casar sempre com a linha certa.
+    deviceId: string;
   } | null>(null);
   const [copiadoConn, setCopiadoConn] = useState(false);
   // Billing B1: oferta free x crédito (individual + tem os dois).
@@ -366,6 +389,7 @@ function DispositivosPage() {
         rustdesk_id: data.rustdesk_id,
         password: data.password,
         deep_link: data.deep_link,
+        deviceId,
       });
       setCopiadoConn(false);
     } finally {
@@ -840,7 +864,11 @@ function DispositivosPage() {
             >
               <Star className={`h-4 w-4 ${favoritos?.has(d.id) ? "fill-warning text-warning" : "text-muted-foreground"}`} />
             </Button>
-            <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
+            {isMobileOs(d.os) ? (
+              <Smartphone className={`h-4 w-4 shrink-0 ${iconColor}`} />
+            ) : (
+              <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
+            )}
             <div className="flex flex-col">
               <span className="font-medium">{d.alias ?? "—"}</span>
               <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
@@ -1641,6 +1669,16 @@ function DispositivosPage() {
           </DialogHeader>
           {connectData && (
             <div className="space-y-3">
+              {isMobileOs(data?.find((x) => x.id === connectData.deviceId)?.os) && (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+                  <span className="font-medium text-warning">Dispositivo móvel.</span>{" "}
+                  <span className="text-muted-foreground">
+                    No Android a pessoa precisa aceitar o compartilhamento na tela do
+                    aparelho — o acesso não é desassistido. Confirme que tem alguém junto
+                    ao celular antes de conectar.
+                  </span>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label>ID AcessoFast</Label>
                 <Input readOnly value={connectData.rustdesk_id} className="font-mono text-xs" />
