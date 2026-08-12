@@ -69,6 +69,29 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
 
+  // Passo 2 (auto-update): resolve o alvo em cascata device -> tenant -> global e
+  // devolve o release correspondente, ou null. Uma unica ida ao banco (a cascata
+  // inteira vive no coalesce da RPC) e zero linhas no caso comum — sem alvo, ou ja
+  // na versao certa.
+  //
+  // Fail-open de proposito: se a resolucao falhar, a maquina simplesmente nao
+  // atualiza agora. Presenca e sessao NAO podem quebrar por causa disso — um erro
+  // aqui nao vale derrubar a telemetria de billing da frota inteira.
+  async function resolveUpdate(deviceId: string): Promise<Record<string, string> | null> {
+    try {
+      const { data, error } = await db.rpc("resolve_agent_update", {
+        p_device_id: deviceId,
+        p_current_version: agent_version ?? "",
+      });
+      if (error) return null;
+      const r = Array.isArray(data) ? data[0] : data;
+      if (!r?.version || !r?.url || !r?.sha256 || !r?.signature) return null;
+      return { version: r.version, url: r.url, sha256: r.sha256, signature: r.signature };
+    } catch {
+      return null;
+    }
+  }
+
   // 1.1) AUTO-ADOÇÃO (acesso direto): device ainda não adotado (só claim 'waiting',
   // não está no address_book). Só no 'start' e com o rustdesk_id do CONTROLADOR (a
   // máquina do técnico, já adotada): a RPC autentica pelo claim, resolve o tenant pelo
@@ -134,9 +157,15 @@ Deno.serve(async (req) => {
 
   // "presence" = maquina ligada e ociosa. Marca presenca e sai: nao abre, nao fecha
   // e nao toca em connection_logs (nao e sessao, nao cobra, nao gera grant).
+  //
+  // O 'update' sai SO aqui, e nao no start/heartbeat, porque 'presence' e a unica
+  // prova que o servidor tem de que a maquina esta ociosa. Trocar o binario e
+  // reiniciar o servico no meio de um atendimento derrubaria a telemetria da sessao
+  // em curso — e um tecnico conectado veria a conexao oscilar sem explicacao.
   if (event === "presence") {
     if (presErr) return json({ error: "db_error", detail: presErr.message }, 500);
-    return json({ ok: true, action: "presence" });
+    const update = await resolveUpdate(device.id);
+    return json(update ? { ok: true, action: "presence", update } : { ok: true, action: "presence" });
   }
 
   async function latestActive() {
