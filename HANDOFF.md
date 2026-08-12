@@ -3,8 +3,9 @@
 > **Sessão 2026-08-10.** Estado: **Passo 1 da atualização de frota DEPLOYADO** (§3) e as
 > **duas branches que colidiam já mergeadas e reconciliadas** (§4). Não há mais nada pendente
 > de merge em nenhum dos dois repos.
-> **Retomar em:** o **Passo 2 do §7** (auto-update do agente) — mas ler antes os dois bloqueios
-> lá, que são de infra, não de código. A Fase 3 segue **pausada no §8**, com o canary preservado.
+> O **Passo 2 (auto-update) está com o código pronto e commitado nos dois repos, NÃO deployado** — §7.
+> **Retomar em:** o **§7.2**, que lista o que falta para ligar, na ordem. O primeiro item é criar o
+> secret da chave de assinatura. A Fase 3 segue **pausada no §8**, com o canary preservado.
 
 ---
 
@@ -170,20 +171,59 @@ Da sessão do deploy (2026-08-10):
 
 ---
 
-## 7. Passos 2 e 3 — desenhados, não implementados
+## 7. Passo 2 — CÓDIGO PRONTO, não deployado · Passo 3 não implementado
 
-Detalhe completo em **`ATUALIZACAO-FROTA.md`** (raiz) · artifact visual:
+Detalhe do desenho em **`ATUALIZACAO-FROTA.md`** (raiz) · artifact visual:
 https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
 
-- **Passo 2 — auto-update do agente.** A `session-ingest` responde `{update:{version,url,sha256}}`;
-  o agente só age em `presence` (máquina ociosa), baixa, confere, **renomeia** o próprio `.exe` → `.old`
-  (no Windows um serviço não *sobrescreve* o binário em uso, mas *renomeia*), grava o novo e reinicia
-  via `schtasks`. Versão-alvo em cascata **device → tenant → global** (é isso que dá o rollout escalonado).
-- **Dois bloqueios antes de ligar:** (a) o CI só publica *artifact* — exige auth e expira em 30 dias;
-  precisa virar Release ou bucket; (b) assinatura Authenticode — o `sha256` vem do mesmo servidor que o
-  arquivo, então não protege contra servidor comprometido.
-- **Bootstrap inescapável:** o auto-update só existe numa máquina depois de uma última rodada manual do
-  instalador — ~50 sessões remotas pelo próprio AcessoFast.
+### 7.1 O que já está commitado (2026-08-12)
+
+| Onde | Commit | O quê |
+|---|---|---|
+| painel | `b83adbe` | migration `20260812120000_agent_auto_update.sql` + `session-ingest` responde `update` |
+| agente | `f92d8aa` | `update.go`, `tools/sign-manifest`, Release assinado no `build-agent.yml` |
+
+**Os dois bloqueios do desenho original foram resolvidos:**
+
+- **(a) Hospedagem** — os três repos são **públicos**, então um GitHub Release baixa anonimamente,
+  não expira e não custa nada. O `build-agent.yml` publica um Release por build da `main`.
+  O *artifact* continua existindo, para o fluxo manual do instalador.
+- **(b) Assinatura** — **sem Authenticode.** O par `(version, sha256)` é assinado com **Ed25519**;
+  a privada vive só num GitHub Actions secret e a pública é constante no fonte do agente. Comprometer
+  o banco **ou** o Release não basta para forjar um update aceito. Resolve a ameaça que importa sem
+  certificado (~US$200-400/ano + validação demorada).
+  A **URL fica fora** da assinatura de propósito: se a assinatura cobre o hash, trocar a URL não serve
+  de nada — e deixá-la de fora permite mudar de hospedagem sem reassinar release antigo.
+
+### 7.2 ⚠️ O que FALTA para ligar — nesta ordem
+
+1. **Criar o secret `AGENT_UPDATE_SIGNING_KEY`** no repo do agente (Settings → Secrets → Actions).
+   A privada foi gerada em 2026-08-12 e **nunca foi impressa nem commitada** — está só no arquivo
+   de scratchpad daquela sessão. **Se ele já sumiu, gerar um par novo e trocar a `updatePubKeyB64`
+   em `update.go`.** Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
+   Sem o secret o passo de Release é **pulado com warning** — não quebra o build.
+2. **Aplicar a migration** e **deployar a `session-ingest`** (nesta ordem, mesma razão do §3).
+3. **Rodar o `build-agent.yml`** e catalogar o release: o SQL de `insert into agent_releases` sai
+   pronto no **resumo do job**.
+4. **Canary:** `update address_book set agent_target_version = '<v>' where rustdesk_id = '<id>'`.
+   Conferir a coluna Agente no painel **antes** de tocar em tenant ou global.
+
+### 7.3 O que NÃO foi exercitado
+
+- **A troca de binário e o restart nunca rodaram em máquina real.** É o trecho de maior risco do
+  Passo 2: entre renomear o `.exe` e gravar o novo há uma janela em que o serviço fica sem binário.
+  Há restauração explícita do `.old`, mas isso é código não exercitado — testar no canary primeiro.
+- O `agendaRestart` **não agenda na virada do dia** (o formato de `/sd` do `schtasks` segue o locale
+  do Windows e errar isso agendaria para a data errada em silêncio). Nesse caso ele só adia: o próximo
+  `presence` tenta de novo. Falhar aqui não é grave — o binário novo **já está no lugar** e sobe no
+  próximo boot.
+- A edge function **não foi type-checada** contra os tipos do Deno (não instalado); só a sintaxe.
+
+### 7.4 Ainda vale
+
+- **Bootstrap inescapável:** o auto-update só existe numa máquina depois de uma última rodada manual
+  do instalador — ~50 sessões remotas pelo próprio AcessoFast. **Essa rodada agora deve levar o agente
+  COM auto-update**, senão será preciso repetir as 50 máquinas depois.
 - **Passo 3 (cliente/MSI):** baixa prioridade; boa parte do que parece "atualizar o cliente" é config.
 
 ---
