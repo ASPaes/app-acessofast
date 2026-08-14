@@ -171,7 +171,7 @@ Da sessão do deploy (2026-08-10):
 
 ---
 
-## 7. Passo 2 — CÓDIGO PRONTO, não deployado · Passo 3 não implementado
+## 7. Passo 2 — SERVIDOR NO AR, auto-update desligado · Passo 3 não implementado
 
 Detalhe do desenho em **`ATUALIZACAO-FROTA.md`** (raiz) · artifact visual:
 https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
@@ -181,6 +181,7 @@ https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
 | Onde | Commit | O quê |
 |---|---|---|
 | painel | `b83adbe` | migration `20260812120000_agent_auto_update.sql` + `session-ingest` responde `update` |
+| painel | `a451bbe` | migration `20260812162229_resolve_agent_update_revoke_anon.sql` (já estava em prod) |
 | agente | `f92d8aa` | `update.go`, `tools/sign-manifest`, Release assinado no `build-agent.yml` |
 
 **Os dois bloqueios do desenho original foram resolvidos:**
@@ -197,16 +198,33 @@ https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
 
 ### 7.2 ⚠️ O que FALTA para ligar — nesta ordem
 
+**O lado servidor já está no ar (2026-08-12).** Migration `agent_auto_update` aplicada,
+`session-ingest` na **v50**. Aplicada avulsa também a `20260812162229_resolve_agent_update_revoke_anon`
+(o `revoke ... from public` da primeira migration **não** alcança o `anon`, que recebe EXECUTE por
+`ALTER DEFAULT PRIVILEGES`); o arquivo dela só entrou no repo em 2026-08-14 (`a451bbe`).
+
+**Nada está ligado, e é assim de propósito** — conferido em 2026-08-14:
+`agent_releases` **0 linhas** · `agent_update_policy.target_version` **NULL** · **0** devices com
+`agent_target_version`. A `resolve_agent_update` devolve zero linhas para todo mundo.
+
+Falta, nesta ordem:
+
 1. **Criar o secret `AGENT_UPDATE_SIGNING_KEY`** no repo do agente (Settings → Secrets → Actions).
-   A privada foi gerada em 2026-08-12 e **nunca foi impressa nem commitada** — está só no arquivo
-   de scratchpad daquela sessão. **Se ele já sumiu, gerar um par novo e trocar a `updatePubKeyB64`
-   em `update.go`.** Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
-   Sem o secret o passo de Release é **pulado com warning** — não quebra o build.
-2. **Aplicar a migration** e **deployar a `session-ingest`** (nesta ordem, mesma razão do §3).
-3. **Rodar o `build-agent.yml`** e catalogar o release: o SQL de `insert into agent_releases` sai
-   pronto no **resumo do job**.
-4. **Canary:** `update address_book set agent_target_version = '<v>' where rustdesk_id = '<id>'`.
+   A privada foi gerada em 2026-08-12 e **nunca foi impressa nem commitada** — vive só no arquivo
+   `agent-signing-key.private` no scratchpad daquela sessão (`5d0d1ab7-3201-4e51-80cd-f715ba6e87a7`),
+   **verificado presente em 2026-08-14**. É diretório temporário: criar o secret **agora**, não depois.
+   **Se sumir, gerar um par novo e trocar a `updatePubKeyB64` em `update.go`** — não adianta procurar
+   a antiga. Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
+   Sem o secret o passo de Release é **pulado com warning** — não quebra o build, só não publica.
+2. **Rodar o `build-agent.yml`** e catalogar o release: o SQL de `insert into agent_releases` sai
+   pronto no **resumo do job**. Hoje o repo do agente só tem o Release antigo **`v3.0.0` (2026-07-20)** —
+   o workflow ainda não publicou nenhum build com auto-update.
+3. **Canary:** `update address_book set agent_target_version = '<v>' where rustdesk_id = '<id>'`.
    Conferir a coluna Agente no painel **antes** de tocar em tenant ou global.
+
+**Lembrar do bootstrap (§7.4):** em 2026-08-14 são **139 devices, 0 reportando `agent_version`** —
+nenhuma máquina rodou ainda o instalador novo, então nenhuma tem o código de auto-update para receber
+o alvo. O canary do item 3 precisa ser uma máquina onde o agente novo já foi instalado à mão.
 
 ### 7.3 O que NÃO foi exercitado
 
