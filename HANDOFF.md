@@ -267,9 +267,27 @@ Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
   **Não é perigoso** — falha no passo (2) do `trocaBinario`, que deixa o `.exe` intacto (o cenário
   ruim é o (3) falhar depois do (2)), e o `updateMaxTries` limita a insistência. Mas suja o log de
   toda máquina e desperdiça banda ×N.
-  **Correção proposta:** um `updateAplicado string` em memória, setado após o `trocaBinario` bem
-  sucedido, com um early-return no `aplicaUpdate` quando `u.Version == updateAplicado`. Em memória
-  basta: o restart limpa o estado, e depois dele a versão já é a nova.
+  **CORRIGIDO em 2026-08-15** — agente `c913ff2`: `updateAplicado string` em memória, setado após o
+  `trocaBinario` bem sucedido, com early-return no `aplicaUpdate` quando `u.Version == updateAplicado`.
+  Em memória basta: o restart limpa o estado, e depois dele a versão corrente já é a nova.
+  Entregue **pelo próprio auto-update** (2º ciclo real, `1a703f6` → `c913ff2`, sem intervenção).
+
+**Releases catalogados (todos `platform = windows`, todos com assinatura conferida contra a pubkey
+embutida antes do insert):**
+
+| versão | sha256 | o que traz |
+|---|---|---|
+| `2026.08.15-f92d8aa` | `03ceb3ea…393d7b` | 1º release assinado; instalado à mão (bootstrap) |
+| `2026.08.15-1a703f6` | `958ace84…a0a16f` | `.gitignore`; **1º auto-update real** |
+| `2026.08.15-c913ff2` | `f47ccca4…6e03c7` | correção da tentativa duplicada; **2º auto-update real** |
+
+**Rito para publicar e catalogar um release** (o resumo do job do Actions não abriu nas duas
+tentativas; este caminho não depende dele): push na `main` do agente → o `build-agent.yml` dispara
+sozinho se o commit tocar `*.go`/`tools/**`/`go.mod`/`go.sum`/o próprio workflow, senão é
+`workflow_dispatch` na mão → baixar o asset do Release e conferir `sha256` **fora do CI** → regerar a
+assinatura localmente com `tools/sign-manifest` (Ed25519 é determinístico: mesmo `(version, sha256)`
+⇒ mesma assinatura do CI, byte a byte) → provar com um teste temporário que chama o
+`verificaAssinatura` real → só então `insert into agent_releases`.
 - O `agendaRestart` **não agenda na virada do dia** (o formato de `/sd` do `schtasks` segue o locale
   do Windows e errar isso agendaria para a data errada em silêncio). Nesse caso ele só adia: o próximo
   `presence` tenta de novo. Falhar aqui não é grave — o binário novo **já está no lugar** e sobe no
