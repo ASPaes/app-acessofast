@@ -272,6 +272,13 @@ Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
   Em memória basta: o restart limpa o estado, e depois dele a versão corrente já é a nova.
   Entregue **pelo próprio auto-update** (2º ciclo real, `1a703f6` → `c913ff2`, sem intervenção).
 
+  ⚠️ **A guarda ainda NÃO foi exercitada em campo, e o 2º ciclo não serve de prova.** Quem executou
+  aquela atualização foi o processo rodando `1a703f6` — o binário *anterior* à correção —, então o
+  log do 2º ciclo mostra o download duplicado de novo, corretamente. Uma correção não se valida no
+  ciclo que a entrega; ela vale do próximo em diante. Para provar, é preciso **um 3º ciclo**, cuja
+  troca seja executada por um processo já em `c913ff2`. Sinal de sucesso no `agent.log`: um único
+  "baixando de" e nenhum `Access is denied` entre a troca e o restart.
+
 **Releases catalogados (todos `platform = windows`, todos com assinatura conferida contra a pubkey
 embutida antes do insert):**
 
