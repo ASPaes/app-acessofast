@@ -329,10 +329,16 @@ assinatura localmente com `tools/sign-manifest` (Ed25519 é determinístico: mes
 
 ### 7.4 Ainda vale
 
-- **Bootstrap inescapável:** o auto-update só existe numa máquina depois de uma última rodada manual
-  do instalador — ~50 sessões remotas pelo próprio AcessoFast. **Essa rodada agora deve levar o agente
-  COM auto-update**, senão será preciso repetir as 50 máquinas depois. O binário a empacotar já existe:
-  Release **`2026.08.15-f92d8aa`** (§7.2), verificado e catalogado.
+- **Bootstrap inescapável, mas BARATO** — não precisa de instalador, ao contrário do que este handoff
+  assumia. Provado em duas máquinas (2026-08-15): descobrir o caminho pelo `PathName` do serviço,
+  `Copy-Item` para `.bak-preupdate`, `Stop-Service AcessoFastAgent`, baixar o `.exe` do Release,
+  **conferir o `Get-FileHash` contra o sha256 do catálogo**, `Start-Service`. As credenciais ficam em
+  `C:\ProgramData\AcessoFast\` e não são tocadas — sem rematrícula. Levar sempre o release **mais
+  novo**; bootstrapar num intermediário só gera um ciclo de update a mais.
+  Cuidado prático: em PowerShell 5.1 pode ser preciso `[Net.ServicePointManager]::SecurityProtocol='Tls12'`
+  antes do `Invoke-WebRequest`, senão o GitHub recusa com erro genérico de conexão.
+- **Já bootstrapadas (2/139):** `208146940` (PC Luiz Asp, tenant ASP) e `51200651`
+  (PC LUIZ CASA NOVO, tenant `teste`) — ambas em `2026.08.15-f602a40`.
 - **Passo 3 (cliente/MSI):** baixa prioridade; boa parte do que parece "atualizar o cliente" é config.
 
 ---
@@ -389,9 +395,16 @@ Restart-Service AcessoFast,AcessoFastAgent -Force
 
 ### Dados de referência (device/tenant de teste)
 
-- Device: `id 27ef8ea6-24a0-4642-9429-9bffb70a9d2c`, `rustdesk_id 51200651`,
-  tenant **ASP** `ebd17e4e-d158-4164-a235-e8fd53cbf895`.
-- Tenant ASP: `max_concurrent_per_tech=null` (ilimitado), `billing_exempt=true`.
+- Device: `id 27ef8ea6-24a0-4642-9429-9bffb70a9d2c`, `rustdesk_id 51200651`, alias
+  **PC LUIZ CASA NOVO**. ⚠️ **Conferido em 2026-08-15: está no tenant `teste`
+  `9471a59b-236b-4790-8232-70f0ec04e838`, NÃO no ASP** — este handoff dizia ASP e estava errado
+  (ou o device foi movido depois). Roda o agente `2026.08.15-f602a40` desde 2026-08-15.
+- Tenant `teste`: `max_concurrent_per_tech=1`, **`billing_exempt=false`** — ou seja, testes de quota e
+  do corte B2 de 2h fazem sentido aqui, e não no ASP. Lembrando que `hard_cap_at` só existe para
+  atendimento ABERTO e vem `null` quando há plano ou crédito; o corte não dispara à toa.
+- Tenant **ASP** `ebd17e4e-d158-4164-a235-e8fd53cbf895`: `max_concurrent_per_tech=100` (o handoff
+  dizia `null`/ilimitado — conferido em 2026-08-15), `billing_exempt=true`. É o tenant do
+  `208146940` (PC Luiz Asp), a outra máquina bootstrapada.
 - Papéis: `luizhansen751@gmail.com` e `asp@…` = **super_admin** (furam o gate).
   `suporte4@aspsoftwares.com.br` = **admin** → **usar este para testar quota**.
 - Secret vive em `private.device_secrets` (upsert 1 linha/device). "Grant" = linha `active` em
