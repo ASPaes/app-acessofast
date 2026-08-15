@@ -272,12 +272,17 @@ Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
   Em memória basta: o restart limpa o estado, e depois dele a versão corrente já é a nova.
   Entregue **pelo próprio auto-update** (2º ciclo real, `1a703f6` → `c913ff2`, sem intervenção).
 
-  ⚠️ **A guarda ainda NÃO foi exercitada em campo, e o 2º ciclo não serve de prova.** Quem executou
-  aquela atualização foi o processo rodando `1a703f6` — o binário *anterior* à correção —, então o
-  log do 2º ciclo mostra o download duplicado de novo, corretamente. Uma correção não se valida no
-  ciclo que a entrega; ela vale do próximo em diante. Para provar, é preciso **um 3º ciclo**, cuja
-  troca seja executada por um processo já em `c913ff2`. Sinal de sucesso no `agent.log`: um único
-  "baixando de" e nenhum `Access is denied` entre a troca e o restart.
+  ✅ **GUARDA VALIDADA EM CAMPO no 3º ciclo** (`c913ff2` → `f602a40`, 2026-08-15 15:17-15:19).
+  Atenção ao raciocínio, que quase induziu a conclusão errada: o **2º ciclo não provava nada** —
+  quem executou aquela troca foi o processo rodando `1a703f6`, *anterior* à correção, então o log
+  dele mostra o download duplicado de novo, corretamente. Uma correção não se valida no ciclo que a
+  entrega. Só o 3º ciclo, executado por um processo já em `c913ff2`, testa a guarda.
+  Evidência: o `presence` das 15:18:04 trouxe o bloco `update` completo (o servidor age certo — a
+  máquina ainda se declarava em `c913ff2`) e o agente **não reagiu**: um único "baixando de" no
+  ciclo inteiro e nenhum `Access is denied`.
+  Cobertura independente do campo: `TestMotivoPular` em `update_test.go` (10 casos), com os dois que
+  separam o certo do errado — "já trocada no disco" pula, "outra versão" não pula (uma guarda grosseira
+  demais bloquearia um alvo novo que chegasse antes do restart).
 
 **Releases catalogados (todos `platform = windows`, todos com assinatura conferida contra a pubkey
 embutida antes do insert):**
@@ -287,6 +292,7 @@ embutida antes do insert):**
 | `2026.08.15-f92d8aa` | `03ceb3ea…393d7b` | 1º release assinado; instalado à mão (bootstrap) |
 | `2026.08.15-1a703f6` | `958ace84…a0a16f` | `.gitignore`; **1º auto-update real** |
 | `2026.08.15-c913ff2` | `f47ccca4…6e03c7` | correção da tentativa duplicada; **2º auto-update real** |
+| `2026.08.15-f602a40` | `6d95b4af…e0e0cb` | `motivoPular` + testes; **3º ciclo — valida a guarda** |
 
 **Rito para publicar e catalogar um release** (o resumo do job do Actions não abriu nas duas
 tentativas; este caminho não depende dele): push na `main` do agente → o `build-agent.yml` dispara
