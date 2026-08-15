@@ -220,13 +220,28 @@ https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
 `agent_releases` **1** · `agent_update_policy.target_version` **NULL** · **0** devices com
 `agent_target_version`. Catálogo não instala nada; quem instala é o alvo.
 
-**Falta — e está BLOQUEADO pelo bootstrap:**
+**Bootstrap da 1ª máquina: FEITO (2026-08-15).** `rustdesk_id 208146940` ("PC Luiz Asp",
+`id 4259b015-c6d0-4051-a3d4-14a5354c16ec`, tenant ASP) roda o `2026.08.15-f92d8aa` e **reporta versão**
+— era 139 devices / 0 com versão, agora 1. Feito **sem instalador**: parar o serviço `AcessoFastAgent`,
+trocar o `.exe` (backup em `<exe>.bak-preupdate`, binário anterior `sha256 56F3BCC1…40A053`), subir o
+serviço. As credenciais ficam em `C:\ProgramData\AcessoFast\` e não são tocadas — não há rematrícula.
+Diagnóstico fica em `C:\ProgramData\AcessoFast\agent.log`.
 
-- **Canary:** `update address_book set agent_target_version = '2026.08.15-f92d8aa' where rustdesk_id = '<id>'`,
-  conferindo a coluna Agente no painel **antes** de tocar em tenant ou global.
-  Em 2026-08-15 são **139 devices, 0 reportando `agent_version`** — nenhuma máquina em campo tem o
-  código de auto-update, então **não existe canary possível hoje**. Antes disso é preciso instalar
-  este build à mão numa máquina (candidato natural: `rustdesk_id 51200651`, o device de teste do §8).
+**Falta para exercitar o auto-update de verdade:**
+
+- A `resolve_agent_update` casa `r.version is distinct from p_current_version` — é **"diferente da
+  atual"**, não "maior que". Logo, apontar o alvo para o `2026.08.15-f92d8aa` na máquina que **já**
+  roda essa versão devolve zero linhas e **não testa nada**. É preciso um **segundo release**: a
+  versão é `data-sha7`, então basta um commit novo no repo do agente (ou um dispatch em outro dia) →
+  catalogar → `update address_book set agent_target_version = '<nova>' where id = '4259b015-…'`.
+- Só então roda o trecho de maior risco (§7.3): download, verificação, rename para `.old`, gravação
+  e restart via `schtasks`.
+
+**🐛 Bug latente achado em 2026-08-15 — `resolve_agent_update` ignora `platform`.** A função casa o
+release **só pela string de versão**; `agent_releases.platform` não entra no `where`. Hoje é inofensivo
+(um único release, Windows), mas um release Android catalogado com a mesma versão faria a função
+devolver 2 linhas e poderia entregar binário de outra plataforma. Corrigir **antes** de catalogar
+qualquer release mobile.
 
 **Sobre a chave privada:** o GitHub guarda o secret write-only — não dá para ler de volta. A única
 cópia legível continua sendo `agent-signing-key.private` no scratchpad da sessão
@@ -262,7 +277,8 @@ Design completo em **`FASE3-DESIGN.md`** · artifact:
 https://claude.ai/code/artifact/ac9306ca-d639-4a1c-bc3d-56b6114e6d7d
 
 **Estado:** Fase 1 (quota) e Fase 2 (senha efêmera) **deployadas e validadas em produção**.
-Fase 3 **desenhada, não implementada** — as 4 validações §7 já foram **todas concluídas em 2026-07-24**:
+Fase 3 **parcialmente implementada no agente** — ver a correção logo abaixo das validações.
+As 4 validações §7 já foram **todas concluídas em 2026-07-24**:
 
 1. **[era bloqueante] ✅** `allow-remote-config-modification:"N"` **não** bloqueia o `--password` local do
    agente → a base §4.1 é viável como desenhada.
@@ -273,10 +289,25 @@ Fase 3 **desenhada, não implementada** — as 4 validações §7 já foram **to
 4. **✅** `approve-mode:password` **permite** conexões simultâneas com a mesma senha → **a senha é bearer;
    quota não é imponível pela senha** (confirma o furo #1). Quota vira uso-justo/faturamento + detecção (§4.4-A).
 
+> ⚠️ **Correção (2026-08-15) — o agente-side da Fase 3 JÁ EXISTE em código.** Descoberto ao ler o
+> `agent.log` da máquina bootstrapada: ela logou `ROTATE boot: rotacionando senha no startup`.
+> No repo do agente, `b8d6c69` (2026-07-25, "Fase 3 agente: janela de carência (60s) + rotate-on-boot")
+> é **ancestral** do commit de reporte de versão — ou seja, está na `main` desde julho e vai junto em
+> qualquer build novo. O item 2 das validações abaixo ("o agente Fase 2 **não** faz rotate-on-boot")
+> descreve o binário de julho, **não** o código atual.
+>
+> Conferido em 2026-08-15, agente-side: **carência 60s ✅** (`main.go`, com supressão de re-emissão de
+> `start` na reconexão dentro da janela) · **rotate-on-boot ✅** (`rotate.go`) · **hold de manutenção ✅**
+> (`holdActive`, arquivo com timestamp RFC3339) · **reporte por-`#N`/IP ❌** (não existe).
+> Consequência prática: **a rodada de bootstrap dos ~50 endpoints leva esse comportamento junto** —
+> toda máquina atualizada passa a rotacionar a senha no boot. Para o tenant ASP isso já foi exercitado
+> e o painel confirmou a rotação.
+
 **Implementar quando retomar** (`FASE3-DESIGN.md` §5–§6): base no `build-client.yml` (rebuild ~48min +
-recompilar instalador) · carência 60s + rotate-on-boot + reporte por-`#N`/IP no agente · detecção
-piggyback no `session-ingest` · hold de manutenção. Decisões pendentes de confirmação do Luiz (§9):
-continuidade vs segurança-primeiro no reboot · carência 60s · hold 15min · quota estratégia **A**.
+recompilar instalador) · reporte por-`#N`/IP no agente · detecção piggyback no `session-ingest`.
+Decisões pendentes de confirmação do Luiz (§9): continuidade vs segurança-primeiro no reboot ·
+carência 60s · hold 15min · quota estratégia **A** — note que carência e hold já estão **codificados**
+nos defaults, então "confirmar" aqui é validar o que já roda, não escolher do zero.
 
 ### ⚠️ Estado da máquina de teste (canary) — NÃO ESQUECER
 
