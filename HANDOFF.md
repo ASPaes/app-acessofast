@@ -196,35 +196,44 @@ https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
   A **URL fica fora** da assinatura de propósito: se a assinatura cobre o hash, trocar a URL não serve
   de nada — e deixá-la de fora permite mudar de hospedagem sem reassinar release antigo.
 
-### 7.2 ⚠️ O que FALTA para ligar — nesta ordem
+### 7.2 ✅ Pipeline de release FECHADO (2026-08-15) — falta só o bootstrap
 
-**O lado servidor já está no ar (2026-08-12).** Migration `agent_auto_update` aplicada,
-`session-ingest` na **v50**. Aplicada avulsa também a `20260812162229_resolve_agent_update_revoke_anon`
-(o `revoke ... from public` da primeira migration **não** alcança o `anon`, que recebe EXECUTE por
+**Servidor no ar desde 2026-08-12.** Migration `agent_auto_update` aplicada, `session-ingest` na
+**v50**. Aplicada avulsa também a `20260812162229_resolve_agent_update_revoke_anon` (o
+`revoke ... from public` da primeira migration **não** alcança o `anon`, que recebe EXECUTE por
 `ALTER DEFAULT PRIVILEGES`); o arquivo dela só entrou no repo em 2026-08-14 (`a451bbe`).
 
-**Nada está ligado, e é assim de propósito** — conferido em 2026-08-14:
-`agent_releases` **0 linhas** · `agent_update_policy.target_version` **NULL** · **0** devices com
-`agent_target_version`. A `resolve_agent_update` devolve zero linhas para todo mundo.
+**Concluído em 2026-08-15 — não refazer:**
 
-Falta, nesta ordem:
+1. **Secret `AGENT_UPDATE_SIGNING_KEY` criado** no repo do agente. Provado funcional: o passo de
+   Release só roda quando ele existe, e rodou.
+2. **`build-agent.yml` disparado** (`workflow_dispatch` na `main`, run `31895369959`) →
+   Release **`2026.08.15-f92d8aa`** publicado, com o `acessofast-agent.exe` (5.795.840 bytes) de
+   commit `f92d8aa`. Verificado ponta a ponta **fora do CI**: binário baixado do Release,
+   `sha256 = 03ceb3ea…393d7b` conferido, header `MZ` (PE Windows) confirmado, e a assinatura
+   aceita pelo `verificaAssinatura` real do `update.go` contra a `updatePubKeyB64` embutida.
+3. **Catalogado** em `agent_releases` (1 linha). O `insert` foi montado à mão porque o resumo do
+   job não abriu; a assinatura foi **regerada localmente** — Ed25519 é determinístico, mesmo
+   `(version, sha256)` dá a mesma assinatura byte a byte que o CI produziu.
 
-1. **Criar o secret `AGENT_UPDATE_SIGNING_KEY`** no repo do agente (Settings → Secrets → Actions).
-   A privada foi gerada em 2026-08-12 e **nunca foi impressa nem commitada** — vive só no arquivo
-   `agent-signing-key.private` no scratchpad daquela sessão (`5d0d1ab7-3201-4e51-80cd-f715ba6e87a7`),
-   **verificado presente em 2026-08-14**. É diretório temporário: criar o secret **agora**, não depois.
-   **Se sumir, gerar um par novo e trocar a `updatePubKeyB64` em `update.go`** — não adianta procurar
-   a antiga. Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
-   Sem o secret o passo de Release é **pulado com warning** — não quebra o build, só não publica.
-2. **Rodar o `build-agent.yml`** e catalogar o release: o SQL de `insert into agent_releases` sai
-   pronto no **resumo do job**. Hoje o repo do agente só tem o Release antigo **`v3.0.0` (2026-07-20)** —
-   o workflow ainda não publicou nenhum build com auto-update.
-3. **Canary:** `update address_book set agent_target_version = '<v>' where rustdesk_id = '<id>'`.
-   Conferir a coluna Agente no painel **antes** de tocar em tenant ou global.
+**Continua tudo desligado, de propósito** — conferido depois do insert:
+`agent_releases` **1** · `agent_update_policy.target_version` **NULL** · **0** devices com
+`agent_target_version`. Catálogo não instala nada; quem instala é o alvo.
 
-**Lembrar do bootstrap (§7.4):** em 2026-08-14 são **139 devices, 0 reportando `agent_version`** —
-nenhuma máquina rodou ainda o instalador novo, então nenhuma tem o código de auto-update para receber
-o alvo. O canary do item 3 precisa ser uma máquina onde o agente novo já foi instalado à mão.
+**Falta — e está BLOQUEADO pelo bootstrap:**
+
+- **Canary:** `update address_book set agent_target_version = '2026.08.15-f92d8aa' where rustdesk_id = '<id>'`,
+  conferindo a coluna Agente no painel **antes** de tocar em tenant ou global.
+  Em 2026-08-15 são **139 devices, 0 reportando `agent_version`** — nenhuma máquina em campo tem o
+  código de auto-update, então **não existe canary possível hoje**. Antes disso é preciso instalar
+  este build à mão numa máquina (candidato natural: `rustdesk_id 51200651`, o device de teste do §8).
+
+**Sobre a chave privada:** o GitHub guarda o secret write-only — não dá para ler de volta. A única
+cópia legível continua sendo `agent-signing-key.private` no scratchpad da sessão
+`5d0d1ab7-3201-4e51-80cd-f715ba6e87a7` (presente em 2026-08-15), **diretório temporário**. Vale
+mover para um cofre durável. Se sumir: gerar par novo e trocar a `updatePubKeyB64` em `update.go`
+(obriga a rebuildar o agente) — não adianta procurar a antiga.
+Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
 
 ### 7.3 O que NÃO foi exercitado
 
@@ -241,7 +250,8 @@ o alvo. O canary do item 3 precisa ser uma máquina onde o agente novo já foi i
 
 - **Bootstrap inescapável:** o auto-update só existe numa máquina depois de uma última rodada manual
   do instalador — ~50 sessões remotas pelo próprio AcessoFast. **Essa rodada agora deve levar o agente
-  COM auto-update**, senão será preciso repetir as 50 máquinas depois.
+  COM auto-update**, senão será preciso repetir as 50 máquinas depois. O binário a empacotar já existe:
+  Release **`2026.08.15-f92d8aa`** (§7.2), verificado e catalogado.
 - **Passo 3 (cliente/MSI):** baixa prioridade; boa parte do que parece "atualizar o cliente" é config.
 
 ---
