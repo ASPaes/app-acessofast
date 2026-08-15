@@ -237,11 +237,31 @@ Diagnóstico fica em `C:\ProgramData\AcessoFast\agent.log`.
 - Só então roda o trecho de maior risco (§7.3): download, verificação, rename para `.old`, gravação
   e restart via `schtasks`.
 
-**🐛 Bug latente achado em 2026-08-15 — `resolve_agent_update` ignora `platform`.** A função casa o
-release **só pela string de versão**; `agent_releases.platform` não entra no `where`. Hoje é inofensivo
-(um único release, Windows), mas um release Android catalogado com a mesma versão faria a função
-devolver 2 linhas e poderia entregar binário de outra plataforma. Corrigir **antes** de catalogar
-qualquer release mobile.
+**✅ CORRIGIDO em 2026-08-15 — `resolve_agent_update` agora filtra por `platform`.**
+Migration `20260815190000_resolve_agent_update_filtra_platform.sql`, aplicada em produção.
+
+O furo era pior do que a primeira leitura sugeria. Não era "devolve 2 linhas": como a PK de
+`agent_releases` é só `version`, duas linhas nem podem existir. O risco real é o **alvo apontar para
+um release de outra plataforma** — e a FK `agent_update_policy.target_version → agent_releases(version)`
+garante que o alvo global é sempre uma versão catalogada, incluindo as Android. Bastaria o alvo
+global/tenant virar um release mobile para **toda máquina Windows do escopo** receber aquele binário,
+e o agente **aceitaria**: assinatura e sha256 conferem, porque o release é legítimo — só que da
+plataforma errada. Resultado seria o `.exe` do serviço substituído por um artefato Android.
+
+Como ficou: a plataforma do device é derivada de `address_book.os` (texto livre — `Windows 10.0.x`,
+`Android BP2A…`, `windows`, e 1 device com `null`) por prefixo, e entra no join com `r.platform`.
+**Fail-closed:** `os` nulo ou irreconhecível ⇒ nenhum update. Cobre 138 dos 139 devices; o único
+descoberto não roda o agente novo. Preferível a máquina que não atualiza do que máquina que recebe
+binário de outra plataforma.
+
+Provado em produção: device **Android** com alvo Windows ⇒ **0 linhas**; device **Windows** com alvo
+Windows ⇒ 1 linha com a versão certa; device já na versão do alvo ⇒ 0 linhas. Grants reconferidos
+depois do `create or replace` (`anon` e `authenticated` sem EXECUTE, `service_role` com).
+
+**Fica registrado:** a PK de `agent_releases` continua só `(version)` — mudar para `(version, platform)`
+quebraria aquela FK. Consequência: a mesma string de versão não pode existir para as duas plataformas.
+Hoje não colide (Windows e mobile saem de commits diferentes e a versão carrega o sha7), e se colidir
+o `insert` falha alto, na cara de quem cataloga.
 
 **Sobre a chave privada:** o GitHub guarda o secret write-only — não dá para ler de volta. A única
 cópia legível continua sendo `agent-signing-key.private` no scratchpad da sessão
