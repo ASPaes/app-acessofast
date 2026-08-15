@@ -339,6 +339,17 @@ assinatura localmente com `tools/sign-manifest` (Ed25519 é determinístico: mes
   antes do `Invoke-WebRequest`, senão o GitHub recusa com erro genérico de conexão.
 - **Já bootstrapadas (2/139):** `208146940` (PC Luiz Asp, tenant ASP) e `51200651`
   (PC LUIZ CASA NOVO, tenant `teste`) — ambas em `2026.08.15-f602a40`.
+- **⚡ ALVO GLOBAL LIGADO em 2026-08-15:** `agent_update_policy.target_version = '2026.08.15-f602a40'`.
+  **Não atualizou ninguém** e era esperado: das 139, 132 rodam agente antigo (recebem o manifesto na
+  resposta do `presence` e o ignoram, por não ter código de update), 5 são barradas pelo filtro de
+  plataforma (4 Android + 1 `os` nulo), 1 tem alvo próprio e 1 já está na versão. Zero atualizações
+  hoje. O valor é prospectivo: **toda máquina bootstrapada daqui em diante se auto-corrige** para o
+  alvo global se cair num build mais antigo.
+  ⚠️ **Consequência a partir de agora:** com o global armado, publicar um release novo e **bater o
+  `target_version`** atualiza TODA a frota bootstrapada de uma vez, sem canário. O canário virou
+  escolha deliberada de cada rollout, não um passo automático — para manter, apontar primeiro o
+  `address_book.agent_target_version` de UMA máquina, conferir, e só então mexer no global.
+  Desligar é `update agent_update_policy set target_version = null where id`.
 - **Passo 3 (cliente/MSI):** baixa prioridade; boa parte do que parece "atualizar o cliente" é config.
 
 ---
