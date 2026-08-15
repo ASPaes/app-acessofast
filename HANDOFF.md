@@ -252,9 +252,24 @@ Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
 
 ### 7.3 O que NÃO foi exercitado
 
-- **A troca de binário e o restart nunca rodaram em máquina real.** É o trecho de maior risco do
-  Passo 2: entre renomear o `.exe` e gravar o novo há uma janela em que o serviço fica sem binário.
-  Há restauração explícita do `.old`, mas isso é código não exercitado — testar no canary primeiro.
+- ~~A troca de binário e o restart nunca rodaram em máquina real.~~ **EXERCITADO E APROVADO em
+  2026-08-15**, no `208146940` (PC Luiz Asp): `2026.08.15-f92d8aa` → `2026.08.15-1a703f6` sem
+  intervenção. Linha do tempo do `agent.log`: `14:37:29` manifesto recebido e assinatura conferida →
+  download com hash validado → `14:37:31` binário trocado → restart agendado → `14:39:04` agente sobe
+  na versão nova → `agent_version` no banco igual ao alvo. **Caminho real do executável:
+  `C:\Program Files\AcessoFast Agent\acessofast-agent.exe`** (com espaço — pasta distinta da do
+  cliente branded, que é `C:\Program Files\AcessoFast\`).
+- **🐛 Defeito encontrado nesse teste — tentativa duplicada na janela do restart.** Entre a troca e o
+  restart (~2 min) o processo vivo ainda é o binário ANTIGO, então o agente segue se declarando na
+  versão velha; o servidor reoferece o update (correto) e o agente **reprocessa**: baixa os 5,7 MB de
+  novo e falha no rename com `Access is denied`, porque o `.old` agora é a imagem do processo em
+  execução e o `os.Remove(velho)` não consegue apagá-la.
+  **Não é perigoso** — falha no passo (2) do `trocaBinario`, que deixa o `.exe` intacto (o cenário
+  ruim é o (3) falhar depois do (2)), e o `updateMaxTries` limita a insistência. Mas suja o log de
+  toda máquina e desperdiça banda ×N.
+  **Correção proposta:** um `updateAplicado string` em memória, setado após o `trocaBinario` bem
+  sucedido, com um early-return no `aplicaUpdate` quando `u.Version == updateAplicado`. Em memória
+  basta: o restart limpa o estado, e depois dele a versão já é a nova.
 - O `agendaRestart` **não agenda na virada do dia** (o formato de `/sd` do `schtasks` segue o locale
   do Windows e errar isso agendaria para a data errada em silêncio). Nesse caso ele só adia: o próximo
   `presence` tenta de novo. Falhar aqui não é grave — o binário novo **já está no lugar** e sobe no
