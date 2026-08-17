@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -75,14 +75,31 @@ type ProvisionResult = {
 type AdoptResult = {
   device_id?: string;
   rustdesk_id?: string;
-  password?: string;
   was_inserted?: boolean;
-  password_provisioned?: boolean;
+  // A adoção não gera senha: quem gera é o agente da máquina, que aplica nela mesma
+  // e reporta ao painel. Em device novo isso chega alguns segundos depois.
+  awaiting_agent?: boolean;
   note?: string;
   hostname?: string;
   os?: string;
   error?: string;
 };
+
+// Resposta do connect-device em modo probe (só diz se o painel já tem a senha).
+type ProbeResult = {
+  probe?: boolean;
+  has_secret?: boolean;
+  awaiting_agent?: boolean;
+  error?: string;
+};
+
+// Instalação nova: o agente sorteia a senha e APLICA na máquina já no boot do
+// serviço, mas só consegue reportá-la ao painel depois da adoção (antes disso o
+// rotate-device-secret recusa — o device ainda não existe). Nesse intervalo o painel
+// não tem senha nenhuma, e é isso que esperamos aqui: entregar outra senha seria
+// entregar uma que não está no endpoint. Com o agente atual a espera é de segundos.
+const AGUARDO_SENHA_MS = 120_000;
+const AGUARDO_POLL_MS = 3000;
 
 type ConnectResult = {
   rustdesk_id?: string;
@@ -293,6 +310,15 @@ function DispositivosPage() {
     free_remaining: number;
     credit_balance: number;
   } | null>(null);
+  // Espera pela senha que a máquina ainda não reportou (instalação nova).
+  const [aguardandoSenha, setAguardandoSenha] = useState<{
+    deviceId: string;
+    source?: "free" | "credit";
+  } | null>(null);
+  const [aguardoExpirou, setAguardoExpirou] = useState(false);
+  // Ref (não estado): o loop de poll roda fora do render e precisa ler o valor atual
+  // pra parar assim que o usuário fechar/cancelar a espera.
+  const aguardoCancelado = useRef(false);
   const [confirmRedefinirId, setConfirmRedefinirId] = useState<string | null>(null);
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
@@ -306,7 +332,13 @@ function DispositivosPage() {
   // Billing B1: connect em (até) 2 etapas. 1ª chamada sem `source`; se a conta
   // for individual e tiver free E crédito, o servidor responde needs_choice e
   // abrimos o modal — a 2ª chamada leva a fonte escolhida.
-  const doConnect = async (deviceId: string, source?: "free" | "credit") => {
+  // jaEsperou: esta chamada veio DEPOIS de uma espera pela senha do agente. Se ainda
+  // vier 'aguardando_agente', não reinicia a espera (evita loop) — mostra o aviso.
+  const doConnect = async (
+    deviceId: string,
+    source?: "free" | "credit",
+    jaEsperou = false,
+  ) => {
     setConnectingId(deviceId);
     try {
       const { data, error } = await supabase.functions.invoke<ConnectResult>(
@@ -315,7 +347,19 @@ function DispositivosPage() {
       );
       if (error || data?.error) {
         const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
-        if (raw.includes("sem_senha_provisionada")) {
+        if (raw.includes("aguardando_agente")) {
+          // A máquina já aplicou uma senha nela mesma e o reporte ao painel ainda não
+          // chegou. Espera o reporte e abre o Conectar sozinha — não existe senha
+          // válida a mostrar agora.
+          setAguardandoSenha({ deviceId, source });
+          if (jaEsperou) {
+            setAguardoExpirou(true);
+            return;
+          }
+          aguardoCancelado.current = false;
+          setAguardoExpirou(false);
+          void esperarSenhaDoAgente(deviceId, source);
+        } else if (raw.includes("sem_senha_provisionada")) {
           toast.error(
             "Dispositivo sem senha provisionada. Provisione a senha antes de conectar.",
           );
@@ -366,6 +410,43 @@ function DispositivosPage() {
     } finally {
       setConnectingId(null);
     }
+  };
+
+  // Poll do probe até a máquina publicar a senha. Usa o probe (read-only) de
+  // propósito: repetir o connect normal criaria e estornaria um atendimento a cada
+  // 3s. Quando a senha aparece, segue o fluxo normal de conexão (billing incluso).
+  const esperarSenhaDoAgente = async (
+    deviceId: string,
+    source?: "free" | "credit",
+  ) => {
+    const limite = Date.now() + AGUARDO_SENHA_MS;
+    while (Date.now() < limite) {
+      await new Promise((resolve) => setTimeout(resolve, AGUARDO_POLL_MS));
+      if (aguardoCancelado.current) return;
+      const { data } = await supabase.functions.invoke<ProbeResult>("connect-device", {
+        body: { device_id: deviceId, probe: true },
+      });
+      if (aguardoCancelado.current) return;
+      if (data?.has_secret) {
+        setAguardandoSenha(null);
+        await doConnect(deviceId, source, true);
+        return;
+      }
+    }
+    if (!aguardoCancelado.current) setAguardoExpirou(true);
+  };
+
+  const fecharAguardo = () => {
+    aguardoCancelado.current = true;
+    setAguardandoSenha(null);
+    setAguardoExpirou(false);
+  };
+
+  const retomarAguardo = () => {
+    if (!aguardandoSenha) return;
+    aguardoCancelado.current = false;
+    setAguardoExpirou(false);
+    void esperarSenhaDoAgente(aguardandoSenha.deviceId, aguardandoSenha.source);
   };
 
   const handleConectar = (deviceId: string) => doConnect(deviceId);
@@ -1643,6 +1724,58 @@ function DispositivosPage() {
       </Dialog>
 
       <Dialog
+        open={aguardandoSenha !== null}
+        onOpenChange={(v) => {
+          if (!v) fecharAguardo();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {aguardoExpirou
+                ? "O computador não publicou a senha"
+                : "Preparando o primeiro acesso"}
+            </DialogTitle>
+            <DialogDescription>
+              {aguardoExpirou
+                ? "O computador definiu uma senha nele mesmo, mas não conseguiu enviá-la ao painel. Confirme que ele está online e espere mais um pouco. Se persistir, gere uma senha manual e aplique-a no AcessoFast da máquina."
+                : "O computador está enviando a senha dele ao painel. Na primeira vez isso leva alguns segundos — a janela de conexão abre sozinha quando a senha chegar."}
+            </DialogDescription>
+          </DialogHeader>
+          {!aguardoExpirou && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+              Aguardando o computador...
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={fecharAguardo}>
+              {aguardoExpirou ? "Fechar" : "Cancelar"}
+            </Button>
+            {aguardoExpirou && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const id = aguardandoSenha?.deviceId ?? null;
+                    fecharAguardo();
+                    if (id) setConfirmRedefinirId(id);
+                  }}
+                >
+                  <KeyRound className="h-4 w-4 mr-1" />
+                  Gerar senha manual
+                </Button>
+                <Button type="button" onClick={retomarAguardo}>
+                  Esperar mais
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={choiceData !== null}
         onOpenChange={(v) => {
           if (!v) setChoiceData(null);
@@ -1787,8 +1920,6 @@ function AdicionarDispositivoDialog({
   const [rustdeskId, setRustdeskId] = useState("");
   const [alias, setAlias] = useState("");
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
-  const [senhaGerada, setSenhaGerada] = useState<string | null>(null);
-  const [copiado, setCopiado] = useState(false);
   const [clienteId, setClienteId] = useState<string>("");
   const [clienteNome, setClienteNome] = useState<string>("");
   const [clienteOpen, setClienteOpen] = useState(false);
@@ -1889,8 +2020,6 @@ function AdicionarDispositivoDialog({
     setRustdeskId("");
     setAlias("");
     setTenantSelecionado("");
-    setSenhaGerada(null);
-    setCopiado(false);
     setClienteId("");
     setClienteNome("");
     setClienteOpen(false);
@@ -2039,12 +2168,13 @@ function AdicionarDispositivoDialog({
           "Dispositivo adotado, mas não consegui aplicar os marcadores — ajuste pelo Editar.",
         );
       }
-      if (data.was_inserted && data.password_provisioned && data.password) {
-        setSenhaGerada(data.password);
-        return;
-      }
       if (data.was_inserted) {
-        toast.success(data.note ?? "Computador adotado");
+        // A senha NÃO é mais gerada aqui: quem define a senha é o próprio
+        // computador, que aplica nele mesmo e envia ao painel em seguida. O
+        // Conectar espera esse envio, então não há nada a copiar nesta tela.
+        toast.success(
+          "Computador adotado. Ele vai enviar a senha em alguns segundos — use Conectar.",
+        );
       } else {
         toast.success("Computador reconectado — já estava cadastrado, agente atualizado.");
       }
@@ -2059,17 +2189,6 @@ function AdicionarDispositivoDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     mutation.mutate();
-  };
-
-  const copiarSenha = async () => {
-    if (!senhaGerada) return;
-    try {
-      await navigator.clipboard.writeText(senhaGerada);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    } catch {
-      toast.error("Não foi possível copiar a senha");
-    }
   };
 
   return (
@@ -2087,299 +2206,272 @@ function AdicionarDispositivoDialog({
         </Button>
       </DialogTrigger>
       <DialogContent>
-        {senhaGerada ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Senha gerada</DialogTitle>
-              <DialogDescription>
-                Configure esta senha como senha permanente (unattended) no client AcessoFast deste
-                endpoint. Ela fica guardada cifrada e pode ser recuperada depois pelo botão
-                Conectar.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={senhaGerada} className="font-mono text-xs" />
-              <Button type="button" size="sm" variant="outline" onClick={copiarSenha}>
-                {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span className="ml-1">{copiado ? "Copiado" : "Copiar"}</span>
-              </Button>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Fechar
-              </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>Adicionar dispositivo</DialogTitle>
-              <DialogDescription>
-                Digite o ID que aparece no AcessoFast do computador do cliente. O computador
-                precisa ter o AcessoFast instalado e estar online — o ID aparece na tela do
-                programa.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="dev-rustdesk-id">AcessoFast ID *</Label>
-                <Input
-                  id="dev-rustdesk-id"
-                  value={rustdeskId}
-                  onChange={(e) => setRustdeskId(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dev-alias">Alias</Label>
-                <Input
-                  id="dev-alias"
-                  value={alias}
-                  onChange={(e) => setAlias(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Cliente</Label>
-                <Popover open={clienteOpen} onOpenChange={(v) => {
-                  setClienteOpen(v);
-                  if (!v) setCriandoCliente(false);
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      disabled={!effectiveTenant}
-                      className="w-full justify-between font-normal"
-                    >
-                      <span className={clienteSelecionado ? "" : "text-muted-foreground"}>
-                        {clienteSelecionado
-                          ? clienteSelecionado.name
-                          : effectiveTenant
-                            ? "Sem cliente — selecionar ou criar"
-                            : "Selecione um tenant primeiro"}
-                      </span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-                    {criandoCliente ? (
-                      <div className="p-3 space-y-3">
-                        <div className="space-y-1">
-                          <Label htmlFor="novo-cliente-nome" className="text-xs">Nome *</Label>
-                          <Input
-                            id="novo-cliente-nome"
-                            value={novoClienteNome}
-                            onChange={(e) => setNovoClienteNome(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="novo-cliente-doc" className="text-xs">CNPJ ou CPF</Label>
-                          <Input
-                            id="novo-cliente-doc"
-                            value={novoClienteDoc}
-                            onChange={(e) => setNovoClienteDoc(e.target.value)}
-                            placeholder="Somente dígitos"
-                          />
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setCriandoCliente(false);
-                              setNovoClienteNome("");
-                              setNovoClienteDoc("");
-                            }}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={salvandoCliente}
-                            onClick={criarCliente}
-                          >
-                            {salvandoCliente ? "Salvando…" : "Salvar cliente"}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <Command filter={filtrarIgnorandoPontuacao}>
-                        <CommandInput placeholder="Buscar por nome ou CNPJ/CPF…" />
-                        <CommandList>
-                          <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem
-                              value="__sem_cliente__"
-                              onSelect={() => {
-                                setClienteId("");
-                                setClienteNome("");
-                                setClienteOpen(false);
-                              }}
-                            >
-                              <span className="text-muted-foreground">Sem cliente</span>
-                              {clienteId === "" && <Check className="ml-auto h-4 w-4" />}
-                            </CommandItem>
-                            {(clientes ?? []).map((c) => (
-                              <CommandItem
-                                key={c.id}
-                                // O documento entra no value porque é ele que o
-                                // filtro do cmdk enxerga — sem isso não dá para
-                                // achar cliente por CNPJ.
-                                value={`${c.name} ${c.document ?? ""}`}
-                                onSelect={() => {
-                                  setClienteId(c.id);
-                                  setClienteNome(c.name);
-                                  setClienteOpen(false);
-                                }}
-                              >
-                                <span className="truncate">{c.name}</span>
-                                {c.document && (
-                                  <span className="shrink-0 text-xs text-muted-foreground">
-                                    {formatarDocumento(c.document, c.document_type)}
-                                  </span>
-                                )}
-                                {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                          <CommandGroup>
-                            <CommandItem
-                              value="__criar_cliente__"
-                              onSelect={() => setCriandoCliente(true)}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              Criar cliente
-                            </CommandItem>
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label>Marcadores</Label>
-                <Popover open={marcadoresOpen} onOpenChange={setMarcadoresOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      disabled={!effectiveTenant}
-                      className="w-full justify-between font-normal h-auto min-h-10 py-2"
-                    >
-                      {marcadoresSel.size === 0 ? (
-                        <span className="text-muted-foreground">
-                          {effectiveTenant ? "Sem marcadores" : "Selecione um tenant primeiro"}
-                        </span>
-                      ) : (
-                        <span className="flex flex-wrap gap-1">
-                          {(markersLista ?? [])
-                            .filter((m) => marcadoresSel.has(m.id))
-                            .map((m) => (
-                              <Badge
-                                key={m.id}
-                                variant="outline"
-                                className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
-                              >
-                                {m.label}
-                              </Badge>
-                            ))}
-                        </span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-                    <Command>
-                      <CommandInput
-                        placeholder="Buscar ou criar marcador…"
-                        value={marcadorBusca}
-                        onValueChange={setMarcadorBusca}
-                      />
-                      <CommandList>
-                        <CommandEmpty>Nenhum marcador.</CommandEmpty>
-                        <CommandGroup>
-                          {(markersLista ?? []).map((m) => {
-                            const ativo = marcadoresSel.has(m.id);
-                            return (
-                              <CommandItem
-                                key={m.id}
-                                value={m.label}
-                                onSelect={() => {
-                                  setMarcadoresSel((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(m.id)) next.delete(m.id);
-                                    else next.add(m.id);
-                                    return next;
-                                  });
-                                }}
-                              >
-                                <span className={`mr-2 h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
-                                {m.label}
-                                {ativo && <Check className="ml-auto h-4 w-4" />}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                        {marcadorBusca.trim() &&
-                          !(markersLista ?? []).some(
-                            (m) => m.label.toLowerCase() === marcadorBusca.trim().toLowerCase(),
-                          ) && (
-                            <CommandGroup>
-                              <CommandItem
-                                value={`__criar_marcador__${marcadorBusca}`}
-                                onSelect={() => criarMarcadorInline(marcadorBusca)}
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Criar "{marcadorBusca.trim()}"
-                              </CommandItem>
-                            </CommandGroup>
-                          )}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {isSuper && (
-                <div className="space-y-2">
-                  <Label htmlFor="dev-tenant">Tenant *</Label>
-                  <Select
-                    value={tenantSelecionado}
-                    onValueChange={(v) => setTenantSelecionado(v)}
-                  >
-                    <SelectTrigger id="dev-tenant">
-                      <SelectValue placeholder="Selecione um tenant" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tenants?.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <DialogFooter>
+        <DialogHeader>
+          <DialogTitle>Adicionar dispositivo</DialogTitle>
+          <DialogDescription>
+            Digite o ID que aparece no AcessoFast do computador do cliente. O computador
+            precisa ter o AcessoFast instalado e estar online — o ID aparece na tela do
+            programa.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="dev-rustdesk-id">AcessoFast ID *</Label>
+            <Input
+              id="dev-rustdesk-id"
+              value={rustdeskId}
+              onChange={(e) => setRustdeskId(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dev-alias">Alias</Label>
+            <Input
+              id="dev-alias"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Cliente</Label>
+            <Popover open={clienteOpen} onOpenChange={(v) => {
+              setClienteOpen(v);
+              if (!v) setCriandoCliente(false);
+            }}>
+              <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setOpen(false);
-                    resetForm();
-                  }}
+                  role="combobox"
+                  disabled={!effectiveTenant}
+                  className="w-full justify-between font-normal"
                 >
-                  Cancelar
+                  <span className={clienteSelecionado ? "" : "text-muted-foreground"}>
+                    {clienteSelecionado
+                      ? clienteSelecionado.name
+                      : effectiveTenant
+                        ? "Sem cliente — selecionar ou criar"
+                        : "Selecione um tenant primeiro"}
+                  </span>
                 </Button>
-                <Button type="submit" disabled={mutation.isPending}>
-                  {mutation.isPending ? "Salvando..." : "Cadastrar"}
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                {criandoCliente ? (
+                  <div className="p-3 space-y-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="novo-cliente-nome" className="text-xs">Nome *</Label>
+                      <Input
+                        id="novo-cliente-nome"
+                        value={novoClienteNome}
+                        onChange={(e) => setNovoClienteNome(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="novo-cliente-doc" className="text-xs">CNPJ ou CPF</Label>
+                      <Input
+                        id="novo-cliente-doc"
+                        value={novoClienteDoc}
+                        onChange={(e) => setNovoClienteDoc(e.target.value)}
+                        placeholder="Somente dígitos"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setCriandoCliente(false);
+                          setNovoClienteNome("");
+                          setNovoClienteDoc("");
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={salvandoCliente}
+                        onClick={criarCliente}
+                      >
+                        {salvandoCliente ? "Salvando…" : "Salvar cliente"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Command filter={filtrarIgnorandoPontuacao}>
+                    <CommandInput placeholder="Buscar por nome ou CNPJ/CPF…" />
+                    <CommandList>
+                      <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__sem_cliente__"
+                          onSelect={() => {
+                            setClienteId("");
+                            setClienteNome("");
+                            setClienteOpen(false);
+                          }}
+                        >
+                          <span className="text-muted-foreground">Sem cliente</span>
+                          {clienteId === "" && <Check className="ml-auto h-4 w-4" />}
+                        </CommandItem>
+                        {(clientes ?? []).map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            // O documento entra no value porque é ele que o
+                            // filtro do cmdk enxerga — sem isso não dá para
+                            // achar cliente por CNPJ.
+                            value={`${c.name} ${c.document ?? ""}`}
+                            onSelect={() => {
+                              setClienteId(c.id);
+                              setClienteNome(c.name);
+                              setClienteOpen(false);
+                            }}
+                          >
+                            <span className="truncate">{c.name}</span>
+                            {c.document && (
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {formatarDocumento(c.document, c.document_type)}
+                              </span>
+                            )}
+                            {c.id === clienteId && <Check className="ml-auto h-4 w-4" />}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__criar_cliente__"
+                          onSelect={() => setCriandoCliente(true)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Criar cliente
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="space-y-2">
+            <Label>Marcadores</Label>
+            <Popover open={marcadoresOpen} onOpenChange={setMarcadoresOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  disabled={!effectiveTenant}
+                  className="w-full justify-between font-normal h-auto min-h-10 py-2"
+                >
+                  {marcadoresSel.size === 0 ? (
+                    <span className="text-muted-foreground">
+                      {effectiveTenant ? "Sem marcadores" : "Selecione um tenant primeiro"}
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap gap-1">
+                      {(markersLista ?? [])
+                        .filter((m) => marcadoresSel.has(m.id))
+                        .map((m) => (
+                          <Badge
+                            key={m.id}
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+                          >
+                            {m.label}
+                          </Badge>
+                        ))}
+                    </span>
+                  )}
                 </Button>
-              </DialogFooter>
-            </form>
-          </>
-        )}
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                <Command>
+                  <CommandInput
+                    placeholder="Buscar ou criar marcador…"
+                    value={marcadorBusca}
+                    onValueChange={setMarcadorBusca}
+                  />
+                  <CommandList>
+                    <CommandEmpty>Nenhum marcador.</CommandEmpty>
+                    <CommandGroup>
+                      {(markersLista ?? []).map((m) => {
+                        const ativo = marcadoresSel.has(m.id);
+                        return (
+                          <CommandItem
+                            key={m.id}
+                            value={m.label}
+                            onSelect={() => {
+                              setMarcadoresSel((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(m.id)) next.delete(m.id);
+                                else next.add(m.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            <span className={`mr-2 h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
+                            {m.label}
+                            {ativo && <Check className="ml-auto h-4 w-4" />}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                    {marcadorBusca.trim() &&
+                      !(markersLista ?? []).some(
+                        (m) => m.label.toLowerCase() === marcadorBusca.trim().toLowerCase(),
+                      ) && (
+                        <CommandGroup>
+                          <CommandItem
+                            value={`__criar_marcador__${marcadorBusca}`}
+                            onSelect={() => criarMarcadorInline(marcadorBusca)}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Criar "{marcadorBusca.trim()}"
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+          {isSuper && (
+            <div className="space-y-2">
+              <Label htmlFor="dev-tenant">Tenant *</Label>
+              <Select
+                value={tenantSelecionado}
+                onValueChange={(v) => setTenantSelecionado(v)}
+              >
+                <SelectTrigger id="dev-tenant">
+                  <SelectValue placeholder="Selecione um tenant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                resetForm();
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "Salvando..." : "Cadastrar"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

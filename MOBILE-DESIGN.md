@@ -208,8 +208,11 @@ Reaproveita `claim-register` + `claim-status` + `adopt-device` — **sem inventa
 2. App espera o RustDesk ID existir.
 3. App gera nonce + token, **persiste** (restart não cria pedido novo), chama `claim-register`.
 4. App faz poll em `claim-status` provando o nonce.
-5. Técnico digita o ID no painel → `adopt-device` → device criado + senha provisionada.
-6. App recebe `approved`, grava o token e entra em modo sessão.
+5. Técnico digita o ID no painel → `adopt-device` → device criado, **sem senha** (v2: a
+   adoção não provisiona mais nada — quem define a senha é sempre o endpoint).
+6. App recebe `approved`, grava o token, **publica a senha dele** no painel
+   (`acessofastPublishSecretAfterAdoption`) e entra em modo sessão. Enquanto essa
+   publicação não chega, o `connect-device` responde `aguardando_agente` e a tela espera.
 
 ⇒ **A UI de adoção do painel não muda em nada.** O Android entra pela mesma porta.
 
