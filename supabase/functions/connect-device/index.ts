@@ -47,6 +47,9 @@ Deno.serve(async (req) => {
     const rawSource = body?.source;
     const chosenSource =
       rawSource === "free" || rawSource === "credit" ? rawSource : null;
+    // PROBE (read-only): "o painel ja conhece a senha desta maquina?". Serve o poll
+    // da tela enquanto o agente nao publica a senha (ver 'aguardando_agente' abaixo).
+    const probe = body?.probe === true;
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -78,6 +81,36 @@ Deno.serve(async (req) => {
     const { data: profile } = await admin
       .from("profiles").select("is_active").eq("id", user.id).maybeSingle();
     if (!profile || profile.is_active === false) return json({ error: "user_inactive" }, 403);
+
+    // Device "com agente" = tem agent_token_hash (matriculado). Nele a senha e
+    // publicada pelo proprio endpoint (rotate-device-secret); sem agente, a senha e
+    // manual (provision/register-device) e o tecnico aplica a mao no cliente.
+    const temAgente = async (): Promise<boolean> => {
+      const { data } = await admin
+        .from("address_book").select("agent_token_hash").eq("id", deviceId).maybeSingle();
+      return !!data?.agent_token_hash;
+    };
+
+    // Senha ja gravada? (RPC mecanica; so service_role executa.)
+    const lerSegredo = async () => {
+      const { data, error } = await admin.rpc("get_device_secret", { p_device_id: deviceId });
+      if (error) return { erro: error, row: null };
+      return { erro: null, row: (Array.isArray(data) ? data[0] : data) ?? null };
+    };
+
+    // PROBE: responde so "tem senha?" e sai. NAO passa por elegibilidade nem emite
+    // grant — se o poll da tela usasse o connect normal, cada tentativa criaria e
+    // estornaria atendimento/credito a cada 3s.
+    if (probe) {
+      const { erro, row: probeRow } = await lerSegredo();
+      if (erro) return json({ error: "secret_fetch_failed" }, 500);
+      const hasSecret = !!probeRow;
+      return json({
+        probe: true,
+        has_secret: hasSecret,
+        awaiting_agent: hasSecret ? false : await temAgente(),
+      });
+    }
 
     // ETAPA 1 — ELEGIBILIDADE (read-only). Decide se precisa escolher.
     const { data: eligRows, error: eligErr } = await admin.rpc("billing_eligibility", {
@@ -148,11 +181,18 @@ Deno.serve(async (req) => {
     };
 
     // Ciphertext via RPC mecanica (so service_role executa).
-    const { data: secretRows, error: secErr } = await admin
-      .rpc("get_device_secret", { p_device_id: deviceId });
+    const { erro: secErr, row } = await lerSegredo();
     if (secErr) { await rollbackGrant(); return json({ error: "secret_fetch_failed" }, 500); }
-    const row = Array.isArray(secretRows) ? secretRows[0] : secretRows;
-    if (!row) { await rollbackGrant(); return json({ error: "sem_senha_provisionada" }, 409); }
+    if (!row) {
+      await rollbackGrant();
+      // Sem senha gravada. Com agente isso e TRANSITORIO e esperado numa instalacao
+      // nova: a maquina ja aplicou uma senha nela mesma e o reporte esta a caminho
+      // (rotate-device-secret). Sinalizamos 'aguardando_agente' pra tela ESPERAR o
+      // reporte — entregar qualquer outra senha aqui seria entregar uma senha que o
+      // endpoint nao tem. Sem agente e senha manual mesmo: provisionar pelo painel.
+      const erro = (await temAgente()) ? "aguardando_agente" : "sem_senha_provisionada";
+      return json({ error: erro }, 409);
+    }
     if (row.key_version !== 1) { await rollbackGrant(); return json({ error: "key_version_desconhecida" }, 500); }
 
     // Decifra AES-256-GCM. AAD = device_id.

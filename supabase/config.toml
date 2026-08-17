@@ -21,6 +21,13 @@ verify_jwt = false
 [functions.register-device]
 verify_jwt = true
 
+# Estava deployada com verify_jwt=false e FORA deste arquivo (17/08/2026): registrado
+# aqui pra um deploy a partir do repo nao inverter o flag sem ninguem perceber. A
+# funcao exige Authorization e valida o usuario por getUser(), entao a checagem de
+# quem chama nao depende do gateway.
+[functions.adopt-device]
+verify_jwt = false
+
 # Cadastro publico: quem chama e um visitante anonimo na tela de login.
 [functions.signup-publico]
 verify_jwt = false
