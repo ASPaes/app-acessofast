@@ -563,7 +563,11 @@ function AuditoriaPage() {
                       mesma empresa. */}
                   <Command filter={filtrarIgnorandoPontuacao}>
                     <CommandInput placeholder="Buscar por nome ou CNPJ…" />
-                    <CommandList>
+                    {/* Barra de rolagem escondida, rolagem preservada: com o
+                        campo de busca logo acima, chegar ao fim da lista é
+                        trabalho de digitar, não de arrastar. A roda e as setas
+                        continuam funcionando. */}
+                    <CommandList className="[scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem
