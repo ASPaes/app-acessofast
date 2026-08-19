@@ -10,6 +10,7 @@ import {
   Building2,
   Store,
   Wallet,
+  Megaphone,
 } from "lucide-react";
 import {
   Sidebar,
@@ -31,7 +32,8 @@ type NavItem = {
     | "/usuarios"
     | "/monitoramento"
     | "/financeiro"
-    | "/empresas";
+    | "/empresas"
+    | "/anuncios";
   icon: typeof LayoutDashboard;
 };
 
@@ -66,9 +68,14 @@ const gestaoAdmin: NavItem[] = [{ title: "Financeiro", url: "/financeiro", icon:
 // todas alavancas de receita, e escolher entre "30 dias de teste" e "20% por
 // três meses" exige olhar o que já está entrando — em telas separadas, essa
 // comparação não acontecia.
+//
+// Anuncios e da plataforma, nao da conta: mede o inventario do plano gratuito
+// somando TODOS os tenants free, e quem le esse numero e quem negocia com
+// anunciante. O tenant que exibe o anuncio nao tem o que fazer com ele.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
+  { title: "Anúncios", url: "/anuncios", icon: Megaphone },
 ];
 
 export function AppSidebar() {

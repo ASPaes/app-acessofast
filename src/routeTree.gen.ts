@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ConectarRouteImport } from './routes/conectar'
 import { Route as DefinirSenhaRouteImport } from './routes/definir-senha'
+import { Route as AuthenticatedAnunciosRouteImport } from './routes/_authenticated/anuncios'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -58,6 +59,11 @@ const DefinirSenhaRoute = DefinirSenhaRouteImport.update({
   id: '/definir-senha',
   path: '/definir-senha',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAnunciosRoute = AuthenticatedAnunciosRouteImport.update({
+  id: '/anuncios',
+  path: '/anuncios',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
   id: '/auditoria',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/anuncios': typeof AuthenticatedAnunciosRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/anuncios': typeof AuthenticatedAnunciosRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/_authenticated/anuncios': typeof AuthenticatedAnunciosRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/anuncios'
     | '/auditoria'
     | '/clientes'
     | '/dashboard'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/anuncios'
     | '/auditoria'
     | '/clientes'
     | '/dashboard'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/_authenticated/anuncios'
     | '/_authenticated/auditoria'
     | '/_authenticated/clientes'
     | '/_authenticated/dashboard'
@@ -265,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/anuncios': {
+      id: '/_authenticated/anuncios'
+      path: '/anuncios'
+      fullPath: '/anuncios'
+      preLoaderRoute: typeof AuthenticatedAnunciosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/auditoria': {
       id: '/_authenticated/auditoria'
       path: '/auditoria'
@@ -325,6 +344,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnunciosRoute: typeof AuthenticatedAnunciosRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -336,6 +356,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnunciosRoute: AuthenticatedAnunciosRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
