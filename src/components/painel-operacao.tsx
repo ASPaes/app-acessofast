@@ -59,6 +59,9 @@ type Resumo = {
   em_andamento: number;
   horas: number;
   duracao_media_s: number | null;
+  // A RPC continua devolvendo a mediana; a tela deixou de exibi-la a pedido,
+  // por ser termo confuso. Fica no contrato porque nao custa nada e voltar a
+  // mostrar seria so um cartao — refazer a funcao seria migration.
   duracao_mediana_s: number | null;
   duracao_p90_s: number | null;
   tecnicos: number;
@@ -111,11 +114,12 @@ const INFO: Record<string, KpiInfo> = {
     comoCalculamos: "soma da duração das sessões do período ÷ 3600",
   },
   duracao: {
-    oQue: "Duração mediana de um atendimento: metade dura menos que isso, metade mais.",
+    oQue: "Quanto dura um atendimento em média, no período.",
     porQue:
-      "A MÉDIA engana aqui, e muito. Nos dados atuais a média é ~43 min e a mediana ~2 min: um punhado de sessões longuíssimas puxa a média para longe do atendimento típico. A mediana descreve o dia a dia; o P90, o pior caso.",
-    comoCalculamos: "percentil 50 da duração das sessões do período",
-    referencia: "O P90 aparece na dica abaixo do número — é onde moram os casos difíceis.",
+      "Dimensiona carga: o mesmo número de acessos com a média subindo significa atendimento mais demorado, e isso se traduz em gente ocupada por mais tempo.",
+    comoCalculamos: "soma da duração das sessões ÷ número de sessões",
+    referencia:
+      "Cuidado ao ler como “atendimento típico”: a média é sensível a sessões muito longas, e hoje ela fica bem acima da maioria dos atendimentos. Por isso o P90 vem ao lado — 9 em cada 10 terminam abaixo dele, e é ali que moram os casos difíceis.",
   },
   computadores: {
     oQue: "Computadores distintos que receberam pelo menos um acesso no período.",
@@ -136,7 +140,8 @@ const INFO: Record<string, KpiInfo> = {
     porQue:
       "É o número que decide o tamanho do plano. O limite de simultaneidade não recusa pela média — recusa no pico, e é sempre no pior momento do dia.",
     comoCalculamos: "varredura das sessões: +1 ao abrir, −1 ao fechar; o pico é o maior acumulado",
-    referencia: "Quando há uma empresa em foco, a dica compara com o limite contratado dela.",
+    referencia:
+      "Com uma empresa em foco, a dica traz o limite contratado dela. Repare que o pico é do PERÍODO e o limite é o de HOJE: se o plano mudou no meio, ou se a conta excedeu o limite naquele dia, os dois não batem — e é isso que “excedido no período” está dizendo.",
   },
   foraHorario: {
     oQue: "Sessões iniciadas antes das 8h, das 18h em diante, ou em fim de semana.",
@@ -234,10 +239,23 @@ export function PainelOperacao({ isSuper }: { isSuper: boolean }) {
       ? Math.round(((r.acessos - r.acessos_anterior) / r.acessos_anterior) * 100)
       : null;
 
+  const limite = r?.limite_plano ?? null;
   const usoPlano =
-    r && r.limite_plano && r.limite_plano > 0
-      ? Math.round((r.pico_simultaneo / r.limite_plano) * 100)
-      : null;
+    r && limite && limite > 0 ? Math.round((r.pico_simultaneo / limite) * 100) : null;
+
+  // O pico e HISTORICO e o limite e ATUAL, entao a razao pode passar de 100% sem
+  // que nada esteja errado — o plano pode ter mudado depois do pico, ou a conta
+  // pode ter estourado o limite naquele dia. Mostrar "200% do limite" nesse caso
+  // e tecnicamente correto e le como defeito da tela. Melhor dizer o que
+  // aconteceu.
+  const dicaPico =
+    !r || !limite || limite <= 0
+      ? "escolha uma empresa para comparar com o plano"
+      : r.pico_simultaneo > limite
+        ? `limite do plano: ${limite} · excedido no período`
+        : r.pico_simultaneo === limite
+          ? `limite do plano: ${limite} · atingido no período`
+          : `limite do plano: ${limite} · ${usoPlano}% no pico`;
 
   const nomeEmpresa =
     empresa === TODAS ? null : ((empresas.data ?? []).find((e) => e.id === empresa)?.nome ?? null);
@@ -313,11 +331,11 @@ export function PainelOperacao({ isSuper }: { isSuper: boolean }) {
           color="emerald"
         />
         <StatCard
-          title="Duração mediana"
+          title="Duração média"
           info={INFO.duracao}
-          value={dur(r?.duracao_mediana_s)}
+          value={dur(r?.duracao_media_s)}
           icon={Layers}
-          hint={`média ${dur(r?.duracao_media_s)} · P90 ${dur(r?.duracao_p90_s)}`}
+          hint={`P90 ${dur(r?.duracao_p90_s)}`}
           loading={carregando}
           color="violet"
         />
@@ -326,11 +344,7 @@ export function PainelOperacao({ isSuper }: { isSuper: boolean }) {
           info={INFO.pico}
           value={r?.pico_simultaneo ?? 0}
           icon={Users}
-          hint={
-            usoPlano === null
-              ? "escolha uma empresa para comparar com o plano"
-              : `${usoPlano}% do limite de ${r?.limite_plano}`
-          }
+          hint={dicaPico}
           loading={carregando}
           color={usoPlano !== null && usoPlano >= 90 ? "amber" : "cyan"}
         />
