@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { KpiRotulo, type KpiInfo } from "@/components/kpi-info";
 import {
   Table,
   TableBody,
@@ -193,6 +194,128 @@ const PANEL_GROUPS = [
   { id: "vps_trend", label: "Tendência", scope: "vps" as const },
 ];
 const HIDDEN_LS_KEY = "acessofast:monitor:hidden";
+
+// ---------------------------------------------------------------------------
+// O que cada número quer dizer. Ver a nota em kpi-info.tsx.
+//
+// Aqui a explicação vale ainda mais do que nas outras telas: são métricas de
+// sistema operacional, e três delas (I/O wait, steal, load) levam a AÇÕES
+// diferentes apesar de subirem juntas quando o servidor sofre. Confundir as três
+// é otimizar consulta quando o problema era o vizinho no mesmo hardware.
+// ---------------------------------------------------------------------------
+const INFO: Record<string, KpiInfo> = {
+  cpu: {
+    oQue: "Percentual do tempo de CPU ocupado na amostra mais recente.",
+    porQue:
+      "A VPS hospeda o relay: CPU saturada atrasa o handshake das conexões e degrada a sessão de todas as empresas ao mesmo tempo.",
+    comoCalculamos: "vps_metrics.cpu_pct da última amostra coletada",
+  },
+  iowait: {
+    oQue: "Percentual do tempo em que a CPU ficou ociosa esperando o disco responder.",
+    porQue:
+      "Separa “servidor ocupado” de “disco não dá conta”. As ações são opostas: CPU alta pede mais processamento, I/O wait alto pede disco melhor ou consulta mais leve.",
+    comoCalculamos: "vps_metrics.cpu_iowait_pct da última amostra",
+  },
+  steal: {
+    oQue:
+      "Percentual do tempo em que a CPU virtual foi tomada pelo hipervisor para outro inquilino do mesmo hardware.",
+    porQue:
+      "É o único destes números que NÃO se resolve mexendo no nosso código. Steal alto e persistente é caso de trocar de host ou de plano — otimizar aqui é trabalho perdido.",
+    comoCalculamos: "vps_metrics.cpu_steal_pct da última amostra",
+    referencia: "Acima de 5% o cartão acende alerta.",
+  },
+  load: {
+    oQue: "Média de processos disputando CPU nos últimos 1, 5 e 15 minutos.",
+    porQue:
+      "As três janelas juntas dizem se é pico passageiro ou piora sustentada: 1min alto com 15min baixo passa sozinho; os três altos, não.",
+    comoCalculamos: "load average do sistema (load1 / load5 / load15)",
+    referencia:
+      "Compare com o número de vCPU mostrado ao lado. Acima disso há fila — load 4 em 2 vCPU é o dobro do que a máquina dá conta.",
+  },
+  memDisponivel: {
+    oQue: "RAM que o sistema consegue entregar a um processo novo agora.",
+    porQue:
+      "É o número honesto de folga. “Livre” puro assusta à toa, porque o Linux usa RAM ociosa como cache de disco e devolve quando alguém precisa — o disponível já conta esse cache liberável.",
+    comoCalculamos: "vps_metrics.mem_available_mb da última amostra",
+  },
+  swap: {
+    oQue: "Quanto de memória virtual em disco está em uso.",
+    porQue:
+      "Swap em uso significa que a RAM acabou em algum momento. Como disco é ordens de grandeza mais lento que memória, é aqui que uma lentidão inexplicável costuma se explicar.",
+    comoCalculamos: "vps_metrics.swap_used_mb da última amostra",
+  },
+  redeTotal: {
+    oQue: "Tráfego da interface do relay, somando entrada e saída.",
+    porQue:
+      "É o volume que as sessões remotas estão movendo. Serve para relacionar lentidão relatada com saturação de banda, e para prever quando o plano da VPS aperta.",
+    comoCalculamos: "((bytes recebidos + enviados) × 8) ÷ segundos entre as duas últimas amostras",
+    referencia:
+      "É taxa derivada de duas amostras, não contador acumulado — mede o instante, não o mês.",
+  },
+  redeRx: {
+    oQue: "Tráfego de ENTRADA na VPS.",
+    porQue:
+      "Numa sessão remota é sobretudo a tela vinda da máquina atendida. RX muito acima de TX indica muitas sessões sendo assistidas ao mesmo tempo.",
+    comoCalculamos: "(bytes recebidos × 8) ÷ segundos entre as duas últimas amostras",
+  },
+  redeTx: {
+    oQue: "Tráfego de SAÍDA da VPS.",
+    porQue:
+      "É o que a VPS devolve aos técnicos. Em VPS o custo e o limite costumam ser de saída, então é este o número que estoura o plano antes do outro.",
+    comoCalculamos: "(bytes enviados × 8) ÷ segundos entre as duas últimas amostras",
+  },
+  resumoMemoria: {
+    oQue: "Percentual da RAM em uso na VPS.",
+    porQue:
+      "Acompanha o swap: memória perto do teto por muito tempo acaba empurrando processo para disco, e aí a lentidão aparece em tudo.",
+    comoCalculamos: "vps_metrics.mem_pct da última amostra",
+  },
+  resumoDisco: {
+    oQue: "Percentual ocupado do volume principal da VPS.",
+    porQue:
+      "Disco cheio derruba o serviço de uma vez, sem degradar antes — é a falha menos gradual da lista, e a que mais avisa com antecedência se alguém olhar.",
+    comoCalculamos: "vps_metrics.disk_pct da última amostra",
+  },
+};
+
+// Explicacao dos GRAFICOS. Separado do INFO dos numeros porque a pergunta e
+// outra: num cartao se pergunta "o que esse numero e"; num grafico, "o que a
+// FORMA dessa curva esta dizendo". Inclinacao, degrau e pico nao se leem no
+// valor instantaneo.
+const INFO_GRAFICO: Record<string, KpiInfo> = {
+  cpuSteal: {
+    oQue: "Uso de CPU e steal ao longo do tempo, no maior valor de cada intervalo.",
+    porQue:
+      "As duas linhas juntas separam a culpa: CPU subindo com steal baixo é trabalho nosso; as duas subindo juntas é hardware sendo disputado com outro inquilino — e aí otimizar código não resolve.",
+    comoCalculamos: "máximo de cpu_pct e de cpu_steal_pct por intervalo do período",
+    referencia:
+      "É o MÁXIMO do intervalo, não a média: média esconde pico curto, que é justamente o que derruba conexão.",
+  },
+  load: {
+    oQue: "Load average ao longo do tempo.",
+    porQue:
+      "Mostra se a fila de processos foi um pico isolado ou uma piora que se sustenta. Fila sustentada acima do número de vCPU é atendimento remoto travando para todas as empresas ao mesmo tempo.",
+    comoCalculamos: "máximo de load1 por intervalo do período",
+  },
+  memoria: {
+    oQue: "Percentual de RAM em uso ao longo do tempo.",
+    porQue:
+      "A forma da curva distingue o que o número instantâneo não distingue: subir e nunca descer é vazamento; subir em degrau e estabilizar é carga nova.",
+    comoCalculamos: "máximo de mem_pct por intervalo do período",
+  },
+  rede: {
+    oQue: "Tráfego do relay ao longo do tempo, em Mbps.",
+    porQue:
+      "Relaciona lentidão relatada com saturação de banda e revela o horário de pico real — que é quando o plano da VPS aperta primeiro.",
+    comoCalculamos: "taxa derivada dos contadores de bytes entre amostras consecutivas",
+  },
+  disco: {
+    oQue: "Percentual ocupado do volume ao longo do tempo.",
+    porQue:
+      "Aqui o que importa é a INCLINAÇÃO: ela diz quantos dias faltam para encher. Disco cheio derruba o serviço de uma vez, sem degradar antes — é a única destas curvas que se lê como contagem regressiva.",
+    comoCalculamos: "máximo de disk_pct por intervalo do período",
+  },
+};
 
 function MonitoramentoPage() {
   const { data: me } = useMe();
@@ -572,28 +695,36 @@ function MonitoramentoPage() {
           <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
               <Cpu className="h-5 w-5 animate-pulse text-viz-cyan" />
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">CPU</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">
+                <KpiRotulo titulo="CPU" info={INFO.cpu} />
+              </div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">
                 {latest ? `${Number(latest.cpu_pct).toFixed(1)}%` : "—"}
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
               <Gauge className="h-5 w-5 animate-pulse text-viz-violet" />
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">Memória</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">
+                <KpiRotulo titulo="Memória" info={INFO.resumoMemoria} />
+              </div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">
                 {latest ? `${Number(latest.mem_pct).toFixed(1)}%` : "—"}
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
               <HardDrive className="h-5 w-5 animate-pulse text-viz-amber" />
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">Disco</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">
+                <KpiRotulo titulo="Disco" info={INFO.resumoDisco} />
+              </div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">
                 {latest ? `${Number(latest.disk_pct).toFixed(0)}%` : "—"}
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-card/40 p-4 flex flex-col items-center justify-center text-center gap-2">
               <Network className="h-5 w-5 animate-pulse text-viz-emerald" />
-              <div className="text-xs uppercase tracking-widest text-muted-foreground">Rede</div>
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">
+                <KpiRotulo titulo="Rede" info={INFO.redeTotal} />
+              </div>
               <div className="text-2xl font-semibold tabular-nums tracking-tight">{netMbps}</div>
             </div>
           </CardContent>
@@ -896,18 +1027,25 @@ function MonitoramentoPage() {
                 <CardDescription>Uso de CPU, I/O wait, steal e load average.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                <VpsStat label="CPU" value={latest ? num(latest.cpu_pct, 1) + "%" : "—"} />
+                <VpsStat
+                  label="CPU"
+                  info={INFO.cpu}
+                  value={latest ? num(latest.cpu_pct, 1) + "%" : "—"}
+                />
                 <VpsStat
                   label="I/O wait"
+                  info={INFO.iowait}
                   value={latest ? num(latest.cpu_iowait_pct, 1) + "%" : "—"}
                 />
                 <VpsStat
                   label="Steal"
+                  info={INFO.steal}
                   value={latest ? num(latest.cpu_steal_pct, 1) + "%" : "—"}
                   warn={isFinite(stealN) && stealN > 5}
                 />
                 <VpsStat
                   label="Load 1 / 5 / 15"
+                  info={INFO.load}
                   value={
                     latest
                       ? `${num(latest.load1, 2)} / ${num(latest.load5, 2)} / ${num(latest.load15, 2)}`
@@ -944,10 +1082,12 @@ function MonitoramentoPage() {
                 <div className="grid gap-4 grid-cols-2">
                   <VpsStat
                     label="Disponível"
+                    info={INFO.memDisponivel}
                     value={isFinite(memAvailGb) ? `${memAvailGb.toFixed(2)} GB` : "—"}
                   />
                   <VpsStat
                     label="Swap em uso"
+                    info={INFO.swap}
                     value={latest?.swap_used_mb != null ? `${num(latest.swap_used_mb, 0)} MB` : "—"}
                   />
                 </div>
@@ -987,9 +1127,9 @@ function MonitoramentoPage() {
                 <CardDescription>Taxa derivada das duas últimas amostras.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 grid-cols-3">
-                <VpsStat label="Total" value={netMbps} icon={Zap} />
-                <VpsStat label="RX" value={netRxMbps} />
-                <VpsStat label="TX" value={netTxMbps} />
+                <VpsStat label="Total" info={INFO.redeTotal} value={netMbps} icon={Zap} />
+                <VpsStat label="RX" info={INFO.redeRx} value={netRxMbps} />
+                <VpsStat label="TX" info={INFO.redeTx} value={netTxMbps} />
               </CardContent>
             </Card>
           )}
@@ -1038,6 +1178,7 @@ function MonitoramentoPage() {
                 <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
                   <TrendCard
                     title="CPU & Steal (%)"
+                    info={INFO_GRAFICO.cpuSteal}
                     icon={<Cpu className="h-4 w-4 text-viz-cyan" />}
                   >
                     <LineChart data={series.data}>
@@ -1082,6 +1223,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Load average"
+                    info={INFO_GRAFICO.load}
                     icon={<Gauge className="h-4 w-4 text-viz-violet" />}
                   >
                     <LineChart data={series.data}>
@@ -1126,6 +1268,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Memória (%)"
+                    info={INFO_GRAFICO.memoria}
                     icon={<MemoryStick className="h-4 w-4 text-viz-violet" />}
                   >
                     <LineChart data={series.data}>
@@ -1153,6 +1296,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Rede/Relay (Mbps)"
+                    info={INFO_GRAFICO.rede}
                     icon={<Network className="h-4 w-4 text-success" />}
                   >
                     <LineChart data={series.data}>
@@ -1180,6 +1324,7 @@ function MonitoramentoPage() {
 
                   <TrendCard
                     title="Disco (%)"
+                    info={INFO_GRAFICO.disco}
                     icon={<HardDrive className="h-4 w-4 text-warning" />}
                   >
                     <LineChart data={series.data}>
@@ -1224,17 +1369,19 @@ function TrendCard({
   title,
   icon,
   children,
+  info,
 }: {
   title: string;
   icon: React.ReactNode;
   children: React.ReactElement;
+  info?: KpiInfo;
 }) {
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           {icon}
-          {title}
+          <KpiRotulo titulo={title} info={info} />
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -1254,12 +1401,14 @@ function VpsStat({
   sub,
   warn,
   icon: Icon,
+  info,
 }: {
   label: string;
   value: string;
   sub?: string;
   warn?: boolean;
   icon?: React.ComponentType<{ className?: string }>;
+  info?: KpiInfo;
 }) {
   return (
     <div
@@ -1270,7 +1419,7 @@ function VpsStat({
     >
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
         {Icon ? <Icon className="h-3 w-3" /> : null}
-        {label}
+        <KpiRotulo titulo={label} info={info} />
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
       {sub ? <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div> : null}

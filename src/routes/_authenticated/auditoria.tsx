@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/stat-card";
+import type { KpiInfo } from "@/components/kpi-info";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -62,6 +63,52 @@ export const Route = createFileRoute("/_authenticated/auditoria")({
  * se amanhã o texto ganhar um sufixo, o filtro continua funcionando.
  */
 const MARCA_EXTERNO = "Acesso externo";
+
+// ---------------------------------------------------------------------------
+// O que cada número quer dizer. Ver a nota em stat-card / kpi-info: a definição
+// mora ao lado da conta que a produz (logo abaixo, nos useMemo), justamente
+// para não sobreviver a uma mudança de fórmula.
+//
+// Detalhe que vale explicitar em TODOS os textos desta tela: os cartões contam
+// a LISTA FILTRADA, não o banco. Período, técnico, origem, empresa e busca já
+// entraram. Um cartão que ignorasse os filtros ao lado deles seria armadilha.
+// ---------------------------------------------------------------------------
+const INFO: Record<string, KpiInfo> = {
+  sessoes: {
+    oQue: "Atendimentos que passaram pelos filtros ativos — período, técnico, origem, empresa e busca.",
+    porQue:
+      "É o denominador de tudo nesta tela. Os outros quatro cartões são recortes deste, então ler qualquer um deles sem olhar este dá porcentagem errada de cabeça.",
+    comoCalculamos: "connection_logs do período, aplicados os filtros da tela",
+    referencia:
+      "Teto de 500 linhas por consulta. Ao bater no teto o cartão avisa: o número vira “pelo menos 500”, não o total — reduza o período.",
+  },
+  emAndamento: {
+    oQue: "Dos atendimentos listados, os que ainda não terminaram.",
+    porQue:
+      "Sessão aberta é vaga de simultaneidade ocupada e, no plano gratuito, relógio de 2 horas correndo. Também é onde aparece sessão fantasma — aberta há horas sem ninguém do outro lado.",
+    comoCalculamos: "linhas filtradas com status = active",
+  },
+  tecnicos: {
+    oQue: "Quantas pessoas distintas atenderam no período filtrado.",
+    porQue:
+      "Divide o volume por gente: 200 sessões de 2 técnicos e de 20 são operações diferentes. Também mostra assento contratado que não está sendo usado.",
+    comoCalculamos: "contagem de técnicos distintos nas linhas filtradas",
+  },
+  empresas: {
+    oQue: "Quantas contas clientes tiveram algum acesso no período.",
+    porQue:
+      "Mostra concentração: receita e risco parecidos se distribuem muito diferente quando quase todo o uso vem de uma conta só.",
+    comoCalculamos: "contagem de tenant_id distintos nas linhas filtradas",
+    referencia:
+      "Empresa aqui é a conta que contratou o AcessoFast — não o cliente final da coluna Cliente.",
+  },
+  foraDoPainel: {
+    oQue: "Atendimentos que começaram pelo executável, sem passar pelo botão Conectar do painel.",
+    porQue:
+      "É o caminho que escapa da quota e da senha efêmera. Um número que só cresce aqui indica técnico reusando credencial por fora — que é exatamente o que o controle de acesso existe para fechar.",
+    comoCalculamos: "linhas filtradas cuja nota começa com “Acesso externo”",
+  },
+};
 
 const JANELAS = {
   "24h": 86_400_000,
@@ -385,6 +432,7 @@ function AuditoriaPage() {
       >
         <StatCard
           title={nomeEmpresaFiltrada ? "Acessos da empresa" : "Sessões no período"}
+          info={INFO.sessoes}
           value={filtradas.length}
           icon={History}
           hint={
@@ -399,6 +447,7 @@ function AuditoriaPage() {
         />
         <StatCard
           title="Em andamento"
+          info={INFO.emAndamento}
           value={ativas}
           icon={Radio}
           hint="Sessões abertas agora"
@@ -407,6 +456,7 @@ function AuditoriaPage() {
         />
         <StatCard
           title="Técnicos"
+          info={INFO.tecnicos}
           value={tecnicosNoPeriodo}
           icon={Users}
           hint="Distintos no período"
@@ -419,6 +469,7 @@ function AuditoriaPage() {
         {mostraEmpresa && (
           <StatCard
             title="Empresas"
+            info={INFO.empresas}
             value={empresasNoPeriodo}
             icon={Building2}
             hint="Com acesso no período"
@@ -431,6 +482,7 @@ function AuditoriaPage() {
             que permite investigar cada um. */}
         <StatCard
           title="Fora do painel"
+          info={INFO.foraDoPainel}
           value={externas}
           icon={ShieldAlert}
           hint="Iniciadas pelo instalador"
