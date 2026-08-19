@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { AnuncioSlot } from "@/components/anuncio-slot";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -323,6 +324,7 @@ function DispositivosPage() {
   const [editing, setEditing] = useState<AddressBookRow | null>(null);
   const [confirmInativarId, setConfirmInativarId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectData, setConnectData] = useState<{
     rustdesk_id: string;
@@ -331,8 +333,15 @@ function DispositivosPage() {
     // Guardado pra resolver a plataforma no modal (aviso de acesso assistido).
     // Usamos o id do device, nao o rustdesk_id, pra casar sempre com a linha certa.
     deviceId: string;
+    // Fase 1 dos anuncios: o slot 'free_start' so existe quando o atendimento
+    // saiu do uso gratuito. Quem diz isso e o servidor (connect-device devolve
+    // `source`), nao um palpite da tela.
+    source: "free" | "credit" | "plan" | null;
   } | null>(null);
   const [copiadoConn, setCopiadoConn] = useState(false);
+  // Saldo esgotado (402 no_credits). Ate aqui isso era so um toast, que e o
+  // formato errado pro momento de maior intencao de compra do fluxo inteiro.
+  const [semSaldo, setSemSaldo] = useState(false);
   // Billing B1: oferta free x crédito (individual + tem os dois).
   const [choiceData, setChoiceData] = useState<{
     deviceId: string;
@@ -397,9 +406,11 @@ function DispositivosPage() {
             "Limite de sessões simultâneas do plano atingido. Encerre uma sessão ativa para conectar em outro dispositivo.",
           );
         } else if (raw.includes("no_credits")) {
-          toast.error(
-            "Sem acessos gratuitos e sem créditos disponíveis. Compre créditos ou conheça os planos para conectar.",
-          );
+          // Uma tela, dois espacos: a oferta de credito e o CONTEUDO, e o espaco
+          // do anunciante mora dentro dela. Empilhar anuncio de terceiro e depois
+          // a oferta em duas janelas seriadas — duas confirmacoes pra uma acao —
+          // e padrao de adware, e queima justamente este momento.
+          setSemSaldo(true);
         } else if (raw.includes("billing_blocked")) {
           toast.error(
             "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
@@ -434,6 +445,7 @@ function DispositivosPage() {
         password: data.password,
         deep_link: data.deep_link,
         deviceId,
+        source: data.source ?? null,
       });
       setCopiadoConn(false);
     } finally {
@@ -1778,6 +1790,12 @@ function DispositivosPage() {
                   </Button>
                 </div>
               </div>
+
+              {/* Slot 'free_start'. Fica DEPOIS da credencial de proposito: o
+                  tecnico veio pegar a senha, e ela nao pode ficar atras de nada.
+                  Ainda assim e antes da sessao abrir — 'Abrir conexão' esta logo
+                  abaixo — que e o momento que o desenho pedia. */}
+              <AnuncioSlot placement="free_start" ativo={connectData.source === "free"} />
             </div>
           )}
           <DialogFooter>
@@ -1892,6 +1910,40 @@ function DispositivosPage() {
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setChoiceData(null)}>
               Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Saldo esgotado (402 no_credits) — o desenho "uma tela, dois espacos".
+          A oferta de credito e o conteudo principal; o espaco do anunciante
+          entra DENTRO, abaixo, e some sozinho quando nao ha peca elegivel.
+          Nenhuma campanha da casa recebe o placement 'exhausted', entao aqui
+          nunca aparece oferta de credito dentro de oferta de credito — isso esta
+          garantido nos dados (ad_campaigns.placements), nao num if desta tela. */}
+      <Dialog open={semSaldo} onOpenChange={setSemSaldo}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Seus acessos de hoje acabaram</DialogTitle>
+            <DialogDescription>
+              Os acessos gratuitos do dia foram usados e não há créditos disponíveis. Com
+              crédito o atendimento também deixa de ter o corte de 2 horas.
+            </DialogDescription>
+          </DialogHeader>
+          <AnuncioSlot placement="exhausted" ativo={semSaldo} />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSemSaldo(false)}>
+              Agora não
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setSemSaldo(false);
+                void navigate({ to: "/financeiro" });
+              }}
+            >
+              <Coins className="mr-2 h-4 w-4" aria-hidden />
+              Ver pacotes de crédito
             </Button>
           </DialogFooter>
         </DialogContent>

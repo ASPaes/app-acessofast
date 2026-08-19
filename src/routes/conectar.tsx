@@ -24,6 +24,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { toast } from "sonner";
+import { AnuncioSlot } from "@/components/anuncio-slot";
 import { Monitor, Copy, Check, Loader2, Building2, ArrowLeftRight } from "lucide-react";
 import { useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarDocumento } from "@/lib/clientes";
@@ -129,6 +130,9 @@ function ConectarPage() {
     rustdesk_id: string;
     password: string;
     deep_link: string;
+    // Fase 1 dos anuncios: o slot 'free_start' so aparece quando o servidor diz
+    // que o atendimento saiu do uso gratuito.
+    source: "free" | "credit" | "plan" | null;
   } | null>(null);
   const [choiceData, setChoiceData] = useState<{
     deviceId: string;
@@ -336,6 +340,7 @@ function ConectarPage() {
         rustdesk_id: data.rustdesk_id,
         password: data.password,
         deep_link: data.deep_link,
+        source: data.source ?? null,
       });
       setCopiado(false);
     } finally {
@@ -638,6 +643,15 @@ function ConectarPage() {
                   </Button>
                 </div>
               </div>
+              {/* Slot 'free_start'. So o momento de inicio entra nesta janela: a
+                  tela do saldo esgotado (402) leva pra /financeiro, e mandar uma
+                  popup de 520px pra outra rota do painel quebra o fluxo do chat.
+                  La o 402 segue como toast. */}
+              <AnuncioSlot
+                placement="free_start"
+                ativo={connectData.source === "free"}
+                surface="embed"
+              />
               {disparado && (
                 // Secao 8: o fluxo pelo chat cria a expectativa de "clica e
                 // conecta de qualquer lugar". Se o protocolo nao estiver
