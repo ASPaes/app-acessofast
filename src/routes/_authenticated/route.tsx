@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
+import { AvisoPlanoGratuito } from "@/components/aviso-plano-gratuito";
 
 // Gate de autenticação. `ssr: false` porque a sessão vive no localStorage
 // (Supabase). O servidor não a enxerga; qualquer tentativa de proteger via SSR
@@ -31,6 +32,11 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   return (
     <AppShell>
+      {/* Aqui, e nao numa tela especifica: o aviso tem que alcancar quem entra
+          direto em Dispositivos para trabalhar, que e o caminho comum de quem
+          usa o gratuito. Quem nao e conta free nunca ve — quem decide isso e a
+          RPC ad_notice_status, nao este layout. */}
+      <AvisoPlanoGratuito />
       <Outlet />
     </AppShell>
   );

@@ -426,6 +426,17 @@ function CadastroPage() {
                   </Label>
                 </div>
 
+                {/* Conta criada por aqui nasce no plano gratuito (signup-publico
+                    grava plan_code = individual). Como o gratuito exibe anuncio,
+                    dizer isso ANTES de criar a conta e o unico momento honesto:
+                    contar depois, com a pessoa ja usando, e mudar a condicao de
+                    quem ja entrou. Ver ANUNCIOS-POLITICA-CONTEUDO.md. */}
+                <p className="rounded-md border border-border/60 bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">
+                  Sua conta começa no <strong className="text-foreground">plano gratuito</strong>:
+                  5 acessos por dia, cada um com limite de 2 horas. Ele exibe anúncio — sempre
+                  identificado, nunca em tela cheia e nunca durante um atendimento em andamento.
+                </p>
+
                 <Button type="submit" className="w-full h-12" disabled={loading || semVaga}>
                   {loading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

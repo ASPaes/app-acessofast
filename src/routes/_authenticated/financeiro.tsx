@@ -35,6 +35,7 @@ import {
   Clock,
   TicketPercent,
   Users,
+  Megaphone,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
@@ -475,6 +476,47 @@ function Financeiro() {
               </p>
             </CardContent>
           )}
+        </Card>
+      )}
+
+      {/* PLANO GRATUITO — o que ele inclui e o que ele mostra.
+          Escrito enquanto nao havia usuario free real: e a unica janela em que
+          essas condicoes podem ser adotadas sem mudar o combinado de quem ja
+          entrou. As promessas aqui sao as mesmas do §1 da politica, e nao sao
+          decorativas — cada uma tem contraparte no codigo (rotulo obrigatorio no
+          slot, teto em ad_policy, o slot so montando fora de sessao ativa).
+          Ver ANUNCIOS-POLITICA-CONTEUDO.md. */}
+      {mode === "free" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-primary" />
+              Plano gratuito
+            </CardTitle>
+            <CardDescription>
+              5 acessos por dia, cada um com limite de 2 horas. Com crédito, o atendimento não tem
+              esse corte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              O plano gratuito <strong className="text-foreground">exibe anúncio</strong>. É o que
+              sustenta ele ser gratuito. Estes são os limites que assumimos:
+            </p>
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
+              <li>· Todo anúncio é identificado — publicidade de terceiro nunca se passa por
+                recomendação nossa.</li>
+              <li>· Nunca durante um atendimento em andamento.</li>
+              <li>· Nunca em tela cheia e nunca bloqueando o que você está fazendo.</li>
+              <li>· Há um teto diário de quantos você vê.</li>
+              <li>· Nada é baixado ou executado: é imagem e texto dentro do painel.</li>
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              O anunciante não recebe seu nome, o da sua empresa, nem a lista das suas máquinas —
+              só a contagem de exibições e cliques. Se alguma dessas condições mudar, avisamos
+              antes de valer.
+            </p>
+          </CardContent>
         </Card>
       )}
 
