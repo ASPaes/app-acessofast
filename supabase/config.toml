@@ -42,3 +42,12 @@ verify_jwt = false
 
 [functions.start-trial-prod]
 verify_jwt = false
+
+# Slot de anuncio do plano gratuito (Fase 1). Quem chama e o painel logado, com o
+# JWT do tecnico — e o proprio user_id que vira o espectador da impressao e o
+# sujeito do teto diario. Sem gateway exigindo JWT, uma chamada anonima entraria
+# na funcao e so seria barrada la dentro; pior, um caller sem sessao nao tem
+# espectador nenhum a quem atribuir a exibicao. Por isso true, ao contrario da
+# maioria das funcoes deste arquivo.
+[functions.ad-serve]
+verify_jwt = true
