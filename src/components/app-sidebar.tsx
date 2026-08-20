@@ -11,13 +11,9 @@ import {
   Store,
   Wallet,
   Megaphone,
+  Plug,
 } from "lucide-react";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  useSidebar,
-} from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 import { useSolicitacoesAcesso } from "@/hooks/use-solicitacoes-acesso";
@@ -33,7 +29,8 @@ type NavItem = {
     | "/monitoramento"
     | "/financeiro"
     | "/empresas"
-    | "/anuncios";
+    | "/anuncios"
+    | "/integracoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -52,7 +49,13 @@ const operacao: NavItem[] = [
 // administração da conta, e ele não toma nenhuma delas.
 const gestao: NavItem[] = [{ title: "Usuários", url: "/usuarios", icon: Users }];
 
-const gestaoAdmin: NavItem[] = [{ title: "Financeiro", url: "/financeiro", icon: Wallet }];
+// Integracoes fica em gestao, e fora da lista do tecnico pelo mesmo motivo do
+// Financeiro: emitir chave que da acesso de escrita ao cadastro e decisao de
+// administracao da conta, nao ferramenta de atendimento.
+const gestaoAdmin: NavItem[] = [
+  { title: "Financeiro", url: "/financeiro", icon: Wallet },
+  { title: "Integrações", url: "/integracoes", icon: Plug },
+];
 
 // Planos saiu: a tela existia para listar empresas e dar acesso ao formulário de
 // atribuição de plano — a mesma lista de Empresas, duplicada. A atribuição
@@ -108,9 +111,7 @@ export function AppSidebar() {
   // o admin, então a contagem precisa aparecer sem ele abrir a tela.
   const podeDecidir = me?.role === "super_admin" || me?.role === "admin";
   const { data: solicitacoes } = useSolicitacoesAcesso(!!podeDecidir);
-  const badges = solicitacoes?.length
-    ? { "/usuarios": solicitacoes.length }
-    : undefined;
+  const badges = solicitacoes?.length ? { "/usuarios": solicitacoes.length } : undefined;
 
   return (
     <Sidebar
@@ -138,12 +139,8 @@ export function AppSidebar() {
           />
           {!collapsed && (
             <div className="flex flex-col leading-tight min-w-0">
-              <span className="text-[13px] font-semibold text-foreground truncate">
-                AcessoFast
-              </span>
-              <span className="text-[10px] tracking-[0.08em] text-text-dim">
-                acesso remoto
-              </span>
+              <span className="text-[13px] font-semibold text-foreground truncate">AcessoFast</span>
+              <span className="text-[10px] tracking-[0.08em] text-text-dim">acesso remoto</span>
             </div>
           )}
         </div>
@@ -209,7 +206,10 @@ function NavGroup({
               }`}
             >
               {active && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary" aria-hidden />
+                <span
+                  className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary"
+                  aria-hidden
+                />
               )}
               <span className="relative shrink-0">
                 <item.icon

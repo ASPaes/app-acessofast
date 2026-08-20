@@ -23,6 +23,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authenticated/dispositivos'
 import { Route as AuthenticatedEmpresasRouteImport } from './routes/_authenticated/empresas'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
+import { Route as AuthenticatedIntegracoesRouteImport } from './routes/_authenticated/integracoes'
 import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 
@@ -96,6 +97,12 @@ const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
   path: '/financeiro',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedIntegracoesRoute =
+  AuthenticatedIntegracoesRouteImport.update({
+    id: '/integracoes',
+    path: '/integracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMonitoramentoRoute =
   AuthenticatedMonitoramentoRouteImport.update({
     id: '/monitoramento',
@@ -122,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -139,6 +147,7 @@ export interface FileRoutesByTo {
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -158,6 +167,7 @@ export interface FileRoutesById {
   '/_authenticated/dispositivos': typeof AuthenticatedDispositivosRoute
   '/_authenticated/empresas': typeof AuthenticatedEmpresasRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/_authenticated/integracoes': typeof AuthenticatedIntegracoesRoute
   '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/dispositivos'
     | '/empresas'
     | '/financeiro'
+    | '/integracoes'
     | '/monitoramento'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/dispositivos'
     | '/empresas'
     | '/financeiro'
+    | '/integracoes'
     | '/monitoramento'
     | '/usuarios'
   id:
@@ -212,6 +224,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dispositivos'
     | '/_authenticated/empresas'
     | '/_authenticated/financeiro'
+    | '/_authenticated/integracoes'
     | '/_authenticated/monitoramento'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
@@ -326,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/integracoes': {
+      id: '/_authenticated/integracoes'
+      path: '/integracoes'
+      fullPath: '/integracoes'
+      preLoaderRoute: typeof AuthenticatedIntegracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/monitoramento': {
       id: '/_authenticated/monitoramento'
       path: '/monitoramento'
@@ -351,6 +371,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDispositivosRoute: typeof AuthenticatedDispositivosRoute
   AuthenticatedEmpresasRoute: typeof AuthenticatedEmpresasRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
+  AuthenticatedIntegracoesRoute: typeof AuthenticatedIntegracoesRoute
   AuthenticatedMonitoramentoRoute: typeof AuthenticatedMonitoramentoRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
@@ -363,6 +384,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDispositivosRoute: AuthenticatedDispositivosRoute,
   AuthenticatedEmpresasRoute: AuthenticatedEmpresasRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
+  AuthenticatedIntegracoesRoute: AuthenticatedIntegracoesRoute,
   AuthenticatedMonitoramentoRoute: AuthenticatedMonitoramentoRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
