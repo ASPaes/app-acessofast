@@ -161,9 +161,49 @@ seria chute, e chute errado manda o técnico para as máquinas da filial errada.
 { "acao": "sincronizar_clientes", "clientes": [ { "nome": "…", "cnpj": "…" } ] }
 ```
 
-Teto de 500 por chamada. **Só cria o que falta** — nunca sobrescreve cadastro existente,
-porque o nome daqui pode ter sido corrigido à mão e a importação não tem como saber qual
-dos dois está certo.
+Teto de 500 por chamada. Casamento **só por CNPJ exato** — nome nunca casa nada.
+
+**O DoctorSaaS manda no nome** (decisão de 21/08/2026). Cliente que já existe e chega com
+grafia diferente é renomeado; o nome de lá é o que vale. O telefone não segue a mesma
+regra: só preenchemos o que está vazio, porque número corrigido à mão aqui costuma ser o
+que atende.
+
+Cliente **desativado** no AcessoFast depende de configuração da empresa, em Integrações →
+Importação de clientes (`integration_settings.reactivate_on_sync`):
+
+- **Desligado** (padrão): não volta — nem recriado nem renomeado, e sai na resposta como
+  `cliente_inativo`. Quem opera pelo painel manda.
+- **Ligado**: a sincronização reativa quem reaparecer na lista de lá, e conta em
+  `reativados`. Quem opera pelo DoctorSaaS manda.
+
+Não dá para escolher por quem usa: as duas leituras são legítimas e dependem de onde o
+cadastro é mantido de verdade. O padrão é o conservador porque linha ausente vale padrão —
+ninguém precisa configurar nada para o comportamento continuar o de hoje.
+
+**O telefone fica de fora da regra do nome**, e não por descuido: no DoctorSaaS vários
+contatos podem estar sob o mesmo CNPJ, então o número que chega é um deles, não "o"
+telefone da empresa. Só preenchemos quando o nosso está vazio.
+
+O tropeço real dessa decisão é o índice `clients_tenant_name_uk`, que é único em
+`(tenant_id, lower(trim(name)))` entre clientes ativos. Renomear para um nome que outro
+cliente ativo já tem viola o índice. Por isso as correções vão **uma a uma** — `UPDATE`
+não tem `ON CONFLICT`, e em bloco uma colisão levaria as outras junto. A inserção tenta em
+bloco primeiro e só cai para linha a linha quando o bloco falha.
+
+Resposta:
+
+```json
+{ "ok": true, "recebidos": 500, "criados": 12, "atualizados": 31, "reativados": 0,
+  "inalterados": 455, "recusados": [ { "cnpj": "…", "motivo": "nome_em_uso" } ] }
+```
+
+`nome_em_uso` é o caso acima: a grafia que veio já pertence a outro cliente ativo. Não é
+pane, é dois cadastros discordando — e a resposta diz qual CNPJ para alguém resolver.
+
+O mesmo vale no `vincular_conversa`: quando o CNPJ bate exato e o nome difere, corrigimos
+na hora, sem esperar o próximo lote. Se a correção colidir, ela é ignorada e o vínculo
+acontece assim mesmo — ficar sem vincular por causa de grafia devolveria o técnico para a
+escolha manual, que é o problema maior.
 
 ---
 
@@ -188,19 +228,34 @@ janela:
 window.opener.postMessage({ tipo: "acessofast:enviar_mensagem", texto }, "*")
 ```
 
-Do lado do DoctorSaaS, um listener posta esse `texto` na conversa aberta:
+Do lado do DoctorSaaS, um listener **escreve** esse `texto` no campo de mensagem da
+conversa aberta. Quem envia é o operador:
 
 ```js
 window.addEventListener("message", (e) => {
-  if (e.data?.tipo === "acessofast:enviar_mensagem") enviarMensagem(e.data.texto)
+  if (e.source !== janelaQueAbri) return                       // é a nossa janelinha
+  if (e.origin !== "https://app.acessofast.com.br") return     // e veio do painel
+  if (e.data?.tipo !== "acessofast:enviar_mensagem") return
+  preencherCampoDeMensagem(e.data.texto)
 })
 ```
 
-Sem o listener nada acontece e o "Copiar instruções" continua sendo a saída — o botão
-"Enviar no chat" apenas avisa que a janela não veio de um chat.
+As duas primeiras linhas não são opcionais. `postMessage` pode partir de qualquer página
+que tenha referência à janela deles, e `window.open` entrega `window.opener` de graça —
+sem a checagem, um site qualquer manda WhatsApp para o cliente em nome da empresa.
 
-O `targetOrigin` é `"*"` porque não sabemos de que domínio a janela foi aberta. O
-conteúdo é o texto de instalação; não há segredo trafegando.
+**Escrever e não enviar** foi decisão conjunta com o time do DoctorSaaS. O texto é de
+instalação, mas um sistema de fora disparando mensagem sem ninguém ler é o tipo de coisa
+que só se descobre depois de sair errada, e a diferença de tempo é um Enter. Por isso o
+botão aqui se chama **Escrever no chat** e confirma com "Feito", não com "Enviado" — nós
+não temos como saber se saiu.
+
+Sem o listener nada acontece e o "Copiar instruções" continua sendo a saída — o botão
+apenas avisa quando a janela não veio de um chat.
+
+O `targetOrigin` do nosso lado é `"*"` porque não sabemos de que domínio a janela foi
+aberta, e o conteúdo é público. Quem tem segredo a proteger na direção contrária é o
+listener, e é lá que a checagem mora.
 
 ---
 

@@ -19,10 +19,12 @@
 //   vincular_conversa     de quem e esta conversa. Casa o CNPJ, cria o cliente
 //                         se faltar, grava o vinculo. E o que faz a tela de
 //                         escolher cliente sumir.
-//   sincronizar_clientes  a carteira em lote. So CRIA o que falta — nunca
-//                         sobrescreve cadastro nosso, porque o nome daqui pode
-//                         ter sido corrigido a mao e a importacao nao tem como
-//                         saber qual dos dois esta certo.
+//   sincronizar_clientes  a carteira em lote. Cria o que falta E CORRIGE o nome
+//                         do que ja existe: o DoctorSaaS e a fonte da verdade do
+//                         nome, decisao de 21/08/2026. Casamento so por CNPJ
+//                         exato — nome nunca casa nada, so e escrito.
+//                         Cliente desativado depende de configuracao da empresa
+//                         (integration_settings.reactivate_on_sync).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS = {
@@ -49,6 +51,19 @@ async function sha256Hex(texto: string): Promise<string> {
 
 function soDigitos(v: unknown): string {
   return String(v ?? "").replace(/\D/g, "");
+}
+
+// Mesma normalizacao do indice clients_tenant_name_uk — lower(btrim(name)).
+// Comparar assim evita gravar de novo o que so difere em espaco ou caixa.
+function chaveNome(v: string): string {
+  return v.trim().toLowerCase();
+}
+
+// 23505 e violacao de indice unico, e aqui isso quase sempre quer dizer que o
+// nome ja pertence a outro cliente ativo. Vale reportar com esse nome: quem le
+// a resposta precisa saber que foi grafia, nao pane.
+function motivoDoErro(e: { code?: string; message?: string }): string {
+  return e?.code === "23505" ? "nome_em_uso" : `falha:${e?.code ?? "?"}`;
 }
 
 type EmpresaEntrada = { nome?: string; cnpj?: string; telefone?: string };
@@ -106,6 +121,24 @@ Deno.serve(async (req) => {
 
       let cliente = (exatos ?? [])[0] ?? null;
       let criado = false;
+
+      // CNPJ exato e nome diferente: o DoctorSaaS manda no nome, entao corrige
+      // na hora, sem esperar a proxima importacao em lote. Nao vale para o
+      // casamento por raiz mais abaixo — la o CNPJ e de OUTRA unidade, e o nome
+      // que veio e da unidade errada.
+      //
+      // Falhar aqui nao derruba o vinculo. O nome colide com o de outro cliente
+      // ativo (clients_tenant_name_uk) uma vez ou outra, e ficar sem vincular a
+      // conversa por causa de grafia seria trocar um problema pequeno por um
+      // grande — o tecnico voltaria a escolher cliente na mao.
+      if (cliente && nome && chaveNome(cliente.name) !== chaveNome(nome)) {
+        const { error: rErr } = await admin
+          .from("clients")
+          .update({ name: nome })
+          .eq("id", cliente.id);
+        if (rErr) console.warn("doctorsaas_rename_ignorado", cliente.id, rErr.code);
+        else cliente = { ...cliente, name: nome };
+      }
 
       if (!cliente) {
         // Sem o CNPJ exato, tenta a raiz: matriz e filial quase nunca batem
@@ -186,41 +219,120 @@ Deno.serve(async (req) => {
         else validos.push({ cnpj, nome, telefone: soDigitos(item?.telefone) || null });
       }
 
+      // Quem manda em cliente desativado e escolha da empresa. Linha ausente vale
+      // o padrao conservador: nao reativa, porque desativar aqui foi decisao de
+      // quem opera o painel e uma sincronizacao nao deve desfazer sozinha.
+      const { data: config } = await admin
+        .from("integration_settings")
+        .select("reactivate_on_sync")
+        .eq("tenant_id", tenantId)
+        .eq("provider", "doctorsaas")
+        .maybeSingle();
+      const reativar = config?.reactivate_on_sync === true;
+
       // Uma consulta so para saber o que ja existe, em vez de uma por cliente.
+      // is_active vem junto por causa da configuracao acima.
       const { data: existentes } = await admin
         .from("clients")
-        .select("document")
+        .select("id, name, phone, document, is_active")
         .eq("tenant_id", tenantId)
         .in(
           "document",
           validos.map((v) => v.cnpj),
         );
-      const jaTem = new Set((existentes ?? []).map((c) => c.document as string));
+      const porDoc = new Map((existentes ?? []).map((c) => [c.document as string, c]));
 
-      const novos = validos.filter((v) => !jaTem.has(v.cnpj));
+      const novos: typeof validos = [];
+      const paraCorrigir: {
+        id: string;
+        cnpj: string;
+        patch: Record<string, string | boolean>;
+        reativa: boolean;
+      }[] = [];
+      let inalterados = 0;
+
+      for (const v of validos) {
+        const atual = porDoc.get(v.cnpj);
+        if (!atual) {
+          novos.push(v);
+          continue;
+        }
+        const inativo = !atual.is_active;
+        if (inativo && !reativar) {
+          recusados.push({ cnpj: v.cnpj, motivo: "cliente_inativo" });
+          continue;
+        }
+        // O DoctorSaaS manda no nome: se difere, o nosso e que esta velho.
+        // O telefone nao segue a mesma regra — so preenchemos o que esta vazio.
+        // Na pratica o DoctorSaaS tem varios contatos por CNPJ, entao o numero
+        // que chega e um deles, nao "o" telefone da empresa.
+        const patch: Record<string, string | boolean> = {};
+        if (inativo) patch.is_active = true;
+        if (chaveNome(String(atual.name)) !== chaveNome(v.nome)) patch.name = v.nome;
+        if (!atual.phone && v.telefone) patch.phone = v.telefone;
+        if (Object.keys(patch).length > 0) {
+          paraCorrigir.push({
+            id: atual.id as string,
+            cnpj: v.cnpj,
+            patch,
+            reativa: inativo,
+          });
+        } else {
+          inalterados++;
+        }
+      }
+
+      // Insercao em bloco, que e o caminho normal. Se UMA linha colidir de nome
+      // com cliente ativo (clients_tenant_name_uk), o INSERT inteiro morre — e
+      // dai a segunda tentativa, uma a uma, para o lote entrar todo menos as
+      // colisoes de verdade. Custa caro so quando ja deu errado.
       let criados = 0;
-      if (novos.length > 0) {
+      const paraInserir = novos.map((v) => ({
+        tenant_id: tenantId,
+        name: v.nome,
+        document: v.cnpj,
+        document_type: "cnpj",
+        phone: v.telefone,
+      }));
+
+      if (paraInserir.length > 0) {
         const { data: inseridos, error: iErr } = await admin
           .from("clients")
-          .insert(
-            novos.map((v) => ({
-              tenant_id: tenantId,
-              name: v.nome,
-              document: v.cnpj,
-              document_type: "cnpj",
-              phone: v.telefone,
-            })),
-          )
+          .insert(paraInserir)
           .select("id");
-        if (iErr) return json({ error: "falha_ao_importar", detalhe: iErr.message }, 500);
-        criados = (inseridos ?? []).length;
+        if (!iErr) {
+          criados = (inseridos ?? []).length;
+        } else {
+          for (const linha of paraInserir) {
+            const { error: uErr } = await admin.from("clients").insert(linha);
+            if (!uErr) criados++;
+            else recusados.push({ cnpj: linha.document, motivo: motivoDoErro(uErr) });
+          }
+        }
+      }
+
+      // Correcoes uma a uma de proposito: UPDATE nao tem ON CONFLICT, entao em
+      // bloco uma colisao de nome levaria as outras junto. Sao poucas depois da
+      // primeira carga — o normal e esta lista vir vazia.
+      let atualizados = 0;
+      let reativados = 0;
+      for (const c of paraCorrigir) {
+        const { error: aErr } = await admin.from("clients").update(c.patch).eq("id", c.id);
+        if (aErr) {
+          recusados.push({ cnpj: c.cnpj, motivo: motivoDoErro(aErr) });
+          continue;
+        }
+        atualizados++;
+        if (c.reativa) reativados++;
       }
 
       return json({
         ok: true,
         recebidos: lista.length,
         criados,
-        ja_existiam: validos.length - novos.length,
+        atualizados,
+        reativados,
+        inalterados,
         recusados,
       });
     }

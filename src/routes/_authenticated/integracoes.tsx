@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -123,6 +124,52 @@ function IntegracoesPage() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ChaveRow[];
+    },
+  });
+
+  // Linha ausente vale o padrao: nao reativa. Por isso `?? false` em vez de
+  // esperar a tabela ter uma linha por empresa.
+  const config = useQuery({
+    enabled: podeEmitir,
+    queryKey: ["integration_settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("integration_settings")
+        .select("reactivate_on_sync")
+        .eq("provider", "doctorsaas")
+        .maybeSingle();
+      if (error) throw error;
+      return data?.reactivate_on_sync ?? false;
+    },
+  });
+
+  const salvarConfig = useMutation({
+    mutationFn: async (valor: boolean) => {
+      const tenantId = me.data?.tenant_id;
+      if (!tenantId) throw new Error("Sua conta não está vinculada a uma empresa.");
+      const { error } = await supabase.from("integration_settings").upsert(
+        {
+          tenant_id: tenantId,
+          provider: "doctorsaas",
+          reactivate_on_sync: valor,
+          updated_at: new Date().toISOString(),
+          updated_by: me.data?.id ?? null,
+        },
+        { onConflict: "tenant_id,provider" },
+      );
+      if (error) throw error;
+      return valor;
+    },
+    onSuccess: async (valor) => {
+      toast.success(
+        valor
+          ? "A sincronização passa a reativar clientes que voltarem na lista do DoctorSaaS."
+          : "Cliente desativado aqui continua desativado, mesmo que volte na lista do DoctorSaaS.",
+      );
+      await queryClient.invalidateQueries({ queryKey: ["integration_settings"] });
+    },
+    onError: (e: unknown) => {
+      toast.error((e as { message?: string })?.message ?? "Falha ao salvar");
     },
   });
 
@@ -296,6 +343,38 @@ function IntegracoesPage() {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Quem manda no cadastro. So faz diferenca depois que a importacao em
+          lote roda, mas o lugar de decidir e antes dela. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Importação de clientes</CardTitle>
+          <CardDescription>
+            Quando o DoctorSaaS manda a carteira, criamos o que falta e corrigimos o nome de quem já
+            existe — o nome de lá é o que vale. O casamento é sempre por CNPJ.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4 rounded-md border border-border/60 p-3">
+            <div className="space-y-1">
+              <Label htmlFor="reativar" className="text-sm font-medium">
+                Reativar cliente que voltar na lista
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {config.data
+                  ? "Ligado: a lista do DoctorSaaS manda. Cliente desativado aqui volta a ficar ativo se reaparecer lá."
+                  : "Desligado: o AcessoFast manda. Quem foi desativado aqui continua desativado, e a importação apenas avisa que ele veio na lista."}
+              </p>
+            </div>
+            <Switch
+              id="reativar"
+              checked={config.data ?? false}
+              disabled={config.isPending || salvarConfig.isPending}
+              onCheckedChange={(v) => salvarConfig.mutate(v)}
+            />
+          </div>
         </CardContent>
       </Card>
 

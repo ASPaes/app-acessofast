@@ -1049,6 +1049,45 @@ export type Database = {
           },
         ]
       }
+      integration_settings: {
+        Row: {
+          provider: string
+          reactivate_on_sync: boolean
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          provider?: string
+          reactivate_on_sync?: boolean
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          provider?: string
+          reactivate_on_sync?: boolean
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       join_requests: {
         Row: {
           created_at: string
@@ -1101,6 +1140,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      launch_offer: {
+        Row: {
+          created_at: string
+          discount_percent: number
+          id: boolean
+          is_active: boolean
+          manual_taken: number
+          slots_total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_percent?: number
+          id?: boolean
+          is_active?: boolean
+          manual_taken?: number
+          slots_total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_percent?: number
+          id?: boolean
+          is_active?: boolean
+          manual_taken?: number
+          slots_total?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       leads: {
         Row: {
@@ -2359,6 +2428,16 @@ export type Database = {
           key_version: number
         }[]
       }
+      launch_offer_status: {
+        Args: never
+        Returns: {
+          discount_percent: number
+          is_active: boolean
+          slots_left: number
+          slots_taken: number
+          slots_total: number
+        }[]
+      }
       meter_external_session: {
         Args: {
           p_connection_log_id: string
@@ -2613,6 +2692,29 @@ export type Database = {
           p_key_version: number
         }
         Returns: undefined
+      }
+      set_launch_offer: {
+        Args: {
+          p_discount_percent?: number
+          p_is_active?: boolean
+          p_manual_taken?: number
+          p_slots_total?: number
+        }
+        Returns: {
+          created_at: string
+          discount_percent: number
+          id: boolean
+          is_active: boolean
+          manual_taken: number
+          slots_total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "launch_offer"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_promo_code_active: {
         Args: { p_active: boolean; p_id: string }
