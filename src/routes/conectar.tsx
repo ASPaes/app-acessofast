@@ -135,11 +135,15 @@ const INSTRUCOES_INSTALACAO = [
 
 // A janelinha nao alcanca a conversa do DoctorSaaS — o unico canal entre as
 // duas e o postMessage para quem abriu a janela. Nos disparamos; do lado de la
-// um listener posta no chat. Sem listener, nada acontece e o "Copiar" continua
-// sendo a saida.
+// um listener escreve o texto no campo de mensagem, e quem envia e o operador.
+// Combinado assim de proposito: sistema de fora disparando WhatsApp no cliente
+// sem ninguem ler custa caro quando sai errado, e o preco de conferir e um Enter.
+// Sem listener nada acontece e o "Copiar" continua sendo a saida.
 //
 // targetOrigin "*" porque nao sabemos de que dominio o chat abriu, e o conteudo
-// e o texto de instalacao — nao ha segredo aqui para vazar.
+// e o texto de instalacao — nao ha segredo aqui para vazar. Quem precisa checar
+// origem e o lado que recebe: o listener deles confere e.source contra a janela
+// que abriu e e.origin contra o dominio do painel.
 function enviarNoChat(texto: string): boolean {
   try {
     if (!window.opener || window.opener.closed) return false;
@@ -1478,8 +1482,8 @@ function ResolverMaquina({
       <div className="space-y-2 rounded-md border border-border/60 bg-muted/40 p-3">
         <p className="text-sm font-medium">O cliente ainda não tem o AcessoFast?</p>
         <p className="text-xs text-muted-foreground">
-          Mande as instruções e peça o ID que aparecer na tela. Com o ID em mãos, use o cadastro
-          acima.
+          O texto cai no campo de mensagem do chat para você conferir e enviar. Com o ID que ele
+          responder, use o cadastro acima.
         </p>
         <div className="flex gap-2">
           <Button type="button" size="sm" className="flex-1" onClick={despacharNoChat}>
@@ -1488,7 +1492,7 @@ function ResolverMaquina({
             ) : (
               <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
-            {enviado ? "Enviado" : "Enviar no chat"}
+            {enviado ? "Feito" : "Escrever no chat"}
           </Button>
           <Button
             type="button"
