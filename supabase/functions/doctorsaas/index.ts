@@ -18,7 +18,8 @@
 // DUAS ACOES
 //   vincular_conversa     de quem e esta conversa. Casa o CNPJ, cria o cliente
 //                         se faltar, grava o vinculo. E o que faz a tela de
-//                         escolher cliente sumir.
+//                         escolher cliente sumir. Com "criar": false vira
+//                         consulta: responde se existe sem escrever cadastro.
 //   sincronizar_clientes  a carteira em lote. Cria o que falta E CORRIGE o nome
 //                         do que ja existe: o DoctorSaaS e a fonte da verdade do
 //                         nome, decisao de 21/08/2026. Casamento so por CNPJ
@@ -112,6 +113,17 @@ Deno.serve(async (req) => {
       const nome = String(entrada.nome ?? "").trim();
       if (cnpj.length !== 14) return json({ error: "cnpj_invalido" }, 400);
 
+      // Consultar sem criar. Pedido do DoctorSaaS quando o cadastro em massa
+      // saiu de cena: o cadastro passa a ser acao explicita do tecnico, na
+      // janelinha, e a API so responde se a empresa existe. Ausente = true,
+      // para nao quebrar quem ja chama.
+      //
+      // "criar": false suprime a CRIACAO, nao toda escrita. Cliente que ja
+      // existe continua sendo renomeado quando a grafia difere (o DoctorSaaS
+      // manda no nome) e a conversa continua sendo vinculada — sem o vinculo a
+      // consulta nao serviria para nada, a janelinha voltaria a perguntar.
+      const podeCriar = body?.criar !== false;
+
       const { data: exatos } = await admin
         .from("clients")
         .select("id, name, document")
@@ -165,6 +177,18 @@ Deno.serve(async (req) => {
             detalhe: "O grupo tem mais de uma unidade e nenhuma com este CNPJ exato.",
           });
         }
+      }
+
+      if (!cliente && !podeCriar) {
+        // Nada foi escrito: nem cliente, nem vinculo. Vincular a coisa nenhuma
+        // seria pior que nao vincular — a janelinha abriria em um cliente que o
+        // tecnico nunca escolheu.
+        return json({
+          ok: true,
+          vinculado: false,
+          motivo: "nao_encontrado",
+          detalhe: "Nenhum cliente com este CNPJ, e criar nao foi autorizado nesta chamada.",
+        });
       }
 
       if (!cliente) {

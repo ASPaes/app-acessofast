@@ -144,9 +144,18 @@ Supabase exigiria uma sessão que o DoctorSaaS não tem nem deve ter.
 ### `vincular_conversa`
 
 ```json
-{ "acao": "vincular_conversa", "conv": "<id da conversa>",
+{ "acao": "vincular_conversa", "conv": "<id da conversa>", "criar": true,
   "empresa": { "nome": "…", "cnpj": "…", "telefone": "…" } }
 ```
+
+`criar` é opcional e vale `true` quando ausente. Com `false` a chamada vira consulta: se
+não houver cliente com esse CNPJ, devolve `{"vinculado": false, "motivo": "nao_encontrado"}`
+e **não cria nada** — o cadastro passa a ser ação explícita do técnico, na janelinha. Foi
+o pedido do DoctorSaaS quando a importação em lote saiu de cena.
+
+Atenção ao que `criar: false` **não** suprime: cliente que já existe continua sendo
+renomeado quando a grafia difere, e a conversa continua sendo vinculada. Sem gravar o
+vínculo a consulta não serviria para nada — a janelinha voltaria a perguntar.
 
 CNPJ exato → raiz (8 dígitos) → cria o cliente. Depois grava em
 `doctorsaas_conversation_links`.
@@ -155,7 +164,13 @@ Devolve `{"vinculado": false, "motivo": "varias_unidades"}` quando o grupo tem m
 unidade e nenhuma com o CNPJ exato. É o único caso em que não vinculamos: escolher uma
 seria chute, e chute errado manda o técnico para as máquinas da filial errada.
 
-### `sincronizar_clientes`
+### `sincronizar_clientes` — existe, mas está fora de uso
+
+Decisão de 21/08/2026: **não importamos nem exportamos a base do DoctorSaaS**. A
+resolução acontece por atendimento, com o CNPJ que chega na conexão solicitada. O
+endpoint continua no ar e testado, para o dia em que alguém quiser a carga em lote; o
+que está descrito abaixo é o comportamento dele, não um passo do fluxo atual.
+
 
 ```json
 { "acao": "sincronizar_clientes", "clientes": [ { "nome": "…", "cnpj": "…" } ] }
@@ -210,11 +225,38 @@ escolha manual, que é o problema maior.
 ## O que o DoctorSaaS pode mandar junto na URL
 
 ```
-/conectar?conv=<id>&nome=<nome do contato>
+/conectar?conv=<id>&nome=<nome do contato>&cnpj=<cnpj do cliente>
 ```
 
-`nome` e opcional e so pre-preenche o cadastro quando o contato nao tem empresa.
-Nunca decide nada — quem manda no cliente do atendimento e o vinculo gravado.
+**`cnpj` resolve o cliente.** A janelinha roda na sessão do próprio técnico, então o RLS
+já recorta o cadastro dele — dar o CNPJ na URL é o suficiente para ela achar o cliente
+sozinha, sem chamada de API nenhuma. Aceita com ou sem pontuação; guardamos só os
+dígitos, e 14 ou 11 (CPF).
+
+`nome` nunca resolve nada — só pré-preenche o cadastro. Quem manda no cliente do
+atendimento continua sendo o vínculo gravado.
+
+### A ordem em que a janelinha resolve
+
+1. **Vínculo gravado** para esta conversa. Ganha de tudo: é escolha explícita de técnico.
+2. **`cnpj` da URL** — CNPJ exato, depois a raiz de 8 dígitos. Mesma regra do servidor.
+   Não grava nada: vale para este atendimento, e o técnico promove a vínculo permanente
+   se quiser.
+3. **Escolha manual**, com o que sabemos em destaque: "o DoctorSaaS diz que esta conversa
+   é X · CNPJ" mais um botão de cadastrar já preenchido.
+
+Várias unidades do mesmo grupo e nenhuma com o CNPJ exato caem no passo 3 de propósito —
+chutar filial manda o técnico para as máquinas da unidade errada.
+
+### Por que isto dispensa a chamada de API no caminho feliz
+
+No fluxo desenhado pelo DoctorSaaS, a consulta prévia tem os dois ramos terminando no
+mesmo lugar: existe → abre a janelinha; não existe → abre a janelinha, que oferece
+cadastrar. A consulta não muda o que acontece depois. Com o CNPJ na URL a janelinha
+decide sozinha, na mesma latência, sem chave e sem round-trip.
+
+`vincular_conversa` com `criar: false` continua valendo para quem quiser a resposta do
+lado de lá — por exemplo, para mostrar um selo "cliente no AcessoFast" na tela deles.
 
 ---
 

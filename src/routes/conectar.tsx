@@ -52,7 +52,7 @@ import {
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
 //
-//   https://<painel>/conectar?conv=<conversation_id>
+//   https://<painel>/conectar?conv=<conversation_id>&nome=<nome>&cnpj=<cnpj>
 //
 // Fica FORA de _authenticated de proposito: aquele layout embrulha tudo no
 // AppShell (sidebar + topo), que nao cabe numa janela de 520px. A sessao e a
@@ -66,9 +66,11 @@ import {
 // Esta tela resolve, nesta ordem, as tres pendencias possiveis, mostrando uma de
 // cada vez em vez de uma arvore de erro tecnico:
 //
-//   V1 vinculo    conversa -> cliente. Escolha manual na primeira vez; pode ser
-//                 permanente ou so para o atendimento atual (secao 7, o caso da
-//                 empresa de informatica que atende varios clientes).
+//   V1 vinculo    conversa -> cliente. Resolve nesta ordem: vinculo ja gravado,
+//                 CNPJ que veio na URL (?cnpj=, resolvido aqui mesmo contra o
+//                 cadastro), e por ultimo a escolha manual. Pode ser permanente
+//                 ou so para o atendimento atual (secao 7, o caso da empresa de
+//                 informatica que atende varios clientes).
 //   V2 empresa    o cliente existe no cadastro do AcessoFast? Se nao, cadastra
 //                 daqui mesmo. Nao existe "sincronizar do DoctorSaaS": o
 //                 contrato da integracao nao preve API do lado de la, entao o
@@ -182,21 +184,30 @@ export const Route = createFileRoute("/conectar")({
   head: () => ({
     meta: [{ title: "Conectar — Acessofast" }, { name: "robots", content: "noindex" }],
   }),
-  validateSearch: (search: Record<string, unknown>): { conv?: string; nome?: string } => {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { conv?: string; nome?: string; cnpj?: string } => {
     const bruto = typeof search.conv === "string" ? search.conv.trim() : "";
-    // `nome` e opcional e so serve para pre-preencher o cadastro do contato sem
-    // empresa. Nunca decide nada: quem manda no cliente e o vinculo gravado.
+    // `nome` e `cnpj` sao o que o DoctorSaaS ja sabe do contato. Chegam na URL
+    // em vez de por API porque a janela roda na sessao do proprio tecnico: o
+    // RLS ja recorta o cadastro dele, e nao ha segredo trafegando que ele nao
+    // pudesse ver de qualquer jeito. Uma chamada a menos entre os dois lados.
+    //
+    // O `cnpj` RESOLVE o cliente; o `nome` nunca resolve nada, so pre-preenche
+    // cadastro. Quem manda de verdade continua sendo o vinculo gravado.
     const contato = typeof search.nome === "string" ? search.nome.trim() : "";
+    const doc = typeof search.cnpj === "string" ? search.cnpj.replace(/\D/g, "") : "";
     return {
       conv: bruto === "" ? undefined : bruto.slice(0, 200),
       nome: contato === "" ? undefined : contato.slice(0, 120),
+      cnpj: doc.length === 14 || doc.length === 11 ? doc : undefined,
     };
   },
   component: ConectarPage,
 });
 
 function ConectarPage() {
-  const { conv, nome: nomeContato } = Route.useSearch();
+  const { conv, nome: nomeContato, cnpj: cnpjContato } = Route.useSearch();
   const queryClient = useQueryClient();
 
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -285,6 +296,60 @@ function ConectarPage() {
     },
   });
 
+  // --- resolucao pelo CNPJ que o DoctorSaaS mandou -------------------------
+  // Sem vinculo gravado, mas com CNPJ na URL, a janelinha resolve sozinha em vez
+  // de perguntar. Nao grava nada: o cliente vale para este atendimento, e o
+  // tecnico promove a vinculo permanente se quiser (o mesmo botao de sempre).
+  //
+  // Mesma regra do lado do servidor, de proposito: CNPJ exato, depois a raiz de
+  // 8 digitos, e varias unidades sem match exato caem na escolha manual — porque
+  // chutar filial manda o tecnico para as maquinas da unidade errada.
+  const querResolverPorCnpj =
+    Boolean(conv) &&
+    sessao.data?.logado === true &&
+    Boolean(cnpjContato) &&
+    !vinculo.isPending &&
+    vinculo.data?.link == null &&
+    temporario === null;
+
+  const resolucao = useQuery({
+    enabled: querResolverPorCnpj,
+    queryKey: ["conectar_resolucao", cnpjContato],
+    queryFn: async () => {
+      const doc = cnpjContato as string;
+      const colunas = "id, name, document, document_type, tenant_id";
+
+      const { data: exatos, error: e1 } = await supabase
+        .from("clients")
+        .select(colunas)
+        .eq("is_active", true)
+        .eq("document", doc)
+        .limit(2);
+      if (e1) throw e1;
+      const exato = (exatos ?? []) as ClienteRow[];
+      if (exato.length === 1) return { cliente: exato[0], motivo: "exato" as const };
+      if (exato.length > 1) return { cliente: null, motivo: "varias_unidades" as const };
+
+      // Raiz so existe para CNPJ. CPF que nao bateu exato acabou aqui.
+      if (doc.length !== 14) return { cliente: null, motivo: "nao_encontrado" as const };
+
+      const { data: raiz, error: e2 } = await supabase
+        .from("clients")
+        .select(colunas)
+        .eq("is_active", true)
+        .eq("document_type", "cnpj")
+        .like("document", `${doc.slice(0, 8)}%`)
+        .order("document");
+      if (e2) throw e2;
+      const irmaos = (raiz ?? []) as ClienteRow[];
+      if (irmaos.length === 1) return { cliente: irmaos[0], motivo: "raiz" as const };
+      if (irmaos.length > 1) return { cliente: null, motivo: "varias_unidades" as const };
+      return { cliente: null, motivo: "nao_encontrado" as const };
+    },
+  });
+
+  const resolvendoCnpj = querResolverPorCnpj && resolucao.isPending;
+
   // --- o grupo do cliente, pela RAIZ do CNPJ ------------------------------
   // Secao 6 do contrato: matriz e filiais da mesma empresa aparecem como uma
   // lista so, porque o cadastro costuma divergir entre os dois sistemas — um
@@ -292,7 +357,8 @@ function ConectarPage() {
   // contrapartida a lista exibe o CNPJ completo de cada unidade.
   // O alvo do atendimento: a selecao temporaria manda no vinculo gravado, porque
   // e uma decisao explicita do tecnico para esta sessao.
-  const clienteAlvo = temporario?.id ?? vinculo.data?.link?.client_id ?? null;
+  const clienteAlvo =
+    temporario?.id ?? vinculo.data?.link?.client_id ?? resolucao.data?.cliente?.id ?? null;
 
   const grupo = useQuery({
     enabled: Boolean(clienteAlvo),
@@ -383,7 +449,9 @@ function ConectarPage() {
     Boolean(conv) &&
     sessao.data?.logado === true &&
     !vinculo.isPending &&
-    ((vinculo.data?.link == null && temporario === null) || trocando);
+    !resolvendoCnpj &&
+    ((vinculo.data?.link == null && temporario === null && resolucao.data?.cliente == null) ||
+      trocando);
 
   const clientes = useQuery({
     enabled: precisaEscolher,
@@ -719,6 +787,39 @@ function ConectarPage() {
               ? "Escolha uma vez e o AcessoFast lembra: nas próximas vezes esta conversa já abre nas máquinas certas."
               : "A escolha vale só para este atendimento — nada é gravado nesta conversa."}
         </p>
+
+        {/* O DoctorSaaS mandou CNPJ e nao achamos ninguem. Em vez de deixar o
+            tecnico procurar um cliente que nao existe, dizemos o que sabemos e
+            oferecemos o cadastro ja preenchido — um clique em vez de redigitar
+            razao social e CNPJ. */}
+        {cnpjContato && !trocando && !criando && resolucao.data?.cliente == null && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-muted/40 p-3">
+            <p className="text-sm">
+              O DoctorSaaS diz que esta conversa é{" "}
+              <span className="font-medium">{nomeContato || "esta empresa"}</span>
+              {" · "}
+              <span className="font-mono text-xs">
+                {formatarDocumento(cnpjContato, cnpjContato.length === 14 ? "cnpj" : "cpf")}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {resolucao.data?.motivo === "varias_unidades"
+                ? "O grupo tem mais de uma unidade e nenhuma com este CNPJ exato. Escolha abaixo a unidade onde estão as máquinas, ou cadastre esta."
+                : "Não encontrei este CNPJ no seu cadastro."}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="w-full"
+              onClick={() => abrirCadastro(cnpjContato, false)}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {resolucao.data?.motivo === "varias_unidades"
+                ? "Cadastrar esta unidade"
+                : "Cadastrar este cliente"}
+            </Button>
+          </div>
+        )}
 
         {criando ? (
           // V2: cadastro do cliente sem sair da janelinha.
