@@ -33,13 +33,21 @@ import {
   Building2,
   ArrowLeftRight,
   Search,
-  Download,
   RefreshCw,
   Link2,
   Plus,
+  UserPlus,
+  ListFilter,
+  ArrowLeft,
+  Send,
 } from "lucide-react";
 import { useState } from "react";
-import { filtrarIgnorandoPontuacao, formatarDocumento, normalizarDocumento } from "@/lib/clientes";
+import {
+  filtrarIgnorandoPontuacao,
+  formatarDocumento,
+  normalizarDocumento,
+  normalizarTexto,
+} from "@/lib/clientes";
 
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
@@ -125,6 +133,23 @@ const INSTRUCOES_INSTALACAO = [
   "3. Me envie esse ID por aqui",
 ].join("\n");
 
+// A janelinha nao alcanca a conversa do DoctorSaaS — o unico canal entre as
+// duas e o postMessage para quem abriu a janela. Nos disparamos; do lado de la
+// um listener posta no chat. Sem listener, nada acontece e o "Copiar" continua
+// sendo a saida.
+//
+// targetOrigin "*" porque nao sabemos de que dominio o chat abriu, e o conteudo
+// e o texto de instalacao — nao ha segredo aqui para vazar.
+function enviarNoChat(texto: string): boolean {
+  try {
+    if (!window.opener || window.opener.closed) return false;
+    window.opener.postMessage({ tipo: "acessofast:enviar_mensagem", texto }, "*");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function invokeErrorMessage(error: unknown): Promise<string> {
   if (error instanceof FunctionsHttpError) {
     try {
@@ -153,15 +178,21 @@ export const Route = createFileRoute("/conectar")({
   head: () => ({
     meta: [{ title: "Conectar — Acessofast" }, { name: "robots", content: "noindex" }],
   }),
-  validateSearch: (search: Record<string, unknown>): { conv?: string } => {
+  validateSearch: (search: Record<string, unknown>): { conv?: string; nome?: string } => {
     const bruto = typeof search.conv === "string" ? search.conv.trim() : "";
-    return { conv: bruto === "" ? undefined : bruto.slice(0, 200) };
+    // `nome` e opcional e so serve para pre-preencher o cadastro do contato sem
+    // empresa. Nunca decide nada: quem manda no cliente e o vinculo gravado.
+    const contato = typeof search.nome === "string" ? search.nome.trim() : "";
+    return {
+      conv: bruto === "" ? undefined : bruto.slice(0, 200),
+      nome: contato === "" ? undefined : contato.slice(0, 120),
+    };
   },
   component: ConectarPage,
 });
 
 function ConectarPage() {
-  const { conv } = Route.useSearch();
+  const { conv, nome: nomeContato } = Route.useSearch();
   const queryClient = useQueryClient();
 
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -174,6 +205,11 @@ function ConectarPage() {
   const [lembrar, setLembrar] = useState(true);
   const [temporario, setTemporario] = useState<ClienteRow | null>(null);
   const [mostrarBuscaMaquina, setMostrarBuscaMaquina] = useState(false);
+  // Saida para o contato que nao e empresa: ou vira cliente sem CNPJ, ou o
+  // tecnico pula o cadastro e vai direto as maquinas.
+  const [modoTodas, setModoTodas] = useState(false);
+  const [avulso, setAvulso] = useState(false);
+  const [buscaTodas, setBuscaTodas] = useState("");
   const [criando, setCriando] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [novoDoc, setNovoDoc] = useState("");
@@ -307,7 +343,7 @@ function ConectarPage() {
 
   // Mesma regra da tela de Dispositivos: online = visto nos ultimos 120s.
   const online = useQuery({
-    enabled: idsDoGrupo.length > 0,
+    enabled: idsDoGrupo.length > 0 || modoTodas,
     queryKey: ["conectar_online"],
     refetchInterval: 30000,
     queryFn: async () => {
@@ -318,6 +354,23 @@ function ConectarPage() {
         .gt("last_online", limite);
       if (error) throw error;
       return new Set((data ?? []).map((r) => r.id as string));
+    },
+  });
+
+  // --- todas as maquinas, quando o atendimento nao tem cliente --------------
+  // A RLS ja recorta pelo tenant. Online primeiro porque e o que da para usar
+  // agora; o resto ordena por apelido.
+  const todas = useQuery({
+    enabled: modoTodas,
+    queryKey: ["conectar_todas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("address_book")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, clients(name)")
+        .eq("is_active", true)
+        .order("alias");
+      if (error) throw error;
+      return (data ?? []) as unknown as (DeviceRow & { clients: { name: string } | null })[];
     },
   });
 
@@ -341,6 +394,17 @@ function ConectarPage() {
       return (data ?? []) as ClienteRow[];
     },
   });
+
+  // O termo digitado pode ser nome OU CNPJ. Jogar um CNPJ no campo de nome faz
+  // o tecnico apagar e redigitar — entao decidimos aqui em qual campo ele cai.
+  function abrirCadastro(termo: string, semEmpresa: boolean) {
+    const digitos = termo.replace(/\D/g, "");
+    const ehDocumento = digitos.length === 11 || digitos.length === 14;
+    setNovoNome(ehDocumento ? (nomeContato ?? "") : termo.trim());
+    setNovoDoc(ehDocumento ? digitos : "");
+    setAvulso(semEmpresa);
+    setCriando(true);
+  }
 
   async function gravarVinculo(cliente: ClienteRow) {
     const { error } = await supabase.from(TABELA_VINCULOS).upsert(
@@ -569,6 +633,77 @@ function ConectarPage() {
     );
   }
 
+  // Saida de escape: atendimento sem empresa, ou cliente que o tecnico nao acha.
+  // Nada e gravado aqui — a conversa continua sem vinculo e pergunta de novo na
+  // proxima vez, que e o comportamento correto para um numero avulso.
+  if (modoTodas) {
+    const termo = normalizarTexto(buscaTodas);
+    const encontradas = (todas.data ?? [])
+      .filter((d) => {
+        if (!termo) return true;
+        const alvo = `${d.alias ?? ""} ${d.rustdesk_id} ${d.clients?.name ?? ""}`;
+        return normalizarTexto(alvo).includes(termo);
+      })
+      .sort((a, b) => {
+        const oa = online.data?.has(a.id) ? 0 : 1;
+        const ob = online.data?.has(b.id) ? 0 : 1;
+        if (oa !== ob) return oa - ob;
+        return (a.alias ?? a.rustdesk_id).localeCompare(b.alias ?? b.rustdesk_id);
+      });
+    // Teto de renderizacao: com cadastro grande a lista inteira trava a janela
+    // de 520px, e o caminho util passa a ser a busca.
+    const TETO = 40;
+    const exibidas = encontradas.slice(0, TETO);
+
+    return (
+      <Moldura
+        titulo="Todas as máquinas"
+        acao={
+          <Button type="button" variant="ghost" size="sm" onClick={() => setModoTodas(false)}>
+            <ArrowLeft className="mr-1 h-3.5 w-3.5" aria-hidden />
+            Voltar
+          </Button>
+        }
+      >
+        <p className="text-xs text-muted-foreground">
+          Só para este atendimento — nada fica gravado nesta conversa.
+        </p>
+        <Input
+          value={buscaTodas}
+          onChange={(e) => setBuscaTodas(e.target.value)}
+          placeholder="Buscar por máquina, ID ou cliente…"
+        />
+        {todas.isPending ? (
+          <div className="space-y-2">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </div>
+        ) : exibidas.length === 0 ? (
+          <Aviso>Nenhuma máquina encontrada.</Aviso>
+        ) : (
+          <div className="space-y-2">
+            {exibidas.map((d) => (
+              <LinhaDispositivo
+                key={d.id}
+                device={d}
+                ativo={online.data?.has(d.id) ?? false}
+                conectando={connectingId === d.id}
+                desabilitado={connectingId !== null}
+                onConectar={() => void doConnect(d.id)}
+                subtitulo={d.clients?.name ?? "Sem cliente"}
+              />
+            ))}
+            {encontradas.length > TETO && (
+              <p className="text-center text-xs text-muted-foreground">
+                Mostrando {TETO} de {encontradas.length}. Refine a busca.
+              </p>
+            )}
+          </div>
+        )}
+      </Moldura>
+    );
+  }
+
   // Escolha manual do cliente: primeira vez desta conversa, ou troca pedida.
   if (precisaEscolher) {
     return (
@@ -585,12 +720,16 @@ function ConectarPage() {
           // V2: cadastro do cliente sem sair da janelinha.
           <div className="space-y-3 rounded-md border p-3">
             <div className="space-y-1">
-              <Label htmlFor="novo-cliente-nome">Nome do cliente</Label>
+              <Label htmlFor="novo-cliente-nome">
+                {avulso ? "Nome do contato" : "Nome do cliente"}
+              </Label>
               <Input
                 id="novo-cliente-nome"
                 value={novoNome}
                 onChange={(e) => setNovoNome(e.target.value)}
-                placeholder="Razão social ou nome fantasia"
+                placeholder={
+                  avulso ? "Como identificar este atendimento" : "Razão social ou nome fantasia"
+                }
                 autoFocus
               />
             </div>
@@ -604,7 +743,9 @@ function ConectarPage() {
                 inputMode="numeric"
               />
               <p className="text-xs text-muted-foreground">
-                Com CNPJ, matriz e filiais do mesmo grupo passam a aparecer numa lista só.
+                {avulso
+                  ? "Pode ficar em branco. Sem CNPJ o cadastro funciona igual — só não agrupa filiais."
+                  : "Com CNPJ, matriz e filiais do mesmo grupo passam a aparecer numa lista só."}
               </p>
             </div>
             <div className="flex gap-2">
@@ -652,10 +793,7 @@ function ConectarPage() {
                         variant="outline"
                         size="sm"
                         className="mt-3"
-                        onClick={() => {
-                          setNovoNome(busca.trim());
-                          setCriando(true);
-                        }}
+                        onClick={() => abrirCadastro(busca, false)}
                       >
                         <Plus className="mr-1.5 h-4 w-4" aria-hidden />
                         Cadastrar cliente
@@ -708,14 +846,38 @@ function ConectarPage() {
               variant="ghost"
               size="sm"
               className="w-full"
-              onClick={() => {
-                setNovoNome(busca.trim());
-                setCriando(true);
-              }}
+              onClick={() => abrirCadastro(busca, false)}
             >
               <Plus className="mr-1.5 h-4 w-4" aria-hidden />
               Cadastrar um cliente novo
             </Button>
+
+            {/* Nem todo atendimento tem empresa do outro lado. Duas saidas, e a
+                diferenca entre elas e o que fica gravado: a primeira cria
+                cadastro e a conversa passa a ser lembrada; a segunda nao grava
+                nada e vale so para agora. */}
+            <div className="flex gap-2 border-t pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => abrirCadastro(busca, true)}
+              >
+                <UserPlus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Não é empresa
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1"
+                onClick={() => setModoTodas(true)}
+              >
+                <ListFilter className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Ver todas as máquinas
+              </Button>
+            </div>
 
             {trocando && (
               <Button
@@ -807,47 +969,16 @@ function ConectarPage() {
                     {formatarDocumento(cliente.document, cliente.document_type) ?? "—"}
                   </span>
                 </div>
-                {daUnidade.map((d) => {
-                  const ativo = online.data?.has(d.id) ?? false;
-                  return (
-                    <div
-                      key={d.id}
-                      className="flex items-center gap-3 rounded-md border border-border/60 p-2.5"
-                    >
-                      <span
-                        className={
-                          "h-2 w-2 shrink-0 rounded-full " +
-                          (ativo ? "bg-green-500" : "bg-muted-foreground/40")
-                        }
-                        aria-hidden
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{d.alias || d.rustdesk_id}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {ativo
-                            ? "Online"
-                            : d.last_online
-                              ? `Offline · ${tempoRelativo(d.last_online)}`
-                              : "Offline"}
-                          {d.os ? ` · ${d.os}` : ""}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={connectingId !== null}
-                        onClick={() => void doConnect(d.id)}
-                      >
-                        {connectingId === d.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        ) : (
-                          <Monitor className="h-4 w-4" aria-hidden />
-                        )}
-                        <span className="ml-1.5">Conectar</span>
-                      </Button>
-                    </div>
-                  );
-                })}
+                {daUnidade.map((d) => (
+                  <LinhaDispositivo
+                    key={d.id}
+                    device={d}
+                    ativo={online.data?.has(d.id) ?? false}
+                    conectando={connectingId === d.id}
+                    desabilitado={connectingId !== null}
+                    onConectar={() => void doConnect(d.id)}
+                  />
+                ))}
               </div>
             );
           })}
@@ -1058,6 +1189,9 @@ function ResolverMaquina({
   const [resultado, setResultado] = useState<BuscaMaquina[] | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [novoId, setNovoId] = useState("");
+  const [novoApelido, setNovoApelido] = useState("");
 
   const digitos = termo.replace(/\D/g, "");
   // O ID do AcessoFast e so digito; o resto e busca por nome da maquina.
@@ -1107,12 +1241,21 @@ function ResolverMaquina({
 
   async function adotar() {
     if (!cliente) return;
+    const id = novoId.replace(/\D/g, "");
+    if (id.length < 6 || id.length > 12) {
+      toast.error("O ID do AcessoFast tem de 6 a 12 dígitos.");
+      return;
+    }
     setOcupado(true);
     try {
       const { data, error } = await supabase.functions.invoke<AdoptResult>("adopt-device", {
         // tenant_id so e lido quando quem chama e super_admin; para o tecnico
         // comum a funcao usa o tenant do proprio perfil.
-        body: { rustdesk_id: digitos, tenant_id: cliente.tenant_id },
+        body: {
+          rustdesk_id: id,
+          alias: novoApelido.trim() || null,
+          tenant_id: cliente.tenant_id,
+        },
       });
       if (error || data?.error) {
         const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
@@ -1144,9 +1287,20 @@ function ResolverMaquina({
       }
       setResultado(null);
       setTermo("");
+      setNovoId("");
+      setNovoApelido("");
       await onMudou();
     } finally {
       setOcupado(false);
+    }
+  }
+
+  function despacharNoChat() {
+    if (enviarNoChat(INSTRUCOES_INSTALACAO)) {
+      setEnviado(true);
+      setTimeout(() => setEnviado(false), 2500);
+    } else {
+      toast.error("Esta janela não foi aberta pelo chat — use Copiar instruções.");
     }
   }
 
@@ -1215,18 +1369,18 @@ function ResolverMaquina({
                   cadastro.
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Se o cliente acabou de instalar o AcessoFast, ele está esperando adoção — adote
-                  agora e já sai vinculado a {cliente.name}.
+                  Se o cliente acabou de instalar o AcessoFast, ele está esperando adoção. O ID já
+                  foi para o cadastro abaixo — é só confirmar.
                 </p>
                 <Button
                   type="button"
                   size="sm"
+                  variant="outline"
                   className="w-full"
-                  disabled={ocupado}
-                  onClick={() => void adotar()}
+                  onClick={() => setNovoId(digitos)}
                 >
-                  {ocupado && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />}
-                  Adotar este computador
+                  <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Cadastrar com este ID
                 </Button>
               </>
             ) : (
@@ -1277,19 +1431,64 @@ function ResolverMaquina({
           </div>
         ))}
 
-      {/* SEND_INSTALLER: so aqui, no caminho de "nao existe maquina". */}
+      {/* CADASTRAR: adotar um computador pelo ID, sem abrir o painel.
+          Nao existe "criar maquina": o agente precisa estar instalado e ter se
+          anunciado. O que fazemos aqui e reivindicar esse anuncio para o cliente
+          desta conversa — por isso o campo e o ID que aparece na tela dele. */}
+      <div className="space-y-2 rounded-md border border-border/60 p-3">
+        <p className="text-sm font-medium">Cadastrar computador</p>
+        <p className="text-xs text-muted-foreground">
+          Peça ao cliente o ID que aparece na tela do AcessoFast dele.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={novoId}
+            onChange={(e) => setNovoId(e.target.value)}
+            placeholder="ID (6 a 12 dígitos)"
+            inputMode="numeric"
+            className="flex-1"
+          />
+          <Input
+            value={novoApelido}
+            onChange={(e) => setNovoApelido(e.target.value)}
+            placeholder="Apelido (opcional)"
+            className="flex-1"
+          />
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="w-full"
+          disabled={ocupado || novoId.trim() === ""}
+          onClick={() => void adotar()}
+        >
+          {ocupado ? (
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+          )}
+          Cadastrar em {cliente.name}
+        </Button>
+      </div>
+
+      {/* SEND_INSTALLER: so aqui, no caminho de "nao existe maquina". O botao de
+          abrir o download saiu — o texto copiado ja leva o link, e um botao que
+          abre a pagina na maquina do TECNICO nao ajuda quem precisa instalar e
+          esta do outro lado da conversa. */}
       <div className="space-y-2 rounded-md border border-border/60 bg-muted/40 p-3">
         <p className="text-sm font-medium">O cliente ainda não tem o AcessoFast?</p>
         <p className="text-xs text-muted-foreground">
-          Mande o link pelo chat e peça o ID que aparecer na tela. Com o ID em mãos, use a pesquisa
-          acima para adotar.
+          Mande as instruções e peça o ID que aparecer na tela. Com o ID em mãos, use o cadastro
+          acima.
         </p>
         <div className="flex gap-2">
-          <Button asChild variant="outline" size="sm" className="flex-1">
-            <a href={URL_DOWNLOAD} target="_blank" rel="noreferrer">
-              <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              Abrir download
-            </a>
+          <Button type="button" size="sm" className="flex-1" onClick={despacharNoChat}>
+            {enviado ? (
+              <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            )}
+            {enviado ? "Enviado" : "Enviar no chat"}
           </Button>
           <Button
             type="button"
@@ -1307,6 +1506,53 @@ function ResolverMaquina({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LinhaDispositivo({
+  device,
+  ativo,
+  conectando,
+  desabilitado,
+  onConectar,
+  subtitulo,
+}: {
+  device: DeviceRow;
+  ativo: boolean;
+  conectando: boolean;
+  desabilitado: boolean;
+  onConectar: () => void;
+  subtitulo?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border/60 p-2.5">
+      <span
+        className={
+          "h-2 w-2 shrink-0 rounded-full " + (ativo ? "bg-green-500" : "bg-muted-foreground/40")
+        }
+        aria-hidden
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">{device.alias || device.rustdesk_id}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {ativo
+            ? "Online"
+            : device.last_online
+              ? `Offline · ${tempoRelativo(device.last_online)}`
+              : "Offline"}
+          {device.os ? ` · ${device.os}` : ""}
+          {subtitulo ? ` · ${subtitulo}` : ""}
+        </p>
+      </div>
+      <Button type="button" size="sm" disabled={desabilitado} onClick={onConectar}>
+        {conectando ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Monitor className="h-4 w-4" aria-hidden />
+        )}
+        <span className="ml-1.5">Conectar</span>
+      </Button>
     </div>
   );
 }

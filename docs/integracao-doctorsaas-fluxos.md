@@ -167,6 +167,71 @@ dos dois está certo.
 
 ---
 
+## O que o DoctorSaaS pode mandar junto na URL
+
+```
+/conectar?conv=<id>&nome=<nome do contato>
+```
+
+`nome` e opcional e so pre-preenche o cadastro quando o contato nao tem empresa.
+Nunca decide nada — quem manda no cliente do atendimento e o vinculo gravado.
+
+---
+
+## Mandar mensagem de volta para o chat
+
+A janelinha nao alcanca a conversa. O unico canal e o `postMessage` para quem abriu a
+janela:
+
+```js
+// o AcessoFast dispara
+window.opener.postMessage({ tipo: "acessofast:enviar_mensagem", texto }, "*")
+```
+
+Do lado do DoctorSaaS, um listener posta esse `texto` na conversa aberta:
+
+```js
+window.addEventListener("message", (e) => {
+  if (e.data?.tipo === "acessofast:enviar_mensagem") enviarMensagem(e.data.texto)
+})
+```
+
+Sem o listener nada acontece e o "Copiar instruções" continua sendo a saída — o botão
+"Enviar no chat" apenas avisa que a janela não veio de um chat.
+
+O `targetOrigin` é `"*"` porque não sabemos de que domínio a janela foi aberta. O
+conteúdo é o texto de instalação; não há segredo trafegando.
+
+---
+
+## Atendimento sem empresa
+
+Nem todo contato do DoctorSaaS tem empresa vinculada — parte do time trabalha com números
+avulsos. A janelinha oferece duas saídas, e a diferença entre elas é o que fica gravado:
+
+**Não é empresa** — cadastra um cliente só com o nome, sem CNPJ. O vínculo da conversa
+passa a existir normalmente e ela é lembrada nas próximas vezes. Sem CNPJ não há
+agrupamento de filiais, e é só isso que se perde.
+
+**Ver todas as máquinas** — não grava nada. Lista todas as máquinas ativas do tenant com
+busca por apelido, ID ou cliente, online primeiro, com teto de 40 na tela para a janela de
+520px não travar. Vale só para o atendimento atual: na próxima abertura a conversa
+pergunta de novo, que é o certo para um número avulso.
+
+---
+
+## Cadastrar computador pela janelinha
+
+Não existe "criar máquina": o agente precisa estar instalado e ter se anunciado. O que o
+botão faz é **adotar** esse anúncio (`adopt-device`) já vinculado ao cliente da conversa,
+com apelido opcional. Por isso o campo é o ID que aparece na tela do cliente.
+
+O botão "Abrir download" saiu: o texto copiado já leva o link, e abrir a página de
+download na máquina do **técnico** não ajuda quem precisa instalar e está do outro lado da
+conversa.
+
+---
+
 ## O timing do popup
 
 O `window.open` precisa ser síncrono no clique, sem `await` antes, ou o navegador bloqueia.
