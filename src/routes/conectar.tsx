@@ -177,6 +177,20 @@ function tempoRelativo(iso: string): string {
   return `há ${Math.floor(h / 24)} d`;
 }
 
+// O parser de busca do TanStack tenta interpretar cada valor da query, entao
+// um CNPJ so de digitos NAO chega aqui como string — chega como number. Sem
+// isto, `?cnpj=19734340000174` caia na validacao, virava undefined, e o
+// roteador redirecionava (307) para a mesma URL sem o parametro. O sintoma era
+// "o DoctorSaaS nao esta mandando o CNPJ"; a causa era este typeof.
+//
+// CNPJ com pontuacao ou comecando com zero nao e numero valido e continua
+// chegando como string — por isso o bug so aparecia em parte dos casos.
+function comoTexto(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return "";
+}
+
 export const Route = createFileRoute("/conectar")({
   // Mesma razao do _authenticated: a sessao vive no localStorage e o servidor
   // nao a enxerga.
@@ -187,7 +201,7 @@ export const Route = createFileRoute("/conectar")({
   validateSearch: (
     search: Record<string, unknown>,
   ): { conv?: string; nome?: string; cnpj?: string } => {
-    const bruto = typeof search.conv === "string" ? search.conv.trim() : "";
+    const bruto = comoTexto(search.conv).trim();
     // `nome` e `cnpj` sao o que o DoctorSaaS ja sabe do contato. Chegam na URL
     // em vez de por API porque a janela roda na sessao do proprio tecnico: o
     // RLS ja recorta o cadastro dele, e nao ha segredo trafegando que ele nao
@@ -195,8 +209,8 @@ export const Route = createFileRoute("/conectar")({
     //
     // O `cnpj` RESOLVE o cliente; o `nome` nunca resolve nada, so pre-preenche
     // cadastro. Quem manda de verdade continua sendo o vinculo gravado.
-    const contato = typeof search.nome === "string" ? search.nome.trim() : "";
-    const doc = typeof search.cnpj === "string" ? search.cnpj.replace(/\D/g, "") : "";
+    const contato = comoTexto(search.nome).trim();
+    const doc = comoTexto(search.cnpj).replace(/\D/g, "");
     return {
       conv: bruto === "" ? undefined : bruto.slice(0, 200),
       nome: contato === "" ? undefined : contato.slice(0, 120),
