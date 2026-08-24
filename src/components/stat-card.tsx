@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KpiRotulo, type KpiInfo } from "@/components/kpi-info";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -48,6 +49,7 @@ export function StatCard({
   hint,
   loading,
   color = "blue",
+  info,
 }: {
   title: string;
   value: number | string | undefined;
@@ -55,12 +57,19 @@ export function StatCard({
   hint: string;
   loading: boolean;
   color?: StatColor;
+  /**
+   * Explicação do indicador. Opcional de propósito: um cartão sem `info`
+   * continua exatamente como era, então nenhum uso existente quebra — mas a
+   * ausência aqui é dívida, não escolha. Número no painel sem definição é
+   * número que cada pessoa entende de um jeito.
+   */
+  info?: KpiInfo;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3 space-y-0">
         <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">
-          {title}
+          <KpiRotulo titulo={title} info={info} />
         </CardTitle>
         <div
           className={`h-9 w-9 rounded-lg flex items-center justify-center ${STAT_COLORS[color].wrap}`}

@@ -16,12 +16,14 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ConectarRouteImport } from './routes/conectar'
 import { Route as DefinirSenhaRouteImport } from './routes/definir-senha'
+import { Route as AuthenticatedAnunciosRouteImport } from './routes/_authenticated/anuncios'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authenticated/dispositivos'
 import { Route as AuthenticatedEmpresasRouteImport } from './routes/_authenticated/empresas'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
+import { Route as AuthenticatedIntegracoesRouteImport } from './routes/_authenticated/integracoes'
 import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 
@@ -59,6 +61,11 @@ const DefinirSenhaRoute = DefinirSenhaRouteImport.update({
   path: '/definir-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAnunciosRoute = AuthenticatedAnunciosRouteImport.update({
+  id: '/anuncios',
+  path: '/anuncios',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
   id: '/auditoria',
   path: '/auditoria',
@@ -90,6 +97,12 @@ const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
   path: '/financeiro',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedIntegracoesRoute =
+  AuthenticatedIntegracoesRouteImport.update({
+    id: '/integracoes',
+    path: '/integracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMonitoramentoRoute =
   AuthenticatedMonitoramentoRouteImport.update({
     id: '/monitoramento',
@@ -109,12 +122,14 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/anuncios': typeof AuthenticatedAnunciosRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -125,12 +140,14 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/anuncios': typeof AuthenticatedAnunciosRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -143,12 +160,14 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/_authenticated/anuncios': typeof AuthenticatedAnunciosRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/dispositivos': typeof AuthenticatedDispositivosRoute
   '/_authenticated/empresas': typeof AuthenticatedEmpresasRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/_authenticated/integracoes': typeof AuthenticatedIntegracoesRoute
   '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -161,12 +180,14 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/anuncios'
     | '/auditoria'
     | '/clientes'
     | '/dashboard'
     | '/dispositivos'
     | '/empresas'
     | '/financeiro'
+    | '/integracoes'
     | '/monitoramento'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
@@ -177,12 +198,14 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/anuncios'
     | '/auditoria'
     | '/clientes'
     | '/dashboard'
     | '/dispositivos'
     | '/empresas'
     | '/financeiro'
+    | '/integracoes'
     | '/monitoramento'
     | '/usuarios'
   id:
@@ -194,12 +217,14 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/_authenticated/anuncios'
     | '/_authenticated/auditoria'
     | '/_authenticated/clientes'
     | '/_authenticated/dashboard'
     | '/_authenticated/dispositivos'
     | '/_authenticated/empresas'
     | '/_authenticated/financeiro'
+    | '/_authenticated/integracoes'
     | '/_authenticated/monitoramento'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
@@ -265,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/anuncios': {
+      id: '/_authenticated/anuncios'
+      path: '/anuncios'
+      fullPath: '/anuncios'
+      preLoaderRoute: typeof AuthenticatedAnunciosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/auditoria': {
       id: '/_authenticated/auditoria'
       path: '/auditoria'
@@ -307,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/integracoes': {
+      id: '/_authenticated/integracoes'
+      path: '/integracoes'
+      fullPath: '/integracoes'
+      preLoaderRoute: typeof AuthenticatedIntegracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/monitoramento': {
       id: '/_authenticated/monitoramento'
       path: '/monitoramento'
@@ -325,23 +364,27 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnunciosRoute: typeof AuthenticatedAnunciosRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDispositivosRoute: typeof AuthenticatedDispositivosRoute
   AuthenticatedEmpresasRoute: typeof AuthenticatedEmpresasRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
+  AuthenticatedIntegracoesRoute: typeof AuthenticatedIntegracoesRoute
   AuthenticatedMonitoramentoRoute: typeof AuthenticatedMonitoramentoRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnunciosRoute: AuthenticatedAnunciosRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDispositivosRoute: AuthenticatedDispositivosRoute,
   AuthenticatedEmpresasRoute: AuthenticatedEmpresasRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
+  AuthenticatedIntegracoesRoute: AuthenticatedIntegracoesRoute,
   AuthenticatedMonitoramentoRoute: AuthenticatedMonitoramentoRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }

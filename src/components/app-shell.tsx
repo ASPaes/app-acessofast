@@ -19,13 +19,15 @@ const routeLabels: Record<string, string> = {
   "/monitoramento": "Monitoramento",
   "/financeiro": "Financeiro",
   "/empresas": "Empresas",
+  "/integracoes": "Integrações",
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const current =
-    Object.entries(routeLabels).find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.[1] ??
-    "";
+    Object.entries(routeLabels).find(
+      ([p]) => pathname === p || pathname.startsWith(p + "/"),
+    )?.[1] ?? "";
 
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -52,7 +54,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode")
+        .select(
+          "name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode",
+        )
         .eq("id", me!.tenant_id as string)
         .single();
       if (error) throw error;
@@ -96,10 +100,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   });
 
-  const scopeLabel = isSuper ? "Plataforma" : tenant?.name ?? "";
+  const scopeLabel = isSuper ? "Plataforma" : (tenant?.name ?? "");
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "4rem" } as React.CSSProperties}>
+    <SidebarProvider
+      style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "4rem" } as React.CSSProperties}
+    >
       {/* Camada de ambiente: `fixed`, atrás de tudo, sem eventos. Só existe
           dentro do shell autenticado — a tela de login não a recebe. */}
       <AmbientBackground />

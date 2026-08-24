@@ -14,8 +14,175 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_campaigns: {
+        Row: {
+          advertiser_tenant_id: string | null
+          body: string | null
+          created_at: string
+          cta_label: string
+          cta_url: string
+          daily_cap: number | null
+          ends_at: string | null
+          headline: string
+          id: string
+          image_path: string | null
+          kind: string
+          name: string
+          placements: string[]
+          starts_at: string | null
+          status: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          advertiser_tenant_id?: string | null
+          body?: string | null
+          created_at?: string
+          cta_label: string
+          cta_url: string
+          daily_cap?: number | null
+          ends_at?: string | null
+          headline: string
+          id?: string
+          image_path?: string | null
+          kind: string
+          name: string
+          placements: string[]
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          advertiser_tenant_id?: string | null
+          body?: string | null
+          created_at?: string
+          cta_label?: string
+          cta_url?: string
+          daily_cap?: number | null
+          ends_at?: string | null
+          headline?: string
+          id?: string
+          image_path?: string | null
+          kind?: string
+          name?: string
+          placements?: string[]
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_advertiser_tenant_id_fkey"
+            columns: ["advertiser_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_impressions: {
+        Row: {
+          campaign_id: string
+          clicked_at: string | null
+          id: string
+          placement: string
+          shown_at: string
+          surface: string
+          viewer_tenant_id: string | null
+          viewer_user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          clicked_at?: string | null
+          id?: string
+          placement: string
+          shown_at?: string
+          surface?: string
+          viewer_tenant_id?: string | null
+          viewer_user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          clicked_at?: string | null
+          id?: string
+          placement?: string
+          shown_at?: string
+          surface?: string
+          viewer_tenant_id?: string | null
+          viewer_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_impressions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_impressions_viewer_tenant_id_fkey"
+            columns: ["viewer_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_notice_acks: {
+        Row: {
+          acknowledged_at: string
+          policy_version: string
+          tenant_id: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          policy_version: string
+          tenant_id?: string | null
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          policy_version?: string
+          tenant_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_notice_acks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_policy: {
+        Row: {
+          id: boolean
+          notice_version: string
+          updated_at: string
+          viewer_daily_cap: number | null
+        }
+        Insert: {
+          id?: boolean
+          notice_version?: string
+          updated_at?: string
+          viewer_daily_cap?: number | null
+        }
+        Update: {
+          id?: boolean
+          notice_version?: string
+          updated_at?: string
+          viewer_daily_cap?: number | null
+        }
+        Relationships: []
+      }
       address_book: {
         Row: {
+          agent_target_version: string | null
           agent_token_hash: string | null
           agent_version: string | null
           alias: string | null
@@ -38,6 +205,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agent_target_version?: string | null
           agent_token_hash?: string | null
           agent_version?: string | null
           alias?: string | null
@@ -60,6 +228,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agent_target_version?: string | null
           agent_token_hash?: string | null
           agent_version?: string | null
           alias?: string | null
@@ -109,6 +278,62 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_releases: {
+        Row: {
+          created_at: string
+          notes: string | null
+          platform: string
+          sha256: string
+          signature: string
+          url: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          notes?: string | null
+          platform?: string
+          sha256: string
+          signature: string
+          url: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          notes?: string | null
+          platform?: string
+          sha256?: string
+          signature?: string
+          url?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      agent_update_policy: {
+        Row: {
+          id: boolean
+          target_version: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          target_version?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          target_version?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_update_policy_target_version_fkey"
+            columns: ["target_version"]
+            isOneToOne: false
+            referencedRelation: "agent_releases"
+            referencedColumns: ["version"]
           },
         ]
       }
@@ -681,6 +906,58 @@ export type Database = {
           },
         ]
       }
+      doctorsaas_conversation_links: {
+        Row: {
+          client_id: string
+          conversation_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          conversation_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          conversation_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctorsaas_conversation_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctorsaas_conversation_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctorsaas_conversation_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       features: {
         Row: {
           created_at: string
@@ -707,6 +984,109 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      integration_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          nome: string | null
+          provider: string
+          revoked_at: string | null
+          revoked_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          nome?: string | null
+          provider?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          nome?: string | null
+          provider?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_keys_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_keys_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_settings: {
+        Row: {
+          provider: string
+          reactivate_on_sync: boolean
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          provider?: string
+          reactivate_on_sync?: boolean
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          provider?: string
+          reactivate_on_sync?: boolean
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       join_requests: {
         Row: {
@@ -760,6 +1140,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      launch_offer: {
+        Row: {
+          created_at: string
+          discount_percent: number
+          id: boolean
+          is_active: boolean
+          manual_taken: number
+          slots_total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_percent?: number
+          id?: boolean
+          is_active?: boolean
+          manual_taken?: number
+          slots_total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_percent?: number
+          id?: boolean
+          is_active?: boolean
+          manual_taken?: number
+          slots_total?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       leads: {
         Row: {
@@ -895,10 +1305,10 @@ export type Database = {
       promo_code_redemptions: {
         Row: {
           admin_email: string | null
+          applied_by: string | null
           applied_discount_months: number | null
           applied_discount_percent: number | null
           applied_extra_trial_days: number
-          applied_by: string | null
           code: string
           consumed_at: string | null
           consumed_intent_id: string | null
@@ -912,10 +1322,10 @@ export type Database = {
         }
         Insert: {
           admin_email?: string | null
+          applied_by?: string | null
           applied_discount_months?: number | null
           applied_discount_percent?: number | null
           applied_extra_trial_days?: number
-          applied_by?: string | null
           code: string
           consumed_at?: string | null
           consumed_intent_id?: string | null
@@ -929,10 +1339,10 @@ export type Database = {
         }
         Update: {
           admin_email?: string | null
+          applied_by?: string | null
           applied_discount_months?: number | null
           applied_discount_percent?: number | null
           applied_extra_trial_days?: number
-          applied_by?: string | null
           code?: string
           consumed_at?: string | null
           consumed_intent_id?: string | null
@@ -945,6 +1355,20 @@ export type Database = {
           tenant_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "promo_code_redemptions_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_code_redemptions_consumed_intent_id_fkey"
+            columns: ["consumed_intent_id"]
+            isOneToOne: false
+            referencedRelation: "signup_intents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "promo_code_redemptions_promo_code_id_fkey"
             columns: ["promo_code_id"]
@@ -1257,6 +1681,7 @@ export type Database = {
       }
       tenant_settings: {
         Row: {
+          agent_target_version: string | null
           alert_email: string | null
           created_at: string
           display_name: string | null
@@ -1268,6 +1693,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agent_target_version?: string | null
           alert_email?: string | null
           created_at?: string
           display_name?: string | null
@@ -1279,6 +1705,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agent_target_version?: string | null
           alert_email?: string | null
           created_at?: string
           display_name?: string | null
@@ -1752,6 +2179,65 @@ export type Database = {
       }
     }
     Functions: {
+      ad_notice_ack: { Args: never; Returns: undefined }
+      ad_notice_status: {
+        Args: never
+        Returns: {
+          deve_exibir: boolean
+          version: string
+        }[]
+      }
+      ad_pick_for_viewer: {
+        Args: {
+          p_placement: string
+          p_viewer_tenant: string
+          p_viewer_user: string
+        }
+        Returns: {
+          body: string
+          cta_label: string
+          cta_url: string
+          headline: string
+          id: string
+          image_path: string
+          kind: string
+        }[]
+      }
+      ad_stats_campanha: {
+        Args: { p_dias?: number }
+        Returns: {
+          campanha: string
+          cliques: number
+          ctr: number
+          espectadores: number
+          exibicoes: number
+          kind: string
+          status: string
+          ultima: string
+        }[]
+      }
+      ad_stats_diario: {
+        Args: { p_dias?: number }
+        Returns: {
+          acessos_gratuitos: number
+          cliques: number
+          dia: string
+          espectadores: number
+          exibicoes: number
+          exibicoes_embed: number
+          exibicoes_painel: number
+        }[]
+      }
+      ad_stats_superficie: {
+        Args: { p_dias?: number }
+        Returns: {
+          cliques: number
+          ctr: number
+          exibicoes: number
+          placement: string
+          surface: string
+        }[]
+      }
       apply_paid_plan: { Args: { p_intent_id: string }; Returns: string }
       apply_promo_code_to_tenant: {
         Args: { p_code: string; p_tenant_id: string }
@@ -1828,6 +2314,13 @@ export type Database = {
           needs_choice: boolean
         }[]
       }
+      cancel_pending_promo: {
+        Args: { p_redemption_id: string }
+        Returns: {
+          ok: boolean
+          reason: string
+        }[]
+      }
       claim_poll: {
         Args: { p_nonce_hash: string; p_rustdesk_id: string }
         Returns: string
@@ -1841,13 +2334,6 @@ export type Database = {
           p_rustdesk_id: string
         }
         Returns: string
-      }
-      cancel_pending_promo: {
-        Args: { p_redemption_id: string }
-        Returns: {
-          ok: boolean
-          reason: string
-        }[]
       }
       claim_trial_document: {
         Args: { p_doc_hash: string; p_doc_type: string; p_tenant_id?: string }
@@ -1946,6 +2432,16 @@ export type Database = {
           key_version: number
         }[]
       }
+      launch_offer_status: {
+        Args: never
+        Returns: {
+          discount_percent: number
+          is_active: boolean
+          slots_left: number
+          slots_taken: number
+          slots_total: number
+        }[]
+      }
       meter_external_session: {
         Args: {
           p_connection_log_id: string
@@ -1958,6 +2454,71 @@ export type Database = {
           hard_cap_at: string
           reason: string
           source: string
+        }[]
+      }
+      ops_empresas: {
+        Args: never
+        Returns: {
+          acessos_30d: number
+          id: string
+          nome: string
+        }[]
+      }
+      ops_por_dia: {
+        Args: { p_dias?: number; p_tenant?: string }
+        Returns: {
+          acessos: number
+          dia: string
+          dispositivos: number
+          horas: number
+          tecnicos: number
+        }[]
+      }
+      ops_por_dispositivo: {
+        Args: { p_dias?: number; p_tenant?: string }
+        Returns: {
+          acessos: number
+          cliente: string
+          dispositivo: string
+          horas: number
+          reacessos: number
+          rustdesk_id: string
+          tecnicos: number
+          ultimo: string
+        }[]
+      }
+      ops_por_tecnico: {
+        Args: { p_dias?: number; p_tenant?: string }
+        Returns: {
+          acessos: number
+          clientes: number
+          dispositivos: number
+          duracao_media_s: number
+          fora_horario: number
+          horas: number
+          tecnico: string
+          ultimo: string
+        }[]
+      }
+      ops_resumo: {
+        Args: { p_dias?: number; p_tenant?: string }
+        Returns: {
+          acessos: number
+          acessos_anterior: number
+          clientes_atendidos: number
+          dispositivos_acessados: number
+          dispositivos_ativos: number
+          dispositivos_novos: number
+          duracao_media_s: number
+          duracao_mediana_s: number
+          duracao_p90_s: number
+          em_andamento: number
+          fora_horario: number
+          horas: number
+          limite_plano: number
+          pico_simultaneo: number
+          reacessos_24h: number
+          tecnicos: number
         }[]
       }
       promo_code_attach_tenant: {
@@ -2104,6 +2665,15 @@ export type Database = {
       }
       release_trial_document: { Args: { p_doc_hash: string }; Returns: boolean }
       reopen_join_request: { Args: { p_user_id: string }; Returns: string }
+      resolve_agent_update: {
+        Args: { p_current_version: string; p_device_id: string }
+        Returns: {
+          sha256: string
+          signature: string
+          url: string
+          version: string
+        }[]
+      }
       revoke_access_grant: { Args: { p_grant_id: string }; Returns: undefined }
       revoke_enrollment_secret: {
         Args: { p_secret_id: string }
@@ -2126,6 +2696,29 @@ export type Database = {
           p_key_version: number
         }
         Returns: undefined
+      }
+      set_launch_offer: {
+        Args: {
+          p_discount_percent?: number
+          p_is_active?: boolean
+          p_manual_taken?: number
+          p_slots_total?: number
+        }
+        Returns: {
+          created_at: string
+          discount_percent: number
+          id: boolean
+          is_active: boolean
+          manual_taken: number
+          slots_total: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "launch_offer"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_promo_code_active: {
         Args: { p_active: boolean; p_id: string }

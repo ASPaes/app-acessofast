@@ -196,41 +196,131 @@ https://claude.ai/code/artifact/1ebfa550-fb78-4a3f-bdfe-976c07c802f2
   A **URL fica fora** da assinatura de propósito: se a assinatura cobre o hash, trocar a URL não serve
   de nada — e deixá-la de fora permite mudar de hospedagem sem reassinar release antigo.
 
-### 7.2 ⚠️ O que FALTA para ligar — nesta ordem
+### 7.2 ✅ Pipeline de release FECHADO (2026-08-15) — falta só o bootstrap
 
-**O lado servidor já está no ar (2026-08-12).** Migration `agent_auto_update` aplicada,
-`session-ingest` na **v50**. Aplicada avulsa também a `20260812162229_resolve_agent_update_revoke_anon`
-(o `revoke ... from public` da primeira migration **não** alcança o `anon`, que recebe EXECUTE por
+**Servidor no ar desde 2026-08-12.** Migration `agent_auto_update` aplicada, `session-ingest` na
+**v50**. Aplicada avulsa também a `20260812162229_resolve_agent_update_revoke_anon` (o
+`revoke ... from public` da primeira migration **não** alcança o `anon`, que recebe EXECUTE por
 `ALTER DEFAULT PRIVILEGES`); o arquivo dela só entrou no repo em 2026-08-14 (`a451bbe`).
 
-**Nada está ligado, e é assim de propósito** — conferido em 2026-08-14:
-`agent_releases` **0 linhas** · `agent_update_policy.target_version` **NULL** · **0** devices com
-`agent_target_version`. A `resolve_agent_update` devolve zero linhas para todo mundo.
+**Concluído em 2026-08-15 — não refazer:**
 
-Falta, nesta ordem:
+1. **Secret `AGENT_UPDATE_SIGNING_KEY` criado** no repo do agente. Provado funcional: o passo de
+   Release só roda quando ele existe, e rodou.
+2. **`build-agent.yml` disparado** (`workflow_dispatch` na `main`, run `31895369959`) →
+   Release **`2026.08.15-f92d8aa`** publicado, com o `acessofast-agent.exe` (5.795.840 bytes) de
+   commit `f92d8aa`. Verificado ponta a ponta **fora do CI**: binário baixado do Release,
+   `sha256 = 03ceb3ea…393d7b` conferido, header `MZ` (PE Windows) confirmado, e a assinatura
+   aceita pelo `verificaAssinatura` real do `update.go` contra a `updatePubKeyB64` embutida.
+3. **Catalogado** em `agent_releases` (1 linha). O `insert` foi montado à mão porque o resumo do
+   job não abriu; a assinatura foi **regerada localmente** — Ed25519 é determinístico, mesmo
+   `(version, sha256)` dá a mesma assinatura byte a byte que o CI produziu.
 
-1. **Criar o secret `AGENT_UPDATE_SIGNING_KEY`** no repo do agente (Settings → Secrets → Actions).
-   A privada foi gerada em 2026-08-12 e **nunca foi impressa nem commitada** — vive só no arquivo
-   `agent-signing-key.private` no scratchpad daquela sessão (`5d0d1ab7-3201-4e51-80cd-f715ba6e87a7`),
-   **verificado presente em 2026-08-14**. É diretório temporário: criar o secret **agora**, não depois.
-   **Se sumir, gerar um par novo e trocar a `updatePubKeyB64` em `update.go`** — não adianta procurar
-   a antiga. Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
-   Sem o secret o passo de Release é **pulado com warning** — não quebra o build, só não publica.
-2. **Rodar o `build-agent.yml`** e catalogar o release: o SQL de `insert into agent_releases` sai
-   pronto no **resumo do job**. Hoje o repo do agente só tem o Release antigo **`v3.0.0` (2026-07-20)** —
-   o workflow ainda não publicou nenhum build com auto-update.
-3. **Canary:** `update address_book set agent_target_version = '<v>' where rustdesk_id = '<id>'`.
-   Conferir a coluna Agente no painel **antes** de tocar em tenant ou global.
+**Continua tudo desligado, de propósito** — conferido depois do insert:
+`agent_releases` **1** · `agent_update_policy.target_version` **NULL** · **0** devices com
+`agent_target_version`. Catálogo não instala nada; quem instala é o alvo.
 
-**Lembrar do bootstrap (§7.4):** em 2026-08-14 são **139 devices, 0 reportando `agent_version`** —
-nenhuma máquina rodou ainda o instalador novo, então nenhuma tem o código de auto-update para receber
-o alvo. O canary do item 3 precisa ser uma máquina onde o agente novo já foi instalado à mão.
+**Bootstrap da 1ª máquina: FEITO (2026-08-15).** `rustdesk_id 208146940` ("PC Luiz Asp",
+`id 4259b015-c6d0-4051-a3d4-14a5354c16ec`, tenant ASP) roda o `2026.08.15-f92d8aa` e **reporta versão**
+— era 139 devices / 0 com versão, agora 1. Feito **sem instalador**: parar o serviço `AcessoFastAgent`,
+trocar o `.exe` (backup em `<exe>.bak-preupdate`, binário anterior `sha256 56F3BCC1…40A053`), subir o
+serviço. As credenciais ficam em `C:\ProgramData\AcessoFast\` e não são tocadas — não há rematrícula.
+Diagnóstico fica em `C:\ProgramData\AcessoFast\agent.log`.
+
+**Falta para exercitar o auto-update de verdade:**
+
+- A `resolve_agent_update` casa `r.version is distinct from p_current_version` — é **"diferente da
+  atual"**, não "maior que". Logo, apontar o alvo para o `2026.08.15-f92d8aa` na máquina que **já**
+  roda essa versão devolve zero linhas e **não testa nada**. É preciso um **segundo release**: a
+  versão é `data-sha7`, então basta um commit novo no repo do agente (ou um dispatch em outro dia) →
+  catalogar → `update address_book set agent_target_version = '<nova>' where id = '4259b015-…'`.
+- Só então roda o trecho de maior risco (§7.3): download, verificação, rename para `.old`, gravação
+  e restart via `schtasks`.
+
+**✅ CORRIGIDO em 2026-08-15 — `resolve_agent_update` agora filtra por `platform`.**
+Migration `20260815190000_resolve_agent_update_filtra_platform.sql`, aplicada em produção.
+
+O furo era pior do que a primeira leitura sugeria. Não era "devolve 2 linhas": como a PK de
+`agent_releases` é só `version`, duas linhas nem podem existir. O risco real é o **alvo apontar para
+um release de outra plataforma** — e a FK `agent_update_policy.target_version → agent_releases(version)`
+garante que o alvo global é sempre uma versão catalogada, incluindo as Android. Bastaria o alvo
+global/tenant virar um release mobile para **toda máquina Windows do escopo** receber aquele binário,
+e o agente **aceitaria**: assinatura e sha256 conferem, porque o release é legítimo — só que da
+plataforma errada. Resultado seria o `.exe` do serviço substituído por um artefato Android.
+
+Como ficou: a plataforma do device é derivada de `address_book.os` (texto livre — `Windows 10.0.x`,
+`Android BP2A…`, `windows`, e 1 device com `null`) por prefixo, e entra no join com `r.platform`.
+**Fail-closed:** `os` nulo ou irreconhecível ⇒ nenhum update. Cobre 138 dos 139 devices; o único
+descoberto não roda o agente novo. Preferível a máquina que não atualiza do que máquina que recebe
+binário de outra plataforma.
+
+Provado em produção: device **Android** com alvo Windows ⇒ **0 linhas**; device **Windows** com alvo
+Windows ⇒ 1 linha com a versão certa; device já na versão do alvo ⇒ 0 linhas. Grants reconferidos
+depois do `create or replace` (`anon` e `authenticated` sem EXECUTE, `service_role` com).
+
+**Fica registrado:** a PK de `agent_releases` continua só `(version)` — mudar para `(version, platform)`
+quebraria aquela FK. Consequência: a mesma string de versão não pode existir para as duas plataformas.
+Hoje não colide (Windows e mobile saem de commits diferentes e a versão carrega o sha7), e se colidir
+o `insert` falha alto, na cara de quem cataloga.
+
+**Sobre a chave privada:** o GitHub guarda o secret write-only — não dá para ler de volta. A única
+cópia legível continua sendo `agent-signing-key.private` no scratchpad da sessão
+`5d0d1ab7-3201-4e51-80cd-f715ba6e87a7` (presente em 2026-08-15), **diretório temporário**. Vale
+mover para um cofre durável. Se sumir: gerar par novo e trocar a `updatePubKeyB64` em `update.go`
+(obriga a rebuildar o agente) — não adianta procurar a antiga.
+Pública atual: `IADLOND+FJeXkthXym/2AoPr6/336ITnC3TvOD1hGQs=`.
 
 ### 7.3 O que NÃO foi exercitado
 
-- **A troca de binário e o restart nunca rodaram em máquina real.** É o trecho de maior risco do
-  Passo 2: entre renomear o `.exe` e gravar o novo há uma janela em que o serviço fica sem binário.
-  Há restauração explícita do `.old`, mas isso é código não exercitado — testar no canary primeiro.
+- ~~A troca de binário e o restart nunca rodaram em máquina real.~~ **EXERCITADO E APROVADO em
+  2026-08-15**, no `208146940` (PC Luiz Asp): `2026.08.15-f92d8aa` → `2026.08.15-1a703f6` sem
+  intervenção. Linha do tempo do `agent.log`: `14:37:29` manifesto recebido e assinatura conferida →
+  download com hash validado → `14:37:31` binário trocado → restart agendado → `14:39:04` agente sobe
+  na versão nova → `agent_version` no banco igual ao alvo. **Caminho real do executável:
+  `C:\Program Files\AcessoFast Agent\acessofast-agent.exe`** (com espaço — pasta distinta da do
+  cliente branded, que é `C:\Program Files\AcessoFast\`).
+- **🐛 Defeito encontrado nesse teste — tentativa duplicada na janela do restart.** Entre a troca e o
+  restart (~2 min) o processo vivo ainda é o binário ANTIGO, então o agente segue se declarando na
+  versão velha; o servidor reoferece o update (correto) e o agente **reprocessa**: baixa os 5,7 MB de
+  novo e falha no rename com `Access is denied`, porque o `.old` agora é a imagem do processo em
+  execução e o `os.Remove(velho)` não consegue apagá-la.
+  **Não é perigoso** — falha no passo (2) do `trocaBinario`, que deixa o `.exe` intacto (o cenário
+  ruim é o (3) falhar depois do (2)), e o `updateMaxTries` limita a insistência. Mas suja o log de
+  toda máquina e desperdiça banda ×N.
+  **CORRIGIDO em 2026-08-15** — agente `c913ff2`: `updateAplicado string` em memória, setado após o
+  `trocaBinario` bem sucedido, com early-return no `aplicaUpdate` quando `u.Version == updateAplicado`.
+  Em memória basta: o restart limpa o estado, e depois dele a versão corrente já é a nova.
+  Entregue **pelo próprio auto-update** (2º ciclo real, `1a703f6` → `c913ff2`, sem intervenção).
+
+  ✅ **GUARDA VALIDADA EM CAMPO no 3º ciclo** (`c913ff2` → `f602a40`, 2026-08-15 15:17-15:19).
+  Atenção ao raciocínio, que quase induziu a conclusão errada: o **2º ciclo não provava nada** —
+  quem executou aquela troca foi o processo rodando `1a703f6`, *anterior* à correção, então o log
+  dele mostra o download duplicado de novo, corretamente. Uma correção não se valida no ciclo que a
+  entrega. Só o 3º ciclo, executado por um processo já em `c913ff2`, testa a guarda.
+  Evidência: o `presence` das 15:18:04 trouxe o bloco `update` completo (o servidor age certo — a
+  máquina ainda se declarava em `c913ff2`) e o agente **não reagiu**: um único "baixando de" no
+  ciclo inteiro e nenhum `Access is denied`.
+  Cobertura independente do campo: `TestMotivoPular` em `update_test.go` (10 casos), com os dois que
+  separam o certo do errado — "já trocada no disco" pula, "outra versão" não pula (uma guarda grosseira
+  demais bloquearia um alvo novo que chegasse antes do restart).
+
+**Releases catalogados (todos `platform = windows`, todos com assinatura conferida contra a pubkey
+embutida antes do insert):**
+
+| versão | sha256 | o que traz |
+|---|---|---|
+| `2026.08.15-f92d8aa` | `03ceb3ea…393d7b` | 1º release assinado; instalado à mão (bootstrap) |
+| `2026.08.15-1a703f6` | `958ace84…a0a16f` | `.gitignore`; **1º auto-update real** |
+| `2026.08.15-c913ff2` | `f47ccca4…6e03c7` | correção da tentativa duplicada; **2º auto-update real** |
+| `2026.08.15-f602a40` | `6d95b4af…e0e0cb` | `motivoPular` + testes; **3º ciclo — valida a guarda** |
+
+**Rito para publicar e catalogar um release** (o resumo do job do Actions não abriu nas duas
+tentativas; este caminho não depende dele): push na `main` do agente → o `build-agent.yml` dispara
+sozinho se o commit tocar `*.go`/`tools/**`/`go.mod`/`go.sum`/o próprio workflow, senão é
+`workflow_dispatch` na mão → baixar o asset do Release e conferir `sha256` **fora do CI** → regerar a
+assinatura localmente com `tools/sign-manifest` (Ed25519 é determinístico: mesmo `(version, sha256)`
+⇒ mesma assinatura do CI, byte a byte) → provar com um teste temporário que chama o
+`verificaAssinatura` real → só então `insert into agent_releases`.
 - O `agendaRestart` **não agenda na virada do dia** (o formato de `/sd` do `schtasks` segue o locale
   do Windows e errar isso agendaria para a data errada em silêncio). Nesse caso ele só adia: o próximo
   `presence` tenta de novo. Falhar aqui não é grave — o binário novo **já está no lugar** e sobe no
@@ -239,9 +329,27 @@ o alvo. O canary do item 3 precisa ser uma máquina onde o agente novo já foi i
 
 ### 7.4 Ainda vale
 
-- **Bootstrap inescapável:** o auto-update só existe numa máquina depois de uma última rodada manual
-  do instalador — ~50 sessões remotas pelo próprio AcessoFast. **Essa rodada agora deve levar o agente
-  COM auto-update**, senão será preciso repetir as 50 máquinas depois.
+- **Bootstrap inescapável, mas BARATO** — não precisa de instalador, ao contrário do que este handoff
+  assumia. Provado em duas máquinas (2026-08-15): descobrir o caminho pelo `PathName` do serviço,
+  `Copy-Item` para `.bak-preupdate`, `Stop-Service AcessoFastAgent`, baixar o `.exe` do Release,
+  **conferir o `Get-FileHash` contra o sha256 do catálogo**, `Start-Service`. As credenciais ficam em
+  `C:\ProgramData\AcessoFast\` e não são tocadas — sem rematrícula. Levar sempre o release **mais
+  novo**; bootstrapar num intermediário só gera um ciclo de update a mais.
+  Cuidado prático: em PowerShell 5.1 pode ser preciso `[Net.ServicePointManager]::SecurityProtocol='Tls12'`
+  antes do `Invoke-WebRequest`, senão o GitHub recusa com erro genérico de conexão.
+- **Já bootstrapadas (2/139):** `208146940` (PC Luiz Asp, tenant ASP) e `51200651`
+  (PC LUIZ CASA NOVO, tenant `teste`) — ambas em `2026.08.15-f602a40`.
+- **⚡ ALVO GLOBAL LIGADO em 2026-08-15:** `agent_update_policy.target_version = '2026.08.15-f602a40'`.
+  **Não atualizou ninguém** e era esperado: das 139, 132 rodam agente antigo (recebem o manifesto na
+  resposta do `presence` e o ignoram, por não ter código de update), 5 são barradas pelo filtro de
+  plataforma (4 Android + 1 `os` nulo), 1 tem alvo próprio e 1 já está na versão. Zero atualizações
+  hoje. O valor é prospectivo: **toda máquina bootstrapada daqui em diante se auto-corrige** para o
+  alvo global se cair num build mais antigo.
+  ⚠️ **Consequência a partir de agora:** com o global armado, publicar um release novo e **bater o
+  `target_version`** atualiza TODA a frota bootstrapada de uma vez, sem canário. O canário virou
+  escolha deliberada de cada rollout, não um passo automático — para manter, apontar primeiro o
+  `address_book.agent_target_version` de UMA máquina, conferir, e só então mexer no global.
+  Desligar é `update agent_update_policy set target_version = null where id`.
 - **Passo 3 (cliente/MSI):** baixa prioridade; boa parte do que parece "atualizar o cliente" é config.
 
 ---
@@ -252,7 +360,8 @@ Design completo em **`FASE3-DESIGN.md`** · artifact:
 https://claude.ai/code/artifact/ac9306ca-d639-4a1c-bc3d-56b6114e6d7d
 
 **Estado:** Fase 1 (quota) e Fase 2 (senha efêmera) **deployadas e validadas em produção**.
-Fase 3 **desenhada, não implementada** — as 4 validações §7 já foram **todas concluídas em 2026-07-24**:
+Fase 3 **parcialmente implementada no agente** — ver a correção logo abaixo das validações.
+As 4 validações §7 já foram **todas concluídas em 2026-07-24**:
 
 1. **[era bloqueante] ✅** `allow-remote-config-modification:"N"` **não** bloqueia o `--password` local do
    agente → a base §4.1 é viável como desenhada.
@@ -263,10 +372,25 @@ Fase 3 **desenhada, não implementada** — as 4 validações §7 já foram **to
 4. **✅** `approve-mode:password` **permite** conexões simultâneas com a mesma senha → **a senha é bearer;
    quota não é imponível pela senha** (confirma o furo #1). Quota vira uso-justo/faturamento + detecção (§4.4-A).
 
+> ⚠️ **Correção (2026-08-15) — o agente-side da Fase 3 JÁ EXISTE em código.** Descoberto ao ler o
+> `agent.log` da máquina bootstrapada: ela logou `ROTATE boot: rotacionando senha no startup`.
+> No repo do agente, `b8d6c69` (2026-07-25, "Fase 3 agente: janela de carência (60s) + rotate-on-boot")
+> é **ancestral** do commit de reporte de versão — ou seja, está na `main` desde julho e vai junto em
+> qualquer build novo. O item 2 das validações abaixo ("o agente Fase 2 **não** faz rotate-on-boot")
+> descreve o binário de julho, **não** o código atual.
+>
+> Conferido em 2026-08-15, agente-side: **carência 60s ✅** (`main.go`, com supressão de re-emissão de
+> `start` na reconexão dentro da janela) · **rotate-on-boot ✅** (`rotate.go`) · **hold de manutenção ✅**
+> (`holdActive`, arquivo com timestamp RFC3339) · **reporte por-`#N`/IP ❌** (não existe).
+> Consequência prática: **a rodada de bootstrap dos ~50 endpoints leva esse comportamento junto** —
+> toda máquina atualizada passa a rotacionar a senha no boot. Para o tenant ASP isso já foi exercitado
+> e o painel confirmou a rotação.
+
 **Implementar quando retomar** (`FASE3-DESIGN.md` §5–§6): base no `build-client.yml` (rebuild ~48min +
-recompilar instalador) · carência 60s + rotate-on-boot + reporte por-`#N`/IP no agente · detecção
-piggyback no `session-ingest` · hold de manutenção. Decisões pendentes de confirmação do Luiz (§9):
-continuidade vs segurança-primeiro no reboot · carência 60s · hold 15min · quota estratégia **A**.
+recompilar instalador) · reporte por-`#N`/IP no agente · detecção piggyback no `session-ingest`.
+Decisões pendentes de confirmação do Luiz (§9): continuidade vs segurança-primeiro no reboot ·
+carência 60s · hold 15min · quota estratégia **A** — note que carência e hold já estão **codificados**
+nos defaults, então "confirmar" aqui é validar o que já roda, não escolher do zero.
 
 ### ⚠️ Estado da máquina de teste (canary) — NÃO ESQUECER
 
@@ -282,9 +406,16 @@ Restart-Service AcessoFast,AcessoFastAgent -Force
 
 ### Dados de referência (device/tenant de teste)
 
-- Device: `id 27ef8ea6-24a0-4642-9429-9bffb70a9d2c`, `rustdesk_id 51200651`,
-  tenant **ASP** `ebd17e4e-d158-4164-a235-e8fd53cbf895`.
-- Tenant ASP: `max_concurrent_per_tech=null` (ilimitado), `billing_exempt=true`.
+- Device: `id 27ef8ea6-24a0-4642-9429-9bffb70a9d2c`, `rustdesk_id 51200651`, alias
+  **PC LUIZ CASA NOVO**. ⚠️ **Conferido em 2026-08-15: está no tenant `teste`
+  `9471a59b-236b-4790-8232-70f0ec04e838`, NÃO no ASP** — este handoff dizia ASP e estava errado
+  (ou o device foi movido depois). Roda o agente `2026.08.15-f602a40` desde 2026-08-15.
+- Tenant `teste`: `max_concurrent_per_tech=1`, **`billing_exempt=false`** — ou seja, testes de quota e
+  do corte B2 de 2h fazem sentido aqui, e não no ASP. Lembrando que `hard_cap_at` só existe para
+  atendimento ABERTO e vem `null` quando há plano ou crédito; o corte não dispara à toa.
+- Tenant **ASP** `ebd17e4e-d158-4164-a235-e8fd53cbf895`: `max_concurrent_per_tech=100` (o handoff
+  dizia `null`/ilimitado — conferido em 2026-08-15), `billing_exempt=true`. É o tenant do
+  `208146940` (PC Luiz Asp), a outra máquina bootstrapada.
 - Papéis: `luizhansen751@gmail.com` e `asp@…` = **super_admin** (furam o gate).
   `suporte4@aspsoftwares.com.br` = **admin** → **usar este para testar quota**.
 - Secret vive em `private.device_secrets` (upsert 1 linha/device). "Grant" = linha `active` em

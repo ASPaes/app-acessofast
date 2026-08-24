@@ -21,6 +21,7 @@ import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
 import { AcessoRestrito } from "@/components/acesso-restrito";
 import { SecaoCupons } from "@/components/secao-cupons";
 import { StatCard } from "@/components/stat-card";
+import type { KpiInfo } from "@/components/kpi-info";
 import { useMe } from "@/hooks/use-me";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -34,6 +35,7 @@ import {
   Clock,
   TicketPercent,
   Users,
+  Megaphone,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
@@ -72,6 +74,75 @@ async function mensagemDeErro(error: unknown): Promise<string> {
 function diasAte(iso: string): number {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
 }
+
+// ---------------------------------------------------------------------------
+// O que cada número quer dizer. Definição junto da conta que a produz — ver a
+// nota em kpi-info.tsx.
+//
+// Esta tela tem DOIS conjuntos de indicadores com públicos diferentes: os da
+// conta (plano, vencimento, uso, assentos), que o admin do tenant lê, e os da
+// plataforma (receita, atraso, teste, créditos), que só o super admin vê. Os
+// textos abaixo não se misturam de propósito.
+// ---------------------------------------------------------------------------
+const INFO: Record<string, KpiInfo> = {
+  // --- da conta -----------------------------------------------------------
+  plano: {
+    oQue: "O plano contratado pela empresa e o preço mensal dele.",
+    porQue:
+      "É o que define assentos, simultaneidade e se o atendimento tem ou não o corte de 2 horas. Toda recusa no Conectar sai de um limite deste plano.",
+    comoCalculamos: "tenants.plan_code, com o preço vindo de plans",
+    referencia: "Conta isenta aparece sem preço — cobrança desligada em tenants.billing_exempt.",
+  },
+  vencimento: {
+    oQue: "Quantos dias faltam para o teste acabar ou para a próxima renovação.",
+    porQue:
+      "Passado o prazo sem pagamento a conta entra em cobrança e depois é bloqueada — os técnicos param de conectar. É o cartão que dá tempo de agir antes disso.",
+    comoCalculamos: "tenants.plan_expires_at − hoje",
+  },
+  atendimentos: {
+    oQue: "Atendimentos da empresa nos últimos 30 dias, e quantos técnicos os fizeram.",
+    porQue:
+      "É o uso real contra o que se paga. Uso muito abaixo do plano é dinheiro parado; muito acima costuma vir com técnico esbarrando em limite.",
+    comoCalculamos: "atendimentos da conta com started_at nos últimos 30 dias",
+    referencia:
+      "Janela fixa de 30 dias, e não “o ciclo”: o ciclo tem fim gravado mas não tem início, e há plano anual — deduzir o começo daria número errado justo para quem paga mais.",
+  },
+  assentos: {
+    oQue: "Usuários ativos da conta sobre o limite de assentos do plano.",
+    porQue:
+      "Cheio, o próximo convite falha. É o limite que mais pega gente de surpresa, porque só aparece na hora de adicionar alguém.",
+    comoCalculamos: "profiles ativos da conta (sem super admin) ÷ tenants.seat_limit",
+  },
+  // --- da plataforma ------------------------------------------------------
+  receita: {
+    oQue: "Soma mensal dos planos das contas que pagam hoje.",
+    porQue:
+      "É a receita recorrente contratada — a base sobre a qual todo o resto se compara. Não é caixa: é o que está assinado.",
+    comoCalculamos:
+      "soma do preço mensal do plano das contas ativas com billing_mode = plan, sem teste e sem isenção",
+    referencia:
+      "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado.",
+  },
+  emAtraso: {
+    oQue: "Receita mensal das contas com pagamento pendente.",
+    porQue:
+      "É o pedaço da receita contratada que pode não entrar. Estas contas caminham para bloqueio, e bloqueio para o trabalho dos técnicos delas.",
+    comoCalculamos:
+      "soma do preço mensal das contas em cobrança, bloqueadas por cobrança ou com past_due_since preenchido",
+  },
+  emTeste: {
+    oQue: "Contas usando o período de teste grátis agora.",
+    porQue:
+      "É o funil de conversão do mês. Cada uma tem data para acabar — e cada uma que acaba sem virar plano é aquisição perdida depois do trabalho já feito.",
+    comoCalculamos: "contas ativas com is_trial = true",
+  },
+  creditosVendidos: {
+    oQue: "Valor dos pacotes de crédito comprados nos últimos 30 dias.",
+    porQue:
+      "É a receita que não é recorrente. Compra de crédito subindo em conta sem plano costuma ser sinal de que o plano ia servir melhor — e de que a conversa comercial vale a pena.",
+    comoCalculamos: "soma do preço dos pacotes lançados nos últimos 30 dias",
+  },
+};
 
 function Financeiro() {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -267,6 +338,7 @@ function Financeiro() {
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Plano"
+            info={INFO.plano}
             value={planName ?? tenant?.plan_code ?? "—"}
             icon={CreditCard}
             hint={
@@ -281,6 +353,7 @@ function Financeiro() {
           />
           <StatCard
             title={isTrial ? "Teste termina" : "Renova em"}
+            info={INFO.vencimento}
             value={dias === null ? "—" : dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `${dias} dias`}
             icon={Clock}
             hint={
@@ -293,6 +366,7 @@ function Financeiro() {
           />
           <StatCard
             title="Atendimentos"
+            info={INFO.atendimentos}
             value={uso?.atendimentos ?? 0}
             icon={Activity}
             hint={`${uso?.tecnicos ?? 0} técnico(s) ativo(s) · últimos 30 dias`}
@@ -301,6 +375,7 @@ function Financeiro() {
           />
           <StatCard
             title="Assentos"
+            info={INFO.assentos}
             value={assentos ? `${usados}/${assentos}` : String(usados)}
             icon={Users}
             hint={
@@ -401,6 +476,47 @@ function Financeiro() {
               </p>
             </CardContent>
           )}
+        </Card>
+      )}
+
+      {/* PLANO GRATUITO — o que ele inclui e o que ele mostra.
+          Escrito enquanto nao havia usuario free real: e a unica janela em que
+          essas condicoes podem ser adotadas sem mudar o combinado de quem ja
+          entrou. As promessas aqui sao as mesmas do §1 da politica, e nao sao
+          decorativas — cada uma tem contraparte no codigo (rotulo obrigatorio no
+          slot, teto em ad_policy, o slot so montando fora de sessao ativa).
+          Ver ANUNCIOS-POLITICA-CONTEUDO.md. */}
+      {mode === "free" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-primary" />
+              Plano gratuito
+            </CardTitle>
+            <CardDescription>
+              5 acessos por dia, cada um com limite de 2 horas. Com crédito, o atendimento não tem
+              esse corte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              O plano gratuito <strong className="text-foreground">exibe anúncio</strong>. É o que
+              sustenta ele ser gratuito. Estes são os limites que assumimos:
+            </p>
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
+              <li>· Todo anúncio é identificado — publicidade de terceiro nunca se passa por
+                recomendação nossa.</li>
+              <li>· Nunca durante um atendimento em andamento.</li>
+              <li>· Nunca em tela cheia e nunca bloqueando o que você está fazendo.</li>
+              <li>· Há um teto diário de quantos você vê.</li>
+              <li>· Nada é baixado ou executado: é imagem e texto dentro do painel.</li>
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              O anunciante não recebe seu nome, o da sua empresa, nem a lista das suas máquinas —
+              só a contagem de exibições e cliques. Se alguma dessas condições mudar, avisamos
+              antes de valer.
+            </p>
+          </CardContent>
         </Card>
       )}
 
@@ -801,6 +917,7 @@ function FinanceiroPlataforma() {
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Receita contratada"
+          info={INFO.receita}
           value={emReais(receitaMes)}
           icon={CreditCard}
           hint={`${pagantes.length} conta(s) pagante(s) · por mês`}
@@ -809,6 +926,7 @@ function FinanceiroPlataforma() {
         />
         <StatCard
           title="Em atraso"
+          info={INFO.emAtraso}
           value={emReais(receitaEmRisco)}
           icon={AlertTriangle}
           hint={`${emAtraso.length} conta(s) com pagamento pendente`}
@@ -817,6 +935,7 @@ function FinanceiroPlataforma() {
         />
         <StatCard
           title="Em teste"
+          info={INFO.emTeste}
           value={emTeste}
           icon={Clock}
           hint="Contas em teste grátis agora"
@@ -825,6 +944,7 @@ function FinanceiroPlataforma() {
         />
         <StatCard
           title="Créditos vendidos"
+          info={INFO.creditosVendidos}
           value={emReais(creditosVendidos)}
           icon={Coins}
           hint="Compras lançadas nos últimos 30 dias"

@@ -10,13 +10,10 @@ import {
   Building2,
   Store,
   Wallet,
+  Megaphone,
+  Plug,
 } from "lucide-react";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  useSidebar,
-} from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 import { useSolicitacoesAcesso } from "@/hooks/use-solicitacoes-acesso";
@@ -31,7 +28,9 @@ type NavItem = {
     | "/usuarios"
     | "/monitoramento"
     | "/financeiro"
-    | "/empresas";
+    | "/empresas"
+    | "/anuncios"
+    | "/integracoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -50,7 +49,13 @@ const operacao: NavItem[] = [
 // administração da conta, e ele não toma nenhuma delas.
 const gestao: NavItem[] = [{ title: "Usuários", url: "/usuarios", icon: Users }];
 
-const gestaoAdmin: NavItem[] = [{ title: "Financeiro", url: "/financeiro", icon: Wallet }];
+// Integracoes fica em gestao, e fora da lista do tecnico pelo mesmo motivo do
+// Financeiro: emitir chave que da acesso de escrita ao cadastro e decisao de
+// administracao da conta, nao ferramenta de atendimento.
+const gestaoAdmin: NavItem[] = [
+  { title: "Financeiro", url: "/financeiro", icon: Wallet },
+  { title: "Integrações", url: "/integracoes", icon: Plug },
+];
 
 // Planos saiu: a tela existia para listar empresas e dar acesso ao formulário de
 // atribuição de plano — a mesma lista de Empresas, duplicada. A atribuição
@@ -66,9 +71,14 @@ const gestaoAdmin: NavItem[] = [{ title: "Financeiro", url: "/financeiro", icon:
 // todas alavancas de receita, e escolher entre "30 dias de teste" e "20% por
 // três meses" exige olhar o que já está entrando — em telas separadas, essa
 // comparação não acontecia.
+//
+// Anuncios e da plataforma, nao da conta: mede o inventario do plano gratuito
+// somando TODOS os tenants free, e quem le esse numero e quem negocia com
+// anunciante. O tenant que exibe o anuncio nao tem o que fazer com ele.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
+  { title: "Anúncios", url: "/anuncios", icon: Megaphone },
 ];
 
 export function AppSidebar() {
@@ -101,9 +111,7 @@ export function AppSidebar() {
   // o admin, então a contagem precisa aparecer sem ele abrir a tela.
   const podeDecidir = me?.role === "super_admin" || me?.role === "admin";
   const { data: solicitacoes } = useSolicitacoesAcesso(!!podeDecidir);
-  const badges = solicitacoes?.length
-    ? { "/usuarios": solicitacoes.length }
-    : undefined;
+  const badges = solicitacoes?.length ? { "/usuarios": solicitacoes.length } : undefined;
 
   return (
     <Sidebar
@@ -131,12 +139,8 @@ export function AppSidebar() {
           />
           {!collapsed && (
             <div className="flex flex-col leading-tight min-w-0">
-              <span className="text-[13px] font-semibold text-foreground truncate">
-                AcessoFast
-              </span>
-              <span className="text-[10px] tracking-[0.08em] text-text-dim">
-                acesso remoto
-              </span>
+              <span className="text-[13px] font-semibold text-foreground truncate">AcessoFast</span>
+              <span className="text-[10px] tracking-[0.08em] text-text-dim">acesso remoto</span>
             </div>
           )}
         </div>
@@ -202,7 +206,10 @@ function NavGroup({
               }`}
             >
               {active && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary" aria-hidden />
+                <span
+                  className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary"
+                  aria-hidden
+                />
               )}
               <span className="relative shrink-0">
                 <item.icon
