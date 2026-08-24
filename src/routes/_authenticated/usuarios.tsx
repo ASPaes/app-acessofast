@@ -65,11 +65,16 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 /**
- * O que a tela deixa escolher. `super_admin` fica de fora: é papel de
- * plataforma, sem empresa, e a edge function recusa concedê-lo — não adianta
- * oferecer aqui um caminho que o backend fecha.
+ * O que a tela deixa escolher.
+ *
+ * `super_admin` fica de fora por ser papel de plataforma, sem empresa: a edge
+ * function recusa concedê-lo, e não adianta oferecer aqui um caminho que o
+ * backend fecha. `head` (Supervisor) fica de fora por outro motivo — existe no
+ * enum e o backend aceita, mas ninguém usa esse grupo, e listar um papel morto
+ * só dá chance de escolher errado. O rótulo continua no ROLE_LABEL para o caso
+ * de alguma conta antiga aparecer com ele.
  */
-const PAPEIS_ATRIBUIVEIS = ["admin", "head", "tech"] as const;
+const PAPEIS_ATRIBUIVEIS = ["admin", "tech"] as const;
 type PapelAtribuivel = (typeof PAPEIS_ATRIBUIVEIS)[number];
 
 type InviteResult = {
@@ -638,9 +643,7 @@ function PapelCell({
             <p className="text-xs text-muted-foreground">
               {escolha === "admin"
                 ? "Admin administra a empresa: convida, desativa e troca o papel dos colegas, além de tudo que o técnico faz."
-                : escolha === "head"
-                  ? "Supervisor acompanha a operação da empresa, sem administrar os membros."
-                  : "Técnico usa o painel para acessar os dispositivos da empresa, sem administrar membros."}
+                : "Técnico usa o painel para acessar os dispositivos da empresa, sem administrar membros."}
             </p>
           </div>
           <DialogFooter>
