@@ -2410,6 +2410,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_tenant: {
+        Args: { p_confirm_name: string; p_tenant: string }
+        Returns: undefined
+      }
       find_tenant_by_document: {
         Args: { p_cnpj?: string; p_doc_hash: string }
         Returns: {
@@ -2720,6 +2724,10 @@ export type Database = {
         Args: { p_active: boolean; p_id: string }
         Returns: undefined
       }
+      set_tenant_active: {
+        Args: { p_active: boolean; p_tenant: string }
+        Returns: undefined
+      }
       set_user_active: {
         Args: { p_active: boolean; p_user_id: string }
         Returns: undefined
@@ -2752,6 +2760,15 @@ export type Database = {
           limit_users: number
           used: number
         }[]
+      }
+      update_tenant: {
+        Args: {
+          p_billing_email?: string
+          p_cnpj?: string
+          p_name: string
+          p_tenant: string
+        }
+        Returns: undefined
       }
       vps_metrics_series: {
         Args: { p_bucket?: string; p_since?: string }

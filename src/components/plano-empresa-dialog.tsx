@@ -88,8 +88,9 @@ export function PlanoEmpresaDialog({
     },
   });
 
-  // Recarrega o formulário a cada empresa aberta. Campo numérico vazio = herdar
-  // do plano (a RPC aplica o default quando o argumento não vai no corpo).
+  // Ao abrir, os campos mostram o que a empresa tem hoje — não o que o plano
+  // dela diz. Os dois divergem sempre que alguém combinou uma exceção, e é
+  // justamente a exceção que precisa estar à vista antes de mexer.
   useEffect(() => {
     if (!empresa) return;
     setCodigo(empresa.plan_code ?? "");
@@ -100,6 +101,23 @@ export function PlanoEmpresaDialog({
   }, [empresa]);
 
   const planoEscolhido = (planos ?? []).find((p) => p.code === codigo);
+
+  /**
+   * Trocar de plano preenche os limites com os do plano novo.
+   *
+   * Antes os números do plano anterior ficavam parados no formulário, e salvar
+   * um Business com "10 técnicos" herdados do Team passava sem ninguém notar:
+   * o campo preenchido é um override, e override silencioso é o pior tipo. Quem
+   * quer exceção continua digitando por cima — a diferença é que agora ela é uma
+   * decisão, não um resto.
+   */
+  const escolherPlano = (code: string) => {
+    setCodigo(code);
+    const p = (planos ?? []).find((x) => x.code === code);
+    if (!p) return;
+    setAssentos(p.max_users === null ? "" : String(p.max_users));
+    setSimultaneas(p.max_concurrent_per_tech === null ? "" : String(p.max_concurrent_per_tech));
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -150,15 +168,27 @@ export function PlanoEmpresaDialog({
         return;
       }
     }
+    if (exigeAssentos) {
+      toast.error("Plano sob medida: informe quantos técnicos foram combinados.");
+      return;
+    }
     mutation.mutate();
   };
 
+  // Quantos assentos a empresa fica tendo de fato: o que está no campo, ou o
+  // padrão do plano quando o campo ficou vazio.
+  const assentosEfetivos =
+    assentos.trim() === "" ? (planoEscolhido?.max_users ?? null) : Number(assentos);
+
   const reduzAssentos =
-    planoEscolhido &&
-    empresa &&
-    planoEscolhido.max_users !== null &&
-    empresa.usuarios > planoEscolhido.max_users &&
-    assentos.trim() === "";
+    empresa !== null &&
+    assentosEfetivos !== null &&
+    Number.isFinite(assentosEfetivos) &&
+    empresa.usuarios > assentosEfetivos;
+
+  // Plano sob medida não tem número de assentos para herdar: a RPC recusa com
+  // seat_count_required, então o campo deixa de ser opcional.
+  const exigeAssentos = planoEscolhido?.max_users === null && assentos.trim() === "";
 
   return (
     <Dialog open={empresa !== null} onOpenChange={(v) => !v && onClose()}>
@@ -166,13 +196,14 @@ export function PlanoEmpresaDialog({
         <DialogHeader>
           <DialogTitle>Plano — {empresa?.name}</DialogTitle>
           <DialogDescription>
-            Deixe um campo numérico vazio para herdar o valor do plano.
+            Escolher um plano preenche os limites dele. Digite por cima só para combinar uma exceção
+            com esta empresa.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submeter} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="plano-codigo">Plano</Label>
-            <Select value={codigo} onValueChange={setCodigo}>
+            <Select value={codigo} onValueChange={escolherPlano}>
               <SelectTrigger id="plano-codigo">
                 <SelectValue placeholder="Escolha um plano" />
               </SelectTrigger>
@@ -196,11 +227,17 @@ export function PlanoEmpresaDialog({
               min={1}
               step={1}
               value={assentos}
-              placeholder="herdar do plano"
+              placeholder={
+                planoEscolhido?.max_users === null ? "combinado com o cliente" : "herdar do plano"
+              }
               onChange={(ev) => setAssentos(ev.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Padrão do plano: {planoEscolhido?.max_users ?? SEM_LIMITE}
+              {!planoEscolhido
+                ? "Escolha um plano para preencher o padrão."
+                : planoEscolhido.max_users === null
+                  ? "Plano sob medida: informe quantos técnicos foram combinados."
+                  : `Padrão do plano: ${planoEscolhido.max_users}`}
             </p>
           </div>
 
@@ -216,16 +253,18 @@ export function PlanoEmpresaDialog({
               onChange={(ev) => setSimultaneas(ev.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Padrão do plano: {planoEscolhido?.max_concurrent_per_tech ?? SEM_LIMITE} ·
-              super_admin não entra nessa conta.
+              {planoEscolhido
+                ? `Padrão do plano: ${planoEscolhido.max_concurrent_per_tech ?? SEM_LIMITE}`
+                : "Escolha um plano para preencher o padrão"}{" "}
+              · super_admin não entra nessa conta.
             </p>
           </div>
 
           {reduzAssentos && (
             <p className="flex items-start gap-2 text-xs text-destructive">
               <AlertTriangle className="h-4 w-4 shrink-0" />A empresa tem {empresa?.usuarios}{" "}
-              usuário(s) e este plano dá {planoEscolhido?.max_users} assento(s). Informe um número
-              em Técnicos para não reduzir.
+              usuário(s) para {assentosEfetivos} assento(s). Aumente Técnicos se ninguém deve ficar
+              de fora.
             </p>
           )}
 

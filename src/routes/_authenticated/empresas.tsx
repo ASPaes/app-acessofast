@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,10 +13,42 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, ChevronRight, User } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  Layers,
+  MoreHorizontal,
+  Pencil,
+  Power,
+  PowerOff,
+  Trash2,
+  User,
+} from "lucide-react";
+import { toast } from "sonner";
 import { ProvisionTenantDialog } from "@/components/provision-tenant-dialog";
 import { PlanoEmpresaDialog, type EmpresaPlano } from "@/components/plano-empresa-dialog";
+import { EditarEmpresaDialog, type EmpresaCadastro } from "@/components/editar-empresa-dialog";
+import { mascararDocumento } from "@/lib/documento";
 
 export const Route = createFileRoute("/_authenticated/empresas")({
   head: () => ({
@@ -39,8 +71,12 @@ const rotuloPapel: Record<string, string> = {
 };
 
 function EmpresasPage() {
+  const queryClient = useQueryClient();
   const [aberta, setAberta] = useState<string | null>(null);
   const [planoEmEdicao, setPlanoEmEdicao] = useState<EmpresaPlano | null>(null);
+  const [cadastroEmEdicao, setCadastroEmEdicao] = useState<EmpresaCadastro | null>(null);
+  const [inativando, setInativando] = useState<TenantLinha | null>(null);
+  const [excluindo, setExcluindo] = useState<TenantLinha | null>(null);
 
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -68,12 +104,46 @@ function EmpresasPage() {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "id, name, seat_limit, max_concurrent_per_tech, is_active, created_at, plan_code, billing_mode, billing_status, is_trial, profiles(count), address_book(count)",
+          "id, name, cnpj, billing_email, seat_limit, max_concurrent_per_tech, is_active, created_at, plan_code, billing_mode, billing_status, is_trial, profiles(count), address_book(count)",
         )
         .order("name");
       if (error) throw error;
       return data ?? [];
     },
+  });
+
+  const toggleAtivaMutation = useMutation({
+    mutationFn: async (vars: { id: string; ativar: boolean }) => {
+      const { error } = await supabase.rpc("set_tenant_active", {
+        p_tenant: vars.id,
+        p_active: vars.ativar,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["tenants-empresas"] });
+      toast.success(vars.ativar ? "Empresa reativada." : "Empresa inativada.");
+      setInativando(null);
+    },
+    onError: (err: Error) => toast.error(traduzirErro(err.message)),
+  });
+
+  const excluirMutation = useMutation({
+    mutationFn: async (vars: { id: string; nome: string }) => {
+      const { error } = await supabase.rpc("delete_tenant", {
+        p_tenant: vars.id,
+        p_confirm_name: vars.nome,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenants-empresas"] });
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      toast.success("Empresa excluída.");
+      setExcluindo(null);
+    },
+    onError: (err: Error) => toast.error(traduzirErro(err.message)),
   });
 
   if (me && !isSuper) {
@@ -117,9 +187,7 @@ function EmpresasPage() {
             Contas cadastradas
           </CardTitle>
           <CardDescription>
-            {data
-              ? `${empresas} empresa(s) · ${individuais} individual(is)`
-              : "Carregando…"}
+            {data ? `${empresas} empresa(s) · ${individuais} individual(is)` : "Carregando…"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -135,13 +203,16 @@ function EmpresasPage() {
                   <TableHead>Assentos</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criada em</TableHead>
+                  <TableHead className="w-12 text-right">
+                    <span className="sr-only">Ações</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 8 }).map((_, j) => (
+                      {Array.from({ length: 9 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-20" />
                         </TableCell>
@@ -150,7 +221,7 @@ function EmpresasPage() {
                   ))}
                 {!isLoading && (data?.length ?? 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                       Nenhuma conta cadastrada ainda.
                     </TableCell>
                   </TableRow>
@@ -169,6 +240,7 @@ function EmpresasPage() {
                         dispositivos={dispositivos}
                         individual={individual}
                         aberta={on}
+                        ehPropriaEmpresa={t.id === me?.tenant_id}
                         onToggle={() => setAberta(on ? null : t.id)}
                         onAlterarPlano={() =>
                           setPlanoEmEdicao({
@@ -180,6 +252,17 @@ function EmpresasPage() {
                             usuarios: membros,
                           })
                         }
+                        onEditarCadastro={() =>
+                          setCadastroEmEdicao({
+                            id: t.id,
+                            name: t.name,
+                            cnpj: t.cnpj,
+                            billing_email: t.billing_email,
+                          })
+                        }
+                        onInativar={() => setInativando(t)}
+                        onReativar={() => toggleAtivaMutation.mutate({ id: t.id, ativar: true })}
+                        onExcluir={() => setExcluindo(t)}
                       />
                     );
                   })}
@@ -190,6 +273,40 @@ function EmpresasPage() {
       </Card>
 
       <PlanoEmpresaDialog empresa={planoEmEdicao} onClose={() => setPlanoEmEdicao(null)} />
+      <EditarEmpresaDialog empresa={cadastroEmEdicao} onClose={() => setCadastroEmEdicao(null)} />
+
+      <AlertDialog open={inativando !== null} onOpenChange={(v) => !v && setInativando(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Inativar «{inativando?.name}»?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os técnicos da empresa param de abrir atendimentos novos. Os dados, os dispositivos e
+              o histórico continuam onde estão, e reativar devolve tudo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={toggleAtivaMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (inativando) toggleAtivaMutation.mutate({ id: inativando.id, ativar: false });
+              }}
+            >
+              {toggleAtivaMutation.isPending ? "Inativando…" : "Inativar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ExcluirEmpresaDialog
+        tenant={excluindo}
+        pendente={excluirMutation.isPending}
+        onClose={() => setExcluindo(null)}
+        onConfirmar={(nome) => {
+          if (excluindo) excluirMutation.mutate({ id: excluindo.id, nome });
+        }}
+      />
     </div>
   );
 }
@@ -197,6 +314,8 @@ function EmpresasPage() {
 type TenantLinha = {
   id: string;
   name: string;
+  cnpj: string | null;
+  billing_email: string | null;
   seat_limit: number;
   max_concurrent_per_tech: number | null;
   is_active: boolean;
@@ -220,16 +339,26 @@ function LinhaConta({
   dispositivos,
   individual,
   aberta,
+  ehPropriaEmpresa,
   onToggle,
   onAlterarPlano,
+  onEditarCadastro,
+  onInativar,
+  onReativar,
+  onExcluir,
 }: {
   tenant: TenantLinha;
   membros: number;
   dispositivos: number;
   individual: boolean;
   aberta: boolean;
+  ehPropriaEmpresa: boolean;
   onToggle: () => void;
   onAlterarPlano: () => void;
+  onEditarCadastro: () => void;
+  onInativar: () => void;
+  onReativar: () => void;
+  onExcluir: () => void;
 }) {
   // Só busca os usuários quando a linha abre: em uma plataforma com muitas
   // contas, trazer todos de antemão seria uma consulta por linha sem ninguém ter
@@ -247,6 +376,8 @@ function LinhaConta({
       return data ?? [];
     },
   });
+
+  const documento = tenant.cnpj ? mascararDocumento(tenant.cnpj) : null;
 
   return (
     <>
@@ -275,29 +406,29 @@ function LinhaConta({
                 individual ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
               }`}
             >
-              {individual ? <User className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />}
+              {individual ? (
+                <User className="h-3.5 w-3.5" />
+              ) : (
+                <Building2 className="h-3.5 w-3.5" />
+              )}
             </span>
             <div className="min-w-0">
               <span className="block font-medium">{tenant.name}</span>
               <span className="block text-xs text-muted-foreground">
                 {individual ? "conta individual" : `${membros} usuário(s)`}
+                {/* O documento fica aqui e não numa coluna própria: é o que
+                    identifica a empresa quando dois nomes se parecem, e só
+                    interessa junto do nome. */}
+                {documento && ` · ${documento}`}
               </span>
             </div>
           </div>
         </TableCell>
+        {/* Só o nome do plano. O "Alterar" que ficava aqui era um botão fantasma
+            no meio de uma coluna de leitura, e agora mora no ⋯ junto com as
+            outras ações da empresa — ação de linha tem um lugar só. */}
         <TableCell className="text-sm">
-          <span className="flex items-center gap-1">
-            {tenant.plan_code ?? <span className="text-muted-foreground">sem plano</span>}
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-xs"
-              onClick={onAlterarPlano}
-              aria-label={`Alterar plano de ${tenant.name}`}
-            >
-              Alterar
-            </Button>
-          </span>
+          {tenant.plan_code ?? <span className="text-muted-foreground">sem plano</span>}
         </TableCell>
         <TableCell>
           <Badge variant="outline">
@@ -333,11 +464,64 @@ function LinhaConta({
         <TableCell className="text-xs text-muted-foreground">
           {new Date(tenant.created_at).toLocaleDateString("pt-BR")}
         </TableCell>
+        <TableCell className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                aria-label={`Ações de ${tenant.name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onEditarCadastro}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar cadastro
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onAlterarPlano}>
+                <Layers className="h-4 w-4 mr-2" />
+                Alterar plano
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {tenant.is_active ? (
+                <DropdownMenuItem
+                  onClick={onInativar}
+                  // Quem está logado não desliga a própria casa: a RPC recusa, e
+                  // deixar o item clicável só renderia um toast de erro.
+                  disabled={ehPropriaEmpresa}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <PowerOff className="h-4 w-4 mr-2" />
+                  Inativar
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={onReativar}>
+                  <Power className="h-4 w-4 mr-2" />
+                  Reativar
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={onExcluir}
+                // Excluir só depois de inativar. Não é burocracia: é a chance de
+                // olhar a conta desligada e perceber que era a errada, com tudo
+                // ainda de pé para desfazer.
+                disabled={tenant.is_active || ehPropriaEmpresa}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {tenant.is_active ? "Excluir (inative antes)" : "Excluir"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
       </TableRow>
 
       {aberta && !individual && (
         <TableRow className="bg-muted/40 hover:bg-muted/40">
-          <TableCell colSpan={8} className="p-0">
+          <TableCell colSpan={9} className="p-0">
             <div className="px-4 py-3">
               {isLoading && <Skeleton className="h-16 w-full" />}
               {!isLoading && (usuarios?.length ?? 0) === 0 && (
@@ -390,4 +574,99 @@ function LinhaConta({
       )}
     </>
   );
+}
+
+/**
+ * Confirmação de exclusão.
+ *
+ * Digitar o nome não é teatro: é o único jeito de a pessoa reler qual conta
+ * está prestes a sumir. O texto lista o que vai junto porque essa é a pergunta
+ * que aparece depois, quando já não dá para responder.
+ */
+function ExcluirEmpresaDialog({
+  tenant,
+  pendente,
+  onClose,
+  onConfirmar,
+}: {
+  tenant: TenantLinha | null;
+  pendente: boolean;
+  onClose: () => void;
+  onConfirmar: (nome: string) => void;
+}) {
+  const [digitado, setDigitado] = useState("");
+  const confere = tenant !== null && digitado.trim() === tenant.name.trim();
+
+  return (
+    <AlertDialog
+      open={tenant !== null}
+      onOpenChange={(v) => {
+        if (!v) {
+          setDigitado("");
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir «{tenant?.name}»?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Some para sempre: os logins da empresa, os dispositivos, o histórico de atendimentos, os
+            clientes, os créditos e as integrações. Não há como desfazer.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="confirmar-nome-empresa">
+            Digite <span className="font-medium text-foreground">{tenant?.name}</span> para
+            confirmar
+          </Label>
+          <Input
+            id="confirmar-nome-empresa"
+            autoComplete="off"
+            value={digitado}
+            onChange={(e) => setDigitado(e.target.value)}
+          />
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            onClick={() => {
+              setDigitado("");
+            }}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!confere || pendente}
+            onClick={(e) => {
+              e.preventDefault();
+              if (tenant && confere) onConfirmar(tenant.name);
+            }}
+          >
+            {pendente ? "Excluindo…" : "Excluir empresa"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+/** As RPCs levantam código curto; a tela é quem sabe dizer isso em português. */
+function traduzirErro(mensagem: string): string {
+  if (mensagem.includes("nao_pode_inativar_a_propria_empresa")) {
+    return "Você não pode inativar a empresa em que está logado.";
+  }
+  if (mensagem.includes("nao_pode_excluir_a_propria_empresa")) {
+    return "Você não pode excluir a empresa em que está logado.";
+  }
+  if (mensagem.includes("empresa_ativa")) return "Inative a empresa antes de excluir.";
+  if (mensagem.includes("empresa_com_super_admin")) {
+    return "Esta empresa abriga um super admin. Mova-o para outra conta antes de excluir.";
+  }
+  if (mensagem.includes("usuario_com_historico")) {
+    return "Um dos logins tem registro em histórico compartilhado (cupom, crédito). Nada foi excluído.";
+  }
+  if (mensagem.includes("confirmacao_nao_confere")) return "O nome digitado não confere.";
+  if (mensagem.includes("empresa_nao_encontrada")) return "Empresa não encontrada.";
+  if (mensagem.includes("forbidden")) return "Só o super admin faz isso.";
+  return mensagem || "Não foi possível concluir a ação.";
 }
