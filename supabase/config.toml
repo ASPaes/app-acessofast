@@ -51,3 +51,8 @@ verify_jwt = false
 # maioria das funcoes deste arquivo.
 [functions.ad-serve]
 verify_jwt = true
+
+# Promocao/rebaixamento de papel pelo painel. Quem chama e o admin ou super_admin
+# logado; a funcao valida o perfil dele por getUser() antes de escrever.
+[functions.set-user-role]
+verify_jwt = true
