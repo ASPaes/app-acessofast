@@ -92,6 +92,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Mesma coisa, para maquina que ainda NAO esta no address_book. O alvo aqui e
+  // so o global (sem device nao ha override por dispositivo nem por tenant), e a
+  // plataforma sai do claim da matricula.
+  async function resolveUpdateGlobal(rid: string): Promise<Record<string, string> | null> {
+    try {
+      const { data, error } = await db.rpc("resolve_agent_update_global", {
+        p_rustdesk_id: rid,
+        p_current_version: agent_version ?? "",
+      });
+      if (error) return null;
+      const r = Array.isArray(data) ? data[0] : data;
+      if (!r?.version || !r?.url || !r?.sha256 || !r?.signature) return null;
+      return { version: r.version, url: r.url, sha256: r.sha256, signature: r.signature };
+    } catch {
+      return null;
+    }
+  }
+
   // 1.1) AUTO-ADOÇÃO (acesso direto): device ainda não adotado (só claim 'waiting',
   // não está no address_book). Só no 'start' e com o rustdesk_id do CONTROLADOR (a
   // máquina do técnico, já adotada): a RPC autentica pelo claim, resolve o tenant pelo
@@ -129,7 +147,25 @@ Deno.serve(async (req) => {
     // no_claim_or_bad_token (ou nulo) -> cai no device_not_registered abaixo.
   }
 
-  if (!device) return json({ error: "device_not_registered" }, 404);
+  // A maquina nao esta no cadastro: nao ha o que registrar, e o 404 continua.
+  // Mas o corpo vai com o bloco de update mesmo assim, e isso e proposital.
+  //
+  // O postEventFull do agente faz json.Unmarshal do corpo SEM olhar o status
+  // (main.go) e devolve r.Update incondicionalmente. Esta e a UNICA porta por
+  // onde uma correcao alcanca uma maquina presa no laco de matricula — sem ela,
+  // mudar o agente dessas maquinas exige ir ate elas. Entregar o update sem
+  // autenticar nao afrouxa nada: o agente so aplica release cuja assinatura
+  // Ed25519 confere com a chave publica embutida nele.
+  //
+  // So no 'presence' porque e o unico evento em que o agente consome o update —
+  // em start/heartbeat seria uma ida ao banco que nao serve para nada.
+  if (!device) {
+    if (event === "presence") {
+      const update = await resolveUpdateGlobal(rustdesk_id);
+      if (update) return json({ error: "device_not_registered", update }, 404);
+    }
+    return json({ error: "device_not_registered" }, 404);
+  }
   if (!device.agent_token_hash) return json({ error: "device_not_provisioned" }, 401);
 
   // 2) Autenticar o agente.
