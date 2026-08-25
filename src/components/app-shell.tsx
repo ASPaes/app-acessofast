@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -9,6 +10,8 @@ import { HealthPill } from "@/components/ui-shell/health-pill";
 import { AmbientBackground } from "@/components/ui-shell/ambient-background";
 import { BillingBanner } from "@/components/billing-banner";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
+import { Button } from "@/components/ui/button";
+import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Visão geral",
@@ -134,6 +137,29 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="font-medium text-foreground truncate">{current}</span>
             </nav>
             <div className="ml-auto flex items-center gap-3">
+              {/* Atalho para a página de download do agente. Abre em aba nova
+                  de propósito: quem clica está no meio de um atendimento e não
+                  pode perder o painel de vista — a instalação acontece do lado
+                  do cliente, em paralelo. */}
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="gap-1.5 px-2.5 text-text-dim hover:text-foreground"
+              >
+                <a
+                  href={URL_DOWNLOAD_AGENTE}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Abre a página de download em uma nova aba"
+                >
+                  <Download />
+                  {/* Em tela estreita sobra só o ícone; o rótulo continua no
+                      acessível, senão o botão vira um link sem nome. */}
+                  <span className="hidden sm:inline">Baixar agente</span>
+                  <span className="sr-only sm:hidden">Baixar agente</span>
+                </a>
+              </Button>
               <HealthPill enabled={isSuper} />
               <div data-tour="user-menu" className="flex items-center">
                 <UserMenu />

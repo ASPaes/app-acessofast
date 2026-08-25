@@ -25,6 +25,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { AnuncioSlot } from "@/components/anuncio-slot";
+import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
 import {
   Monitor,
   Copy,
@@ -125,7 +126,7 @@ type AdoptResult = {
 
 // Onde o cliente final baixa o agente. E o mesmo endereco do fluxo normal de
 // instalacao (FASE3-DESIGN, item 1) — a integracao nao cria um caminho paralelo.
-const URL_DOWNLOAD = "https://acessofast.com.br/baixar";
+const URL_DOWNLOAD = URL_DOWNLOAD_AGENTE;
 
 const INSTRUCOES_INSTALACAO = [
   "Para eu acessar seu computador remotamente:",
