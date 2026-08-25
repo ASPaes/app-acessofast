@@ -178,7 +178,7 @@ vencimento − 30d → AVISO (dias restantes, data, valor, forma de pagto, timel
 
 ## 10. Adoção de device (automação) — já existe, decisão em aberto
 
-O agente **auto-registra** um claim por `rustdesk_id` no enroll; o técnico **adota por ID** (`redeem_claim`/`adopt-device`). O download genérico em `/baixar` **força o caminho sem segredo de tenant**.
+O agente **auto-registra** um claim por `rustdesk_id` no enroll; o técnico **adota por ID** (`redeem_claim`/`adopt-device`). O download genérico em `/download` **força o caminho sem segredo de tenant**.
 
 ⚠️ **Risco bearer** (ID de 9 dígitos, enumerável): qualquer tenant que souber o ID adota. **Postura anti-sequestro = decisão em aberto** — opções: confirmação no endpoint (código efêmero), exigir device online+validado, ou release-para-readotar. Ver `acessofast-access-control-plan`.
 
