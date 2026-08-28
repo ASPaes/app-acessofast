@@ -18,9 +18,20 @@ Um segundo enforcement é **temporal**: o **corte às 2h do free** é um `end` f
 
 | Modo | Escopo | Unidade de consumo | Simultaneidade | Limite de tempo |
 |------|--------|--------------------|----------------|-----------------|
-| **Free** | por **conta** (individual, ~1 técnico) | 1 acesso = 1 **device distinto/dia** (teto 5/dia) | **1** | **2h/atendimento** → corte + rotação |
+| **Free** | por **conta** (individual, ~1 técnico) | 1 acesso = 1 **atendimento** (teto 5/dia) | **1** | **2h/atendimento** → corte |
 | **Créditos** | por **conta** | 1 crédito = 1 atendimento/device por **janela de 3h** | **ilimitada** | sessão máx = **TBD** (§11) |
 | **Planos** | por **tenant** | **nenhuma** (uso ilimitado) | por técnico (5 / 10 / ∞) | — |
+
+> **Correção 26/08/2026 — unidade do acesso gratuito.** Esta tabela dizia "1 acesso = 1 **device
+> distinto/dia**". O código sempre fez outra coisa: `create_access_grant` e `meter_external_session`
+> incrementam `daily_access.used` **a cada atendimento**, independente de device. **Vence o código, e a
+> tabela foi corrigida.** Pela regra antiga, reconectar à mesma máquina não custaria nada e o gratuito
+> viraria tempo ilimitado num cliente só — o que anula a razão de existir do cap de 2h. Pela regra do
+> código o gratuito é honestamente "até 5 x 2h por dia". Reconexão dentro da janela de 2h continua sem
+> cobrar, pelo gate de reconexão — a regra só cobra quando a janela venceu de verdade.
+>
+> A coluna de limite de tempo também perdeu a menção à rotação de senha: o corte deixa de ser feito
+> rotacionando a credencial. Ver o plano de aposentadoria da senha rotativa.
 
 **Reset do free:** diário à **meia-noite `America/Sao_Paulo` (GMT-3)**.
 
