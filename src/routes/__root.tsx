@@ -85,7 +85,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Painel multitenant do Acessofast: acesso remoto seguro e suporte de TI para MSPs, clínicas e times internos.",
       },
-      { name: "author", content: "ASP Softwares" },
+      { name: "author", content: "AcessoFast" },
       { property: "og:title", content: "Acessofast — Painel de acesso remoto" },
       {
         property: "og:description",
