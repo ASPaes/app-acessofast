@@ -4,7 +4,8 @@
 // FIX v2: duration_seconds e coluna GERADA -> nunca escrever nela; so setar session_end.
 // FIX v3: aceita o evento "presence" (agente manda a cada 60s com a maquina ociosa) e
 //         carimba address_book.last_online em TODO evento autenticado. O painel deriva
-//         online/offline dessa coluna (janela de 2 min) — sem isto tudo fica "Offline".
+//         online/offline dessa coluna (janela em src/lib/presenca.ts do painel) — sem
+//         isto tudo fica "Offline".
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -176,7 +177,8 @@ Deno.serve(async (req) => {
   const nowIso = new Date().toISOString();
 
   // 2.1) Presenca: qualquer evento autenticado prova que a maquina esta viva agora.
-  // O painel calcula online/offline por address_book.last_online > now() - 2min, e o
+  // O painel calcula online/offline por address_book.last_online > now() - JANELA_ONLINE_MS
+  // (src/lib/presenca.ts; hoje 7min, dimensionada pelo presenceInterval do agente), e o
   // agente ocioso so manda "presence" (60s em 60s) — por isso o carimbo vem ANTES do
   // roteamento por evento, e nao so no ramo de sessao.
   //

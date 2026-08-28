@@ -49,6 +49,7 @@ import {
   normalizarDocumento,
   normalizarTexto,
 } from "@/lib/clientes";
+import { limiteOnlineISO } from "@/lib/presenca";
 
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
@@ -432,7 +433,7 @@ function ConectarPage() {
     queryKey: ["conectar_online"],
     refetchInterval: 30000,
     queryFn: async () => {
-      const limite = new Date(Date.now() - 120000).toISOString();
+      const limite = limiteOnlineISO();
       const { data, error } = await supabase
         .from("address_book")
         .select("id")

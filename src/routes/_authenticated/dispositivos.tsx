@@ -64,6 +64,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { limiteOnlineISO } from "@/lib/presenca";
 
 type ProvisionResult = {
   device_id?: string;
@@ -694,7 +695,7 @@ function DispositivosPage() {
     queryKey: ["dispositivos_online"],
     refetchInterval: 30000,
     queryFn: async () => {
-      const limite = new Date(Date.now() - 120000).toISOString();
+      const limite = limiteOnlineISO();
       const { data, error } = await supabase
         .from("address_book")
         .select("id")
