@@ -170,7 +170,16 @@ Deno.serve(async (req) => {
   if (!device.agent_token_hash) return json({ error: "device_not_provisioned" }, 401);
 
   // 2) Autenticar o agente.
+  //
+  // Continua 401 — aqui o agente NAO entra em laco por causa da resposta (o
+  // presence segue a cadencia normal), entao nao ha o problema que o
+  // rotate-device-secret tinha. Mas o rustdesk_id vai pro log de proposito: os
+  // logs da plataforma so guardam o IP, e em 05/09/2026 isso impediu de
+  // descobrir QUAL maquina estava com token divergente. Um device nesse estado
+  // nao volta sozinho — precisa ser re-adotado — entao ele tem que ser
+  // localizavel.
   if (presentedHash !== device.agent_token_hash) {
+    console.warn("session_token_invalido", rustdesk_id, device.id);
     return json({ error: "unauthorized" }, 401);
   }
 

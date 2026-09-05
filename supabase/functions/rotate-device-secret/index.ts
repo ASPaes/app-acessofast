@@ -97,6 +97,9 @@ Deno.serve(async (req) => {
 
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
 
+  // Calculado antes do descarte porque a checagem de token virou parte dele.
+  const presentedHash = await sha256Hex(agent_token);
+
   // 200 de proposito, e a diferenca vale a leitura: o agente so apaga o
   // rotate.pending quando recebe 200 (rotate.go, rotateRetryLoop). Com 404 ele
   // reagenda a cada 30s PARA SEMPRE — eram 38 mil chamadas por dia, ~94% de tudo
@@ -111,12 +114,28 @@ Deno.serve(async (req) => {
     console.warn("rotate_descartado_device_nao_registrado", rustdesk_id);
     return json({ ok: true, discarded: true, reason: "device_not_registered" }, 200);
   }
-  if (!device.agent_token_hash) return json({ error: "device_not_provisioned" }, 401);
-
-  // 2) Autenticar o agente (mesmo esquema do session-ingest).
-  const presentedHash = await sha256Hex(agent_token);
-  if (presentedHash !== device.agent_token_hash) {
-    return json({ error: "unauthorized" }, 401);
+  // Mesmo raciocinio do descarte acima, para o outro jeito de a rotacao nunca
+  // dar certo: o dispositivo existe, mas o token que ele apresenta nao e mais o
+  // dele. Isso acontece quando o device foi re-adotado (redeem_claim rotaciona
+  // agent_token_hash) e sobrou um agente antigo na maquina, ou quando a
+  // credencial local se perdeu.
+  //
+  // 401 aqui era um laco identico ao que o 404 causava: o rotateRetryLoop so
+  // apaga o rotate.pending com 200, entao reagendava a cada 30s indefinidamente.
+  // Em 05/09/2026 UMA maquina nesse estado gerava 2.880 chamadas por dia.
+  // Retentar nunca resolve — o token local nao muda sozinho, e a senha pendente
+  // dele nao poderia ser guardada de qualquer forma: ele nao prova ser o dono.
+  //
+  // Loga o rustdesk_id de proposito. Os logs da plataforma so guardam o IP, e
+  // sem o id nao da para dizer QUAL maquina esta nesse estado — foi exatamente
+  // o que impediu o diagnostico em 05/09.
+  if (!device.agent_token_hash || presentedHash !== device.agent_token_hash) {
+    console.warn(
+      "rotate_descartado_token_invalido",
+      rustdesk_id,
+      device.agent_token_hash ? "hash_divergente" : "device_sem_token",
+    );
+    return json({ ok: true, discarded: true, reason: "token_invalido" }, 200);
   }
 
   // 3) Cifrar AES-256-GCM. AAD = device_id (a MESMA string usada por connect-device).
