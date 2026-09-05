@@ -41,6 +41,7 @@ import {
   ArrowLeft,
   Send,
 } from "lucide-react";
+import { limiteOnlineISO } from "@/lib/presenca";
 import { useState } from "react";
 import {
   filtrarIgnorandoPontuacao,
@@ -425,13 +426,13 @@ function ConectarPage() {
     },
   });
 
-  // Mesma regra da tela de Dispositivos: online = visto nos ultimos 120s.
+  // Mesma regra da tela de Dispositivos (JANELA_ONLINE_MS, em lib/presenca).
   const online = useQuery({
     enabled: idsDoGrupo.length > 0 || modoTodas,
     queryKey: ["conectar_online"],
     refetchInterval: 30000,
     queryFn: async () => {
-      const limite = new Date(Date.now() - 120000).toISOString();
+      const limite = limiteOnlineISO();
       const { data, error } = await supabase
         .from("address_book")
         .select("id")
