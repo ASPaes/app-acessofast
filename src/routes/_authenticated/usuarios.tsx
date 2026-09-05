@@ -57,6 +57,26 @@ export const Route = createFileRoute("/_authenticated/usuarios")({
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const ROLE_LABEL: Record<string, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  head: "Supervisor",
+  tech: "Técnico",
+};
+
+/**
+ * O que a tela deixa escolher.
+ *
+ * `super_admin` fica de fora por ser papel de plataforma, sem empresa: a edge
+ * function recusa concedê-lo, e não adianta oferecer aqui um caminho que o
+ * backend fecha. `head` (Supervisor) fica de fora por outro motivo — existe no
+ * enum e o backend aceita, mas ninguém usa esse grupo, e listar um papel morto
+ * só dá chance de escolher errado. O rótulo continua no ROLE_LABEL para o caso
+ * de alguma conta antiga aparecer com ele.
+ */
+const PAPEIS_ATRIBUIVEIS = ["admin", "tech"] as const;
+type PapelAtribuivel = (typeof PAPEIS_ATRIBUIVEIS)[number];
+
 type InviteResult = {
   ok?: boolean;
   user_id?: string;
@@ -143,13 +163,6 @@ function UsuariosPage() {
     return tenantMatch && searchMatch;
   });
 
-  const roleLabel: Record<string, string> = {
-    super_admin: "Super Admin",
-    admin: "Admin",
-    head: "Supervisor",
-    tech: "Técnico",
-  };
-
   const canResend = (u: { id: string; role: string; tenant_id: string | null }) => {
     if (!me) return false;
     if (u.id === me.id) return false;
@@ -217,13 +230,45 @@ function UsuariosPage() {
   });
 
 
+  // Mudar papel é a única operação desta tela que passa por edge function em vez
+  // de RPC: private.guard_profile_privileges() só libera profiles.role para
+  // super_admin e service_role, então quem escreve é o backend — mesma razão da
+  // invite-user e da join-request.
+  const podeMudarPapel = (u: { id: string; role: string; tenant_id: string | null }) => {
+    if (!me) return false;
+    if (u.id === me.id) return false;
+    if (u.role === "super_admin") return false;
+    if (me.role === "super_admin") return true;
+    if (me.role === "admin" && me.tenant_id && u.tenant_id === me.tenant_id) return true;
+    return false;
+  };
+
+  const mudarPapelMutation = useMutation({
+    mutationFn: async (vars: { id: string; papel: PapelAtribuivel }) => {
+      const { data, error } = await supabase.functions.invoke<InviteResult>("set-user-role", {
+        body: { user_id: vars.id, role: vars.papel },
+      });
+      if (error) throw new Error(await invokeErrorMessage(error));
+      if (!data?.ok) throw new Error(data?.detail ?? data?.error ?? "Falha ao alterar o papel");
+      return data;
+    },
+    onSuccess: (_data, vars) => {
+      toast.success(`Papel alterado para ${ROLE_LABEL[vars.papel] ?? vars.papel}`);
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Usuários</h1>
           <p className="text-sm text-muted-foreground">
-            Membros do painel. Convites e mudança de papel são operações do backend.
+            Membros do painel. Admins convidam, ativam e trocam o papel de quem é da própria
+            empresa.
           </p>
         </div>
         <div className="flex gap-2">
@@ -344,7 +389,16 @@ function UsuariosPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{roleLabel[u.role] ?? u.role}</Badge>
+                        <PapelCell
+                          papel={u.role}
+                          nome={u.full_name ?? u.email ?? "este usuário"}
+                          editavel={podeMudarPapel(u)}
+                          salvando={
+                            mudarPapelMutation.isPending &&
+                            mudarPapelMutation.variables?.id === u.id
+                          }
+                          onSalvar={(papel) => mudarPapelMutation.mutate({ id: u.id, papel })}
+                        />
                       </TableCell>
                       <TableCell>
                         <Badge variant={u.is_active ? "default" : "secondary"}>
@@ -505,6 +559,110 @@ function NomeCell({
           <Pencil className="h-3 w-3" />
         </Button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Papel do usuário, com a promoção/rebaixamento atrás de um diálogo.
+ *
+ * Ao contrário do nome, aqui um clique errado dá ou tira poder — quem vira
+ * Admin passa a convidar, desativar e trocar o papel dos colegas da empresa.
+ * Por isso o papel novo é escolhido e confirmado numa janela que diz o que cada
+ * um alcança, em vez de um select solto na linha que muda no primeiro clique.
+ */
+function PapelCell({
+  papel,
+  nome,
+  editavel,
+  salvando,
+  onSalvar,
+}: {
+  papel: string;
+  nome: string;
+  editavel: boolean;
+  salvando: boolean;
+  onSalvar: (papel: PapelAtribuivel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [escolha, setEscolha] = useState<PapelAtribuivel>(
+    (PAPEIS_ATRIBUIVEIS as readonly string[]).includes(papel) ? (papel as PapelAtribuivel) : "tech",
+  );
+
+  const badge = <Badge variant="outline">{ROLE_LABEL[papel] ?? papel}</Badge>;
+  if (!editavel) return badge;
+
+  return (
+    <div className="group flex items-center gap-1.5">
+      {badge}
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (v) {
+            setEscolha(
+              (PAPEIS_ATRIBUIVEIS as readonly string[]).includes(papel)
+                ? (papel as PapelAtribuivel)
+                : "tech",
+            );
+          }
+        }}
+      >
+        <DialogTrigger asChild>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+            aria-label={`Alterar papel de ${nome}`}
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar papel</DialogTitle>
+            <DialogDescription>
+              {nome} é <strong>{ROLE_LABEL[papel] ?? papel}</strong> hoje. A mudança vale na próxima
+              vez que ele carregar o painel.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="papel-novo">Novo papel</Label>
+            <Select value={escolha} onValueChange={(v) => setEscolha(v as PapelAtribuivel)}>
+              <SelectTrigger id="papel-novo">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAPEIS_ATRIBUIVEIS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {escolha === "admin"
+                ? "Admin administra a empresa: convida, desativa e troca o papel dos colegas, além de tudo que o técnico faz."
+                : "Técnico usa o painel para acessar os dispositivos da empresa, sem administrar membros."}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={salvando || escolha === papel}
+              onClick={() => {
+                onSalvar(escolha);
+                setOpen(false);
+              }}
+            >
+              {salvando ? "Salvando..." : "Alterar papel"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

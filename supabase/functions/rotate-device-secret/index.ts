@@ -96,7 +96,21 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
-  if (!device) return json({ error: "device_not_registered" }, 404);
+
+  // 200 de proposito, e a diferenca vale a leitura: o agente so apaga o
+  // rotate.pending quando recebe 200 (rotate.go, rotateRetryLoop). Com 404 ele
+  // reagenda a cada 30s PARA SEMPRE — eram 38 mil chamadas por dia, ~94% de tudo
+  // que esta rota recebia, de maquinas que nao existem no cadastro. Respondendo
+  // 200 o laco morre na primeira volta, sem atualizar um unico endpoint.
+  //
+  // Nao ha nada a perder ao descartar: a senha pendente nunca chegou a ser
+  // guardada (nao existe linha onde guardar) e o painel nao alcanca um
+  // dispositivo que nao esta no address_book. Quando ele for adotado, o
+  // rotateOnBoot e o fim de sessao produzem senha nova.
+  if (!device) {
+    console.warn("rotate_descartado_device_nao_registrado", rustdesk_id);
+    return json({ ok: true, discarded: true, reason: "device_not_registered" }, 200);
+  }
   if (!device.agent_token_hash) return json({ error: "device_not_provisioned" }, 401);
 
   // 2) Autenticar o agente (mesmo esquema do session-ingest).

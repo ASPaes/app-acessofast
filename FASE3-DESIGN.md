@@ -16,7 +16,7 @@
 **Objetivo da Fase 3:** transformar a senha efêmera no **único** caminho de acesso, fechar a escalada por config remota, e reconciliar isso com **continuidade de sessão** (quedas curtas e reboot).
 
 ### Restrições inegociáveis (contexto do produto)
-1. O fluxo "cliente baixa em `acessofast.com.br/baixar` e informa o ID" **não muda**.
+1. O fluxo "cliente baixa em `acessofast.com.br/download` e informa o ID" **não muda**.
 2. A chave de relay `-k` é **pública** (embutida no client). ⇒ o relay **não distingue** conexão via painel de conexão direta. **Toda a segurança recai sobre a senha.**
 3. RustDesk **OSS** (self-hosted hbbs/hbbr). Sem recursos do Pro (access control, OIDC, API de sessão).
 

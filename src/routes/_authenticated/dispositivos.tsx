@@ -41,10 +41,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2 } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { filtrarIgnorandoPontuacao } from "@/lib/clientes";
-import { limiteOnlineISO } from "@/lib/presenca";
+import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -65,6 +64,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { limiteOnlineISO } from "@/lib/presenca";
 
 type ProvisionResult = {
   device_id?: string;
@@ -129,7 +129,7 @@ type AddressBookRow = {
   tenant_id: string | null;
   is_active: boolean;
   client_id: string | null;
-  clients?: { name: string; document: string | null; document_type: string | null } | null;
+  clients?: { name: string; document: string | null; document_type: string | null; phone: string | null } | null;
   tenants: { name: string } | null;
 };
 
@@ -310,6 +310,14 @@ function DispositivosPage() {
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [showInativos, setShowInativos] = useState(false);
   const [soFavoritos, setSoFavoritos] = useState(false);
+  // TEMPORARIO — rodada de bootstrap da frota (ver ATUALIZACAO-FROTA.md). Maquina
+  // que nunca reportou versao e maquina sem auto-update: o campo agent_version
+  // nasceu junto com o cliente de update, entao "desconhecida" quer dizer build
+  // anterior a 12/08/2026, e nenhuma release que a gente publique a alcanca. A
+  // unica saida e uma sessao remota manual — e para isso alguem precisa ligar
+  // para o cliente e combinar a hora. Este filtro e essa lista de ligacoes.
+  // Sai da tela (com o telefone e o contador) quando a contagem chegar a zero.
+  const [soDesconhecidos, setSoDesconhecidos] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid" | "grouped">("list");
   const [markerFilter, setMarkerFilter] = useState<Set<string>>(new Set());
   const [markerFilterOpen, setMarkerFilterOpen] = useState(false);
@@ -587,7 +595,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, client_id, clients(name, document, document_type), tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, client_id, clients(name, document, document_type, phone), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -762,6 +770,7 @@ function DispositivosPage() {
     return data.filter((d) => {
       if (!showInativos && d.is_active === false) return false;
       if (soFavoritos && !favoritos?.has(d.id)) return false;
+      if (isSuper && soDesconhecidos && d.agent_version) return false;
       if (isSuper && tenantFilter !== "all" && d.tenant_id !== tenantFilter) return false;
       if (markerFilter.size > 0) {
         const assigned = markersByDevice?.get(d.id) ?? [];
@@ -780,7 +789,7 @@ function DispositivosPage() {
       }
       return true;
     });
-  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, favoritos, markerFilter, markersByDevice]);
+  }, [data, q, showInativos, isSuper, tenantFilter, soFavoritos, soDesconhecidos, favoritos, markerFilter, markersByDevice]);
 
   const escopoContagem = useMemo(() => {
     const base = data ?? [];
@@ -799,6 +808,14 @@ function DispositivosPage() {
     }
     return { online, offline, atendimento };
   }, [escopoContagem, sessoesAtivas, dispositivosOnline]);
+
+  // TEMPORARIO (bootstrap da frota): quantas maquinas ainda nao reportam versao.
+  // Conta no escopo do filtro de empresa, como os outros contadores, para o numero
+  // do rotulo bater com o que a lista mostra ao ligar o filtro.
+  const desconhecidos = useMemo(
+    () => escopoContagem.filter((d) => d.is_active !== false && !d.agent_version).length,
+    [escopoContagem],
+  );
 
   const toggleAtivoMutation = useMutation({
     mutationFn: async (vars: { id: string; ativar: boolean }) => {
@@ -935,6 +952,36 @@ function DispositivosPage() {
     );
   };
 
+  // TEMPORARIO (bootstrap da frota): o telefone so aparece com o filtro
+  // "Agente desconhecido" ligado. Fora dele a tela e inventario e o telefone e
+  // ruido numa tabela ja cheia; dentro dele a tela vira lista de ligacoes a
+  // fazer, e o numero e a unica coisa que falta para agir.
+  const mostrarContato = isSuper && soDesconhecidos;
+
+  const contatoTelefone = (phone: string | null | undefined) => {
+    const digitos = (phone ?? "").replace(/\D/g, "");
+    if (!digitos) {
+      return <span className="text-[10px] text-muted-foreground/70 mt-1">sem telefone</span>;
+    }
+    // O banco guarda so DDD+numero (normalizarTelefone tira o 55), e o wa.me
+    // exige DDI. Celular (11 digitos) vai para o WhatsApp; fixo vira tel:, que
+    // e o que o aparelho do operador sabe fazer com ele.
+    const celular = digitos.length === 11;
+    return (
+      <a
+        href={celular ? `https://wa.me/55${digitos}` : `tel:+55${digitos}`}
+        target={celular ? "_blank" : undefined}
+        rel={celular ? "noreferrer" : undefined}
+        onClick={(e) => e.stopPropagation()}
+        className="mt-1 inline-flex w-fit items-center gap-1 text-[10px] text-primary tabular-nums hover:underline"
+        title={celular ? "Abrir conversa no WhatsApp" : "Ligar"}
+      >
+        {celular ? <MessageCircle className="h-3 w-3" /> : <Phone className="h-3 w-3" />}
+        {formatarTelefone(digitos) ?? digitos}
+      </a>
+    );
+  };
+
   // Badge de consumo de um device (ou null se sem atendimento aberto).
   const consumoBadge = (deviceId: string) => {
     const a = atendimentosAtivos?.get(deviceId);
@@ -1028,6 +1075,12 @@ function DispositivosPage() {
             </div>
           </div>
         </TableCell>
+        {/* Agrupado por cliente a linha nao tem a celula Cliente — sem isto o
+            telefone ficaria de fora justo na visao que junta as maquinas de quem
+            a gente precisa ligar. */}
+        {!mostrarGrupo && mostrarContato && (
+          <TableCell>{contatoTelefone(d.clients?.phone)}</TableCell>
+        )}
         {mostrarGrupo && (
           <TableCell>
             {(() => {
@@ -1040,6 +1093,7 @@ function DispositivosPage() {
                   {doc && (
                     <span className="text-[10px] text-muted-foreground/70 mt-1 tabular-nums">{doc}</span>
                   )}
+                  {mostrarContato && contatoTelefone(d.clients?.phone)}
                 </div>
               );
             })()}
@@ -1315,6 +1369,28 @@ function DispositivosPage() {
                 Mostrar inativos
               </Label>
             </div>
+            {/* TEMPORARIO — some daqui quando o contador zerar. Ver o comentario
+                do estado soDesconhecidos e ATUALIZACAO-FROTA.md. */}
+            {isSuper && (
+              <div className="flex items-center gap-2 px-2">
+                <Switch
+                  id="so-desconhecidos"
+                  checked={soDesconhecidos}
+                  onCheckedChange={setSoDesconhecidos}
+                />
+                <Label
+                  htmlFor="so-desconhecidos"
+                  className="text-xs text-muted-foreground flex items-center gap-1"
+                  title="Máquinas que nunca reportaram versão do agente — sem auto-update, elas só saem do atraso com uma sessão remota manual"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Agente desconhecido
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px] tabular-nums">
+                    {desconhecidos}
+                  </Badge>
+                </Label>
+              </div>
+            )}
             <Popover open={markerFilterOpen} onOpenChange={setMarkerFilterOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">

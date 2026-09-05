@@ -52,6 +52,7 @@ import {
   normalizarTelefone,
   normalizarTexto,
 } from "@/lib/clientes";
+import { JANELA_ONLINE_MS } from "@/lib/presenca";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   head: () => ({
@@ -68,9 +69,6 @@ type ClientRow = {
   phone: string | null;
   is_active: boolean;
 };
-
-/** Mesma janela que a tela de Dispositivos usa para considerar uma máquina online. */
-const JANELA_ONLINE_MS = 120_000;
 
 /**
  * Linha de cliente + detalhe com as máquinas dele.

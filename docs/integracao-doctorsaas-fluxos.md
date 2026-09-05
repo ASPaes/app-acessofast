@@ -89,7 +89,7 @@ A seção 11 do documento insiste: "não representar 'computador não encontrado
 | `DEVICE_OFFLINE` | Nenhuma máquina vista nos últimos 120s | Avisa que é só ligar + **Atualizar**. **Nunca** oferece instalador |
 | `READY_TO_CONNECT` | Há máquina ativa | Lista com bolinha de online e botão Conectar |
 
-`SEND_INSTALLER` é o link de `acessofast.com.br/baixar` mais um **"Copiar instruções"**
+`SEND_INSTALLER` é o link de `acessofast.com.br/download` mais um **"Copiar instruções"**
 que põe na área de transferência o texto pronto para colar no chat, incluindo o pedido do
 ID. É o pareamento do fluxo: o cliente instala, informa o ID, o técnico adota pelo ID.
 
