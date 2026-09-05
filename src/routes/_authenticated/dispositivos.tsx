@@ -779,7 +779,13 @@ function DispositivosPage() {
       }
       if (t) {
         const digits = t.replace(/\D/g, "");
+        // O ID casa pelos DIGITOS, nao pelo texto cru. A tela mostra o id
+        // agrupado ("307 871 329"), entao quem copia o que ve digita com
+        // espacos — e rustdesk_id e gravado sem eles. Comparando cru,
+        // "307871329".includes("307 871 329") da falso e a lista volta vazia
+        // com o dispositivo bem ali. A tela ensinava a digitar errado.
         const match =
+          (digits.length > 0 && d.rustdesk_id.includes(digits)) ||
           d.rustdesk_id.toLowerCase().includes(t) ||
           (d.alias ?? "").toLowerCase().includes(t) ||
           (d.device_group ?? "").toLowerCase().includes(t) ||
