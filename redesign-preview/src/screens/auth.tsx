@@ -48,7 +48,6 @@ export function AuthScreen() {
             <img src={LOGO_ACESSOFAST} alt="" aria-hidden className="size-14 object-contain" />
             <div className="leading-tight">
               <p className="text-[22px] font-semibold tracking-[-0.02em] text-ink">AcessoFast</p>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted">ASP Softwares</p>
             </div>
           </div>
 
@@ -67,7 +66,7 @@ export function AuthScreen() {
             </StatusBadge>
           </div>
 
-          <p className="text-[11.5px] text-muted">© 2026 ASP Softwares</p>
+          <p className="text-[11.5px] text-muted">© 2026 AcessoFast</p>
         </section>
 
         {/* Formulário */}

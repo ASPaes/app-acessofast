@@ -236,9 +236,6 @@ function CadastroPage() {
             <img src={acessofastLogo.url} alt="Acessofast" className="h-24 w-24 object-contain" />
             <div className="leading-tight">
               <div className="text-4xl font-semibold">AcessoFast</div>
-              <div className="text-base uppercase tracking-widest text-muted-foreground">
-                ASP SOFTWARES
-              </div>
             </div>
           </div>
 
@@ -255,7 +252,7 @@ function CadastroPage() {
           </div>
 
           <div className="relative text-[11px] text-muted-foreground">
-            © {new Date().getFullYear()} ASP Softwares
+            © {new Date().getFullYear()} AcessoFast
           </div>
         </div>
 

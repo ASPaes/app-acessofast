@@ -427,7 +427,7 @@ function ConectarPage() {
     },
   });
 
-  // Mesma regra da tela de Dispositivos: online = visto nos ultimos 120s.
+  // Mesma regra da tela de Dispositivos (JANELA_ONLINE_MS, em lib/presenca).
   const online = useQuery({
     enabled: idsDoGrupo.length > 0 || modoTodas,
     queryKey: ["conectar_online"],

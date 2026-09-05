@@ -115,9 +115,6 @@ function AguardandoPage() {
               <img src={acessofastLogo.url} alt="Acessofast" className="h-10 w-10 object-contain" />
               <div className="leading-tight">
                 <div className="text-lg font-semibold">AcessoFast</div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  ASP Softwares
-                </div>
               </div>
             </div>
 

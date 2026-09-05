@@ -865,6 +865,44 @@ function DispositivosPage() {
     return () => clearInterval(id);
   }, [atendCount]);
 
+  // Tempo real do que o operador fica olhando: "entrou em atendimento" aparecia
+  // com ate 15-30s de atraso porque esta tela so repergunta em intervalo, mesmo
+  // com o dado ja no banco ~3s depois do evento. Um parceiro reclamou disso.
+  // Dashboard e Monitoramento ja assinavam postgres_changes; aqui faltava.
+  //
+  // NAO assinamos address_book de proposito, e a razao e de custo: aquela tabela
+  // leva um UPDATE a cada sinal de presenca (~480/dia por maquina, ~160 maquinas
+  // = ~77 mil eventos/dia). O Realtime cobra por mensagem ENTREGUE, entao isso
+  // seria multiplicado por cada painel aberto — com 4 abas, ~9M/mes contra os 5M
+  // do plano. Trocariamos um estouro de cota por outro.
+  //
+  // connection_logs e atendimentos mudam so quando existe sessao de verdade
+  // (poucos milhares/dia no total), e sao justamente as duas que movem o status
+  // de atendimento. Online/offline continua no refetch periodico, que agora nao
+  // pisca mais porque a janela foi corrigida (ver lib/presenca).
+  useEffect(() => {
+    const canal = supabase
+      .channel("dispositivos_atendimento_rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "connection_logs" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["sessoes_ativas"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "atendimentos" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["atendimentos_ativos"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [queryClient]);
+
   const colCount = (isSuper ? 7 : 6) + (showConsumo ? 1 : 0);
 
   // Referencia de "em dia": a versao mais nova que a propria frota reporta.
