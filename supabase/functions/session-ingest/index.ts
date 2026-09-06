@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
   // 1) Resolver o dispositivo pelo rustdesk_id (unico) -> tenant + hash do token.
   let { data: device, error: devErr } = await db
     .from("address_book")
-    .select("id, tenant_id, agent_token_hash")
+    .select("id, tenant_id, agent_token_hash, ignorar_presenca")
     .eq("rustdesk_id", rustdesk_id)
     .maybeSingle();
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       // adotado agora (ou já estava) -> re-busca pra seguir o fluxo normal.
       const r = await db
         .from("address_book")
-        .select("id, tenant_id, agent_token_hash")
+        .select("id, tenant_id, agent_token_hash, ignorar_presenca")
         .eq("rustdesk_id", rustdesk_id)
         .maybeSingle();
       device = r.data;
@@ -184,6 +184,28 @@ Deno.serve(async (req) => {
   }
 
   const nowIso = new Date().toISOString();
+
+  // DESCARTE DO PRESENCE DE BINARIO ANTIGO — a chamada morre aqui, sem escrever.
+  //
+  // ~80 maquinas rodam binario anterior a 10/08/2026, batem a cada 60s (o dobro da
+  // cadencia atual), nao se atualizam sozinhas e NAO PODEM ser alcancadas: sao de
+  // parceiro, sem acesso fisico nem remoto. O servidor oferece a atualizacao (o `os`
+  // delas resolve como windows e o manifesto sai), mas essa versao nao tem o codigo
+  // que le o campo.
+  //
+  // A invocacao nao da para evitar — foi testado, chamada a rota inexistente conta
+  // igual. O que da para evitar e o TRABALHO. E ele era o item mais pesado do banco:
+  // address_book tinha 2.977.214 updates em 177 linhas, porque cada presence
+  // carimbava last_online. No Postgres todo UPDATE escreve versao nova e deixa a
+  // anterior morta pro autovacuum recolher — o custo nao aparece no tamanho da
+  // tabela, aparece em WAL, inchaco de indice e autovacuum permanente.
+  //
+  // So o 'presence' e descartado. start/heartbeat/end continuam passando: sao
+  // sessao de verdade, contam para cobranca, e sao raros. Cortar telemetria de
+  // billing para economizar escrita seria trocar um problema por outro bem pior.
+  if (event === "presence" && device.ignorar_presenca === true) {
+    return json({ ok: true, action: "presence", ignored: true });
+  }
 
   // 2.1) Presenca: qualquer evento autenticado prova que a maquina esta viva agora.
   // O painel calcula online/offline por address_book.last_online > now() - JANELA_ONLINE_MS

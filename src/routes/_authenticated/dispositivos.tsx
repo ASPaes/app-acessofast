@@ -937,12 +937,18 @@ function DispositivosPage() {
   const agenteVersao = (d: AddressBookRow) => {
     const dt = dataDaVersao(d.agent_version);
     if (!dt) {
+      // Nao e so "nao sei a versao": esta maquina roda binario anterior a
+      // 10/08/2026, que nao se atualiza sozinho. Desde 06/09 o servidor descarta
+      // o presence dela (ver ignorar_presenca), entao ela TAMBEM nao tem mais
+      // status — e o operador precisa saber que o "Offline" ao lado nao quer
+      // dizer desligada, quer dizer sem telemetria.
       return (
         <span
-          className="text-muted-foreground"
-          title="Agente anterior ao reporte de versao — precisa ser atualizado"
+          className="inline-flex items-center gap-1 text-warning"
+          title="Versão anterior a 10/08/2026: não se atualiza sozinha e não reporta status. O computador continua acessível normalmente; reinstale o AcessoFast quando puder."
         >
-          desconhecida
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          desatualizado
         </span>
       );
     }
@@ -1128,9 +1134,27 @@ function DispositivosPage() {
               Online
             </Badge>
           ) : (
-            <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-              {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
+            <Badge
+              variant="outline"
+              className={`gap-1.5 ${d.agent_version ? "text-muted-foreground" : "text-warning border-warning/30"}`}
+              title={
+                d.agent_version
+                  ? undefined
+                  : "Esta máquina roda uma versão que não reporta status. Ela pode estar ligada — o AcessoFast continua acessando normalmente."
+              }
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${d.agent_version ? "bg-muted-foreground/40" : "bg-warning/60"}`}
+              />
+              {/* Sem agent_version o servidor descarta o presence desta maquina
+                  (ignorar_presenca), entao NAO sabemos se ela esta ligada. Dizer
+                  "Offline" seria afirmar o que nao se sabe, e mandaria o tecnico
+                  procurar defeito numa maquina que provavelmente esta funcionando. */}
+              {!d.agent_version
+                ? "Sem status"
+                : d.last_online
+                  ? `Offline · ${tempoRelativo(d.last_online)}`
+                  : "Offline"}
             </Badge>
           )}
         </TableCell>
