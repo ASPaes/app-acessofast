@@ -65,7 +65,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { limiteOnlineISO } from "@/lib/presenca";
-import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
+import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
   device_id?: string;
@@ -513,6 +513,19 @@ function DispositivosPage() {
   // da sessao que este aviso liberou, e a maquina sai da lista sozinha quando
   // voltar a reportar versao.
   const [avisoAtualizacao, setAvisoAtualizacao] = useState<AddressBookRow | null>(null);
+  const [comandoCopiado, setComandoCopiado] = useState(false);
+
+  const copiarComandoAtualizacao = async () => {
+    try {
+      await navigator.clipboard.writeText(COMANDO_ATUALIZAR_AGENTE);
+      setComandoCopiado(true);
+      setTimeout(() => setComandoCopiado(false), 2500);
+    } catch {
+      // Sem permissao de area de transferencia o comando continua visivel e
+      // selecionavel na tela — o caminho nao morre por causa do atalho.
+      toast.error("Não consegui copiar. Selecione o comando e copie manualmente.");
+    }
+  };
 
   const handleConectar = (deviceId: string) => {
     const d = (data ?? []).find((x) => x.id === deviceId);
@@ -2122,23 +2135,26 @@ function DispositivosPage() {
           </DialogHeader>
 
           <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-            <p className="font-medium mb-2">Depois de conectar, faça isto na máquina do cliente:</p>
-            <ol className="list-decimal pl-5 space-y-1.5 text-muted-foreground">
-              <li>
-                Abra{" "}
-                <a
-                  href={URL_DOWNLOAD_AGENTE}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-foreground underline underline-offset-2"
-                >
-                  {URL_DOWNLOAD_AGENTE.replace(/^https:\/\//, "")}
-                </a>{" "}
-                e baixe o instalador
-              </li>
-              <li>Execute o instalador (ele atualiza por cima, sem desinstalar)</li>
-              <li>Pronto — daqui em diante essa máquina se atualiza sozinha</li>
-            </ol>
+            <p className="font-medium mb-1">Já conectado, cole isto no PowerShell da máquina:</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Baixa e abre o instalador sozinho. Ele atualiza por cima — não precisa
+              desinstalar nada, e a máquina não reinicia.
+            </p>
+            <div className="flex items-start gap-2">
+              <code className="flex-1 min-w-0 rounded border bg-background p-2.5 font-mono text-[11px] leading-relaxed break-all">
+                {COMANDO_ATUALIZAR_AGENTE}
+              </code>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={copiarComandoAtualizacao}
+              >
+                {comandoCopiado ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {comandoCopiado ? "Copiado" : "Copiar"}
+              </Button>
+            </div>
           </div>
 
           <p className="text-xs text-muted-foreground">
@@ -2146,12 +2162,12 @@ function DispositivosPage() {
             não consegue saber se está ligada.
           </p>
 
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setAvisoAtualizacao(null)}>
-              Agora não
-            </Button>
-            <Button onClick={seguirAposAviso}>
-              Conectar e atualizar
+          {/* Um botao so, de proposito: nao ha "agora nao". O tecnico ja tem o
+              comando copiado quando a sessao abre, entao a atualizacao e o
+              caminho natural — nao um desvio que da para adiar. */}
+          <DialogFooter>
+            <Button onClick={seguirAposAviso} className="w-full sm:w-auto">
+              Copiei o comando — conectar agora
             </Button>
           </DialogFooter>
         </DialogContent>
