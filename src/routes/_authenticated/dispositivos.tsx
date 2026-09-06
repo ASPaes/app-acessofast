@@ -65,6 +65,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { limiteOnlineISO } from "@/lib/presenca";
+import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
   device_id?: string;
@@ -499,7 +500,34 @@ function DispositivosPage() {
     void esperarSenhaDoAgente(aguardandoSenha.deviceId, aguardandoSenha.source);
   };
 
-  const handleConectar = (deviceId: string) => doConnect(deviceId);
+  // Aviso obrigatorio de atualizacao (agente sem agent_version).
+  //
+  // POR QUE ELE NAO BLOQUEIA O ACESSO, e sim o INTERROMPE: para atualizar a
+  // maquina o tecnico precisa entrar nela. Bloquear ate a atualizacao seria um
+  // impasse — ninguem consegue atualizar, e o resultado pratico e o tecnico
+  // desistir do AcessoFast e usar outra ferramenta, com a maquina velha ficando
+  // velha para sempre.
+  //
+  // Entao: o passo e obrigatorio (nao da para conectar sem ver e confirmar), mas
+  // a saida dele e ACESSAR JA LEVANDO a instrucao. A atualizacao acontece dentro
+  // da sessao que este aviso liberou, e a maquina sai da lista sozinha quando
+  // voltar a reportar versao.
+  const [avisoAtualizacao, setAvisoAtualizacao] = useState<AddressBookRow | null>(null);
+
+  const handleConectar = (deviceId: string) => {
+    const d = (data ?? []).find((x) => x.id === deviceId);
+    if (d && !d.agent_version) {
+      setAvisoAtualizacao(d);
+      return;
+    }
+    return doConnect(deviceId);
+  };
+
+  const seguirAposAviso = () => {
+    const d = avisoAtualizacao;
+    setAvisoAtualizacao(null);
+    if (d) void doConnect(d.id);
+  };
 
   const copiarSenhaConn = async () => {
     if (!connectData) return;
@@ -2066,6 +2094,69 @@ function DispositivosPage() {
           Nenhuma campanha da casa recebe o placement 'exhausted', entao aqui
           nunca aparece oferta de credito dentro de oferta de credito — isso esta
           garantido nos dados (ad_campaigns.placements), nao num if desta tela. */}
+      {/* Aviso obrigatorio: maquina com agente que nao se atualiza sozinho.
+          Nao da para fechar no X nem clicando fora — a unica saida e um dos dois
+          botoes, porque o ponto e que a informacao NAO passe batido. */}
+      <Dialog
+        open={avisoAtualizacao !== null}
+        onOpenChange={(aberto) => { if (!aberto) setAvisoAtualizacao(null); }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+              Atualize o AcessoFast neste computador
+            </DialogTitle>
+            <DialogDescription className="pt-1">
+              <strong className="text-foreground">
+                {avisoAtualizacao?.alias || avisoAtualizacao?.rustdesk_id}
+              </strong>{" "}
+              está com uma versão antiga, que não se atualiza sozinha e não reporta
+              status para o painel. O acesso funciona normalmente — o que falta é
+              atualizar o programa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+            <p className="font-medium mb-2">Depois de conectar, faça isto na máquina do cliente:</p>
+            <ol className="list-decimal pl-5 space-y-1.5 text-muted-foreground">
+              <li>
+                Abra{" "}
+                <a
+                  href={URL_DOWNLOAD_AGENTE}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-foreground underline underline-offset-2"
+                >
+                  {URL_DOWNLOAD_AGENTE.replace(/^https:\/\//, "")}
+                </a>{" "}
+                e baixe o instalador
+              </li>
+              <li>Execute o instalador (ele atualiza por cima, sem desinstalar)</li>
+              <li>Pronto — daqui em diante essa máquina se atualiza sozinha</li>
+            </ol>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Enquanto não for atualizada, ela aparece como “Sem status” na lista: o painel
+            não consegue saber se está ligada.
+          </p>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setAvisoAtualizacao(null)}>
+              Agora não
+            </Button>
+            <Button onClick={seguirAposAviso}>
+              Conectar e atualizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={semSaldo} onOpenChange={setSemSaldo}>
         <DialogContent>
           <DialogHeader>
