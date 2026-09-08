@@ -1,4 +1,4 @@
--- AcessoFast, 08/09/2026: levar o aviso de "agente desatualizado" para quem
+XXX-- AcessoFast, 08/09/2026: levar o aviso de "agente desatualizado" para quem
 -- acessa DIRETO pelo cliente, sem passar pelo painel.
 --
 -- O painel ja barra: clicar em Conectar numa maquina atrasada abre um dialogo
@@ -90,9 +90,14 @@ begin
     'versao antiga do AcessoFast: nao reporta status e nao se atualiza sozinha.' || chr(10) || chr(10) ||
     'Enquanto estiver conectado nele, abra o PowerShell E COLE o comando abaixo. ' ||
     'Ele baixa e instala a versao nova por cima, sem desinstalar nada e sem reiniciar:' || chr(10) || chr(10) ||
-    'powershell -Command "iwr -UseBasicParsing ' ||
+    -- SEM `powershell -Command` na frente: o texto e para colar DENTRO de um
+    -- PowerShell ja aberto, e o aninhamento quebra. Testado na maquina do Ryan:
+    -- colando a versao anterior, o shell de fora consumia as aspas e a expressao
+    -- ($env:TEMP+'\...') chegava como texto literal, dando
+    --   C:\Users\...\Temp+'\AcessoFastSetup.exe' : O termo ... nao e reconhecido
+    'iwr -UseBasicParsing ' ||
     '''https://github.com/ASPaes/acessofast-agent/releases/latest/download/AcessoFastSetup.exe'' ' ||
-    '-OutFile ($env:TEMP+''\AcessoFastSetup.exe''); Start-Process ($env:TEMP+''\AcessoFastSetup.exe'')"'
+    '-OutFile "$env:TEMP\AcessoFastSetup.exe"; Start-Process "$env:TEMP\AcessoFastSetup.exe"'
   );
 end;
 $fn$;
