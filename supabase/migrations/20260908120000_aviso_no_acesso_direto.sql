@@ -1,4 +1,4 @@
-XXX-- AcessoFast, 08/09/2026: levar o aviso de "agente desatualizado" para quem
+-- AcessoFast, 08/09/2026: levar o aviso de "agente desatualizado" para quem
 -- acessa DIRETO pelo cliente, sem passar pelo painel.
 --
 -- O painel ja barra: clicar em Conectar numa maquina atrasada abre um dialogo
