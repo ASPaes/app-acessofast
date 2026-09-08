@@ -1,0 +1,19 @@
+-- AcessoFast, 08/09/2026: sobra da mudanca de schema.
+--
+-- A 20260908160000 recriou as duas RPCs em `public` e mandou dropar as de
+-- `private` no fim. A `puxar_aviso_agente` saiu; a
+-- `registrar_aviso_desatualizado` FICOU, e com o texto antigo do comando do
+-- PowerShell (o que quebrava ao ser colado, ver 20260908180000). Conferido em
+-- producao depois de aplicar. Nao sei dizer por que so uma das duas caiu — a
+-- migration aplicou com sucesso e as duas assinaturas batiam.
+--
+-- Ela nao e alcancavel de lugar nenhum: o PostgREST nao enxerga `private` (foi
+-- esse o defeito que a 160000 consertou) e a session-ingest chama o nome sem
+-- schema, que resolve em `public`. Quem chama `private` direto e so o cron, e so
+-- para a `purge_avisos_agente` — que continua la, de proposito, porque esse
+-- caminho nunca passou pelo PostgREST.
+--
+-- Entao dropar nao tira funcao de ninguem: tira uma copia morta com texto errado,
+-- que e exatamente a "metade errada para editar" que a 160000 dizia estar
+-- eliminando ao mover em vez de embrulhar.
+drop function if exists private.registrar_aviso_desatualizado(text, text, text);
