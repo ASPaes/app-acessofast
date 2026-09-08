@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
   // 1) Resolver o dispositivo pelo rustdesk_id (unico) -> tenant + hash do token.
   let { data: device, error: devErr } = await db
     .from("address_book")
-    .select("id, tenant_id, agent_token_hash, ignorar_presenca")
+    .select("id, tenant_id, agent_token_hash, ignorar_presenca, alias")
     .eq("rustdesk_id", rustdesk_id)
     .maybeSingle();
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
       // adotado agora (ou já estava) -> re-busca pra seguir o fluxo normal.
       const r = await db
         .from("address_book")
-        .select("id, tenant_id, agent_token_hash, ignorar_presenca")
+        .select("id, tenant_id, agent_token_hash, ignorar_presenca, alias")
         .eq("rustdesk_id", rustdesk_id)
         .maybeSingle();
       device = r.data;
@@ -250,7 +250,28 @@ Deno.serve(async (req) => {
   if (event === "presence") {
     if (presErr) return json({ error: "db_error", detail: presErr.message }, 500);
     const update = await resolveUpdate(device.id);
-    return json(update ? { ok: true, action: "presence", update } : { ok: true, action: "presence" });
+
+    // Aviso pendente para ESTA maquina (ela e a do tecnico). Vem de um acesso
+    // direto que ele fez a uma maquina desatualizada — ver o 'start' abaixo. O
+    // presence e o unico canal que o servidor tem para falar com um agente
+    // ocioso, entao e por aqui que o aviso sai.
+    //
+    // Fail-open: se a busca falhar, a presenca NAO pode quebrar por causa de um
+    // aviso. Perder um aviso custa um lembrete; perder presenca custa o status
+    // da maquina.
+    let aviso: { titulo: string; mensagem: string } | null = null;
+    try {
+      const { data: avisoRows } = await db.rpc("puxar_aviso_agente", {
+        p_rustdesk_id: rustdesk_id,
+      });
+      const a = Array.isArray(avisoRows) ? avisoRows[0] : avisoRows;
+      if (a?.titulo && a?.mensagem) aviso = { titulo: a.titulo, mensagem: a.mensagem };
+    } catch { /* sem aviso desta vez */ }
+
+    const corpo: Record<string, unknown> = { ok: true, action: "presence" };
+    if (update) corpo.update = update;
+    if (aviso) corpo.aviso = aviso;
+    return json(corpo);
   }
 
   async function latestActive() {
@@ -290,6 +311,31 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!data || !data.hard_cap_at) return null;           // sem atendimento aberto, ou credito/plano
     return data.hard_cap_at <= nowIso2 ? nowIso2 : data.hard_cap_at;
+  }
+
+  // ACESSO DIRETO A MAQUINA DESATUALIZADA -> deixa um aviso para o tecnico.
+  //
+  // O painel ja barra quem clica em Conectar por la. Este ramo cobre quem abre o
+  // cliente e digita o ID: nao ha tela nossa nesse caminho, e a maquina acessada
+  // nao pode mostrar nada (o agente dela e justamente o desatualizado). Entao o
+  // aviso vai para a maquina DO TECNICO, que o `controller_rustdesk_id` acabou
+  // de identificar, e sai no proximo presence dele — ate 3 min depois.
+  //
+  // So no 'start': heartbeat repetiria o registro a cada batida da mesma sessao.
+  // A RPC ainda dedupe por (destino, alvo) pendente, mas nao custa nada nao
+  // chamar 300 vezes.
+  if (
+    event === "start" &&
+    controller_rustdesk_id &&
+    !agent_version // a maquina ACESSADA e a desatualizada
+  ) {
+    try {
+      await db.rpc("registrar_aviso_desatualizado", {
+        p_destino_rustdesk_id: controller_rustdesk_id,
+        p_alvo_rustdesk_id: rustdesk_id,
+        p_alvo_nome: device.alias ?? null,
+      });
+    } catch { /* aviso e acessorio: nunca derruba a sessao */ }
   }
 
   // 3) Tratar o evento.
