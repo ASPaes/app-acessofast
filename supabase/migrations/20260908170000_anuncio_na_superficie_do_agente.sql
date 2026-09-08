@@ -304,7 +304,7 @@ grant execute on function public.puxar_aviso_agente(text) to service_role;
 -- dashboard nao precisa de ajuste. A quebra por superficie ja sai de graca no
 -- ad_stats_superficie, que agrupa por surface.
 -- ---------------------------------------------------------------------------
-create or replace function public.ad_stats_campanha(p_dias integer)
+create or replace function public.ad_stats_campanha(p_dias integer default 30)
 returns table (campanha text, kind text, status text, exibicoes bigint,
                cliques bigint, ctr numeric, espectadores bigint, ultima timestamptz)
 language sql
@@ -332,7 +332,7 @@ as $fn$
    order by count(i.id) desc, c.name;
 $fn$;
 
-create or replace function public.ad_stats_diario(p_dias integer)
+create or replace function public.ad_stats_diario(p_dias integer default 30)
 returns table (dia date, exibicoes bigint, cliques bigint, espectadores bigint,
                exibicoes_painel bigint, exibicoes_embed bigint, acessos_gratuitos bigint)
 language sql
