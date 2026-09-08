@@ -380,6 +380,31 @@ Deno.serve(async (req) => {
     }
     const meter = Array.isArray(meterRows) ? meterRows[0] : meterRows;
     if (meter?.blocked) {
+      // ANUNCIO NO ACESSO DIRETO — o momento "esgotado" fora do painel.
+      //
+      // A sessao vai cair no proximo tick do agente (cap = agora, logo abaixo) e
+      // hoje o tecnico nao recebe explicacao nenhuma: pelo painel ele veria o 402
+      // com o slot de anuncio, mas quem digitou o ID no cliente nao passa por tela
+      // nossa. Do lado dele isso parece defeito do produto.
+      //
+      // O recado vai para a maquina DELE (o controller_rustdesk_id que a maquina
+      // acessada acabou de reportar) e sai no proximo presence — ate 3 min depois.
+      // A RPC escolhe a peca, deduplica e enfileira; a impressao so e contada
+      // quando o aviso e efetivamente puxado.
+      //
+      // So em no_credits: 'billing_blocked' e conta suspensa e 'quota_exceeded' e
+      // limite de simultaneidade — nos dois casos comprar credito nao resolve
+      // nada, e oferecer pacote a quem nao tem esse problema e so ruido.
+      //
+      // Fail-open, como todo o resto deste arquivo: anuncio nunca derruba sessao.
+      if (meter.reason === "no_credits" && controller_rustdesk_id) {
+        try {
+          await db.rpc("registrar_anuncio_esgotado", {
+            p_destino_rustdesk_id: controller_rustdesk_id,
+          });
+        } catch { /* sem anuncio desta vez */ }
+      }
+
       // Sem saldo / conta bloqueada: cap = AGORA -> o agente (B2) corta na hora.
       return json({
         ok: true,
