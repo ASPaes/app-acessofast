@@ -730,7 +730,13 @@ function ConectarPage() {
       .filter((d) => {
         if (!termo) return true;
         const alvo = `${d.alias ?? ""} ${d.rustdesk_id} ${d.clients?.name ?? ""}`;
-        return normalizarTexto(alvo).includes(termo);
+        if (normalizarTexto(alvo).includes(termo)) return true;
+        // Tambem pelos DIGITOS: a tela mostra o id agrupado ("307 871 329") e
+        // quem copia o que ve digita com espacos, mas rustdesk_id e gravado
+        // sem eles — comparando so o texto cru a busca nao acha a maquina que
+        // esta bem ali na lista. Mesmo caso da tela de Dispositivos.
+        const digitos = termo.replace(/\D/g, "");
+        return digitos.length > 0 && d.rustdesk_id.includes(digitos);
       })
       .sort((a, b) => {
         const oa = online.data?.has(a.id) ? 0 : 1;

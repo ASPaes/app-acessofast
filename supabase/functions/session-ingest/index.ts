@@ -55,6 +55,35 @@ Deno.serve(async (req) => {
     return json({ error: "missing_or_invalid_fields" }, 400);
   }
 
+  // ===========================================================================
+  // DESCARTE ANTECIPADO — a chamada morre AQUI, sem tocar no banco.
+  //
+  // Esta guarda vem antes de tudo: antes do client do Supabase, antes do sha256,
+  // antes de qualquer consulta. Nada de rede, nada de leitura, nada de escrita.
+  //
+  // Como reconhecemos sem perguntar ao banco: binario anterior a 10/08/2026 nao
+  // manda `agent_version` — foi essa build que introduziu o campo. E exatamente
+  // o mesmo criterio que deixa a coluna agent_version nula nessas 82 maquinas.
+  // Elas batem a cada 60s (o dobro da cadencia atual), nao se atualizam sozinhas
+  // e nao podem ser alcancadas: sao de parceiro, sem acesso fisico nem remoto.
+  //
+  // O que isso evitava, medido no banco antes da mudanca:
+  //   address_book  2.977.214 updates numa tabela de 177 linhas
+  // Cada presence carimbava last_online, e no Postgres todo UPDATE escreve uma
+  // versao nova da linha e deixa a anterior morta pro autovacuum recolher. Sao
+  // ~85 mil escritas/dia, 2,5 milhoes/mes, que deixam de existir.
+  //
+  // A INVOCACAO em si continua contando na cota — foi testado, chamada a rota
+  // inexistente conta igual, nao ha como recusar antes de entrar. O que morre e
+  // o trabalho: banco, WAL, autovacuum.
+  //
+  // So o 'presence' e descartado. start/heartbeat/end de agente antigo PASSAM
+  // normalmente: sao sessao de verdade e contam para cobranca. Cortar telemetria
+  // de billing para poupar escrita seria trocar um problema por outro pior.
+  if (event === "presence" && !agent_version) {
+    return json({ ok: true, action: "presence", ignored: "agente_sem_versao" });
+  }
+
   const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
@@ -65,7 +94,7 @@ Deno.serve(async (req) => {
   // 1) Resolver o dispositivo pelo rustdesk_id (unico) -> tenant + hash do token.
   let { data: device, error: devErr } = await db
     .from("address_book")
-    .select("id, tenant_id, agent_token_hash")
+    .select("id, tenant_id, agent_token_hash, ignorar_presenca")
     .eq("rustdesk_id", rustdesk_id)
     .maybeSingle();
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
@@ -127,7 +156,7 @@ Deno.serve(async (req) => {
       // adotado agora (ou já estava) -> re-busca pra seguir o fluxo normal.
       const r = await db
         .from("address_book")
-        .select("id, tenant_id, agent_token_hash")
+        .select("id, tenant_id, agent_token_hash, ignorar_presenca")
         .eq("rustdesk_id", rustdesk_id)
         .maybeSingle();
       device = r.data;
@@ -184,6 +213,15 @@ Deno.serve(async (req) => {
   }
 
   const nowIso = new Date().toISOString();
+
+  // Override manual: marca no cadastro para silenciar UMA maquina especifica que
+  // ainda reporta versao (logo, escapa da guarda la de cima). Serve para o caso
+  // pontual — uma maquina em laco, um cliente que pediu para sair do monitoramento
+  // — sem precisar de deploy. O caso das 82 nao passa por aqui: aquelas morrem
+  // antes, sem consulta nenhuma.
+  if (event === "presence" && device.ignorar_presenca === true) {
+    return json({ ok: true, action: "presence", ignored: "marcado_no_cadastro" });
+  }
 
   // 2.1) Presenca: qualquer evento autenticado prova que a maquina esta viva agora.
   // O painel calcula online/offline por address_book.last_online > now() - JANELA_ONLINE_MS

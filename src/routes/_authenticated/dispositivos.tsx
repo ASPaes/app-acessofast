@@ -65,6 +65,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { limiteOnlineISO } from "@/lib/presenca";
+import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
   device_id?: string;
@@ -499,7 +500,47 @@ function DispositivosPage() {
     void esperarSenhaDoAgente(aguardandoSenha.deviceId, aguardandoSenha.source);
   };
 
-  const handleConectar = (deviceId: string) => doConnect(deviceId);
+  // Aviso obrigatorio de atualizacao (agente sem agent_version).
+  //
+  // POR QUE ELE NAO BLOQUEIA O ACESSO, e sim o INTERROMPE: para atualizar a
+  // maquina o tecnico precisa entrar nela. Bloquear ate a atualizacao seria um
+  // impasse — ninguem consegue atualizar, e o resultado pratico e o tecnico
+  // desistir do AcessoFast e usar outra ferramenta, com a maquina velha ficando
+  // velha para sempre.
+  //
+  // Entao: o passo e obrigatorio (nao da para conectar sem ver e confirmar), mas
+  // a saida dele e ACESSAR JA LEVANDO a instrucao. A atualizacao acontece dentro
+  // da sessao que este aviso liberou, e a maquina sai da lista sozinha quando
+  // voltar a reportar versao.
+  const [avisoAtualizacao, setAvisoAtualizacao] = useState<AddressBookRow | null>(null);
+  const [comandoCopiado, setComandoCopiado] = useState(false);
+
+  const copiarComandoAtualizacao = async () => {
+    try {
+      await navigator.clipboard.writeText(COMANDO_ATUALIZAR_AGENTE);
+      setComandoCopiado(true);
+      setTimeout(() => setComandoCopiado(false), 2500);
+    } catch {
+      // Sem permissao de area de transferencia o comando continua visivel e
+      // selecionavel na tela — o caminho nao morre por causa do atalho.
+      toast.error("Não consegui copiar. Selecione o comando e copie manualmente.");
+    }
+  };
+
+  const handleConectar = (deviceId: string) => {
+    const d = (data ?? []).find((x) => x.id === deviceId);
+    if (d && !d.agent_version) {
+      setAvisoAtualizacao(d);
+      return;
+    }
+    return doConnect(deviceId);
+  };
+
+  const seguirAposAviso = () => {
+    const d = avisoAtualizacao;
+    setAvisoAtualizacao(null);
+    if (d) void doConnect(d.id);
+  };
 
   const copiarSenhaConn = async () => {
     if (!connectData) return;
@@ -779,7 +820,13 @@ function DispositivosPage() {
       }
       if (t) {
         const digits = t.replace(/\D/g, "");
+        // O ID casa pelos DIGITOS, nao pelo texto cru. A tela mostra o id
+        // agrupado ("307 871 329"), entao quem copia o que ve digita com
+        // espacos — e rustdesk_id e gravado sem eles. Comparando cru,
+        // "307871329".includes("307 871 329") da falso e a lista volta vazia
+        // com o dispositivo bem ali. A tela ensinava a digitar errado.
         const match =
+          (digits.length > 0 && d.rustdesk_id.includes(digits)) ||
           d.rustdesk_id.toLowerCase().includes(t) ||
           (d.alias ?? "").toLowerCase().includes(t) ||
           (d.device_group ?? "").toLowerCase().includes(t) ||
@@ -931,12 +978,18 @@ function DispositivosPage() {
   const agenteVersao = (d: AddressBookRow) => {
     const dt = dataDaVersao(d.agent_version);
     if (!dt) {
+      // Nao e so "nao sei a versao": esta maquina roda binario anterior a
+      // 10/08/2026, que nao se atualiza sozinho. Desde 06/09 o servidor descarta
+      // o presence dela (ver ignorar_presenca), entao ela TAMBEM nao tem mais
+      // status — e o operador precisa saber que o "Offline" ao lado nao quer
+      // dizer desligada, quer dizer sem telemetria.
       return (
         <span
-          className="text-muted-foreground"
-          title="Agente anterior ao reporte de versao — precisa ser atualizado"
+          className="inline-flex items-center gap-1 text-warning"
+          title="Versão anterior a 10/08/2026: não se atualiza sozinha e não reporta status. O computador continua acessível normalmente; reinstale o AcessoFast quando puder."
         >
-          desconhecida
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          desatualizado
         </span>
       );
     }
@@ -1122,9 +1175,27 @@ function DispositivosPage() {
               Online
             </Badge>
           ) : (
-            <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-              {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
+            <Badge
+              variant="outline"
+              className={`gap-1.5 ${d.agent_version ? "text-muted-foreground" : "text-warning border-warning/30"}`}
+              title={
+                d.agent_version
+                  ? undefined
+                  : "Esta máquina roda uma versão que não reporta status. Ela pode estar ligada — o AcessoFast continua acessando normalmente."
+              }
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${d.agent_version ? "bg-muted-foreground/40" : "bg-warning/60"}`}
+              />
+              {/* Sem agent_version o servidor descarta o presence desta maquina
+                  (ignorar_presenca), entao NAO sabemos se ela esta ligada. Dizer
+                  "Offline" seria afirmar o que nao se sabe, e mandaria o tecnico
+                  procurar defeito numa maquina que provavelmente esta funcionando. */}
+              {!d.agent_version
+                ? "Sem status"
+                : d.last_online
+                  ? `Offline · ${tempoRelativo(d.last_online)}`
+                  : "Offline"}
             </Badge>
           )}
         </TableCell>
@@ -2036,6 +2107,72 @@ function DispositivosPage() {
           Nenhuma campanha da casa recebe o placement 'exhausted', entao aqui
           nunca aparece oferta de credito dentro de oferta de credito — isso esta
           garantido nos dados (ad_campaigns.placements), nao num if desta tela. */}
+      {/* Aviso obrigatorio: maquina com agente que nao se atualiza sozinho.
+          Nao da para fechar no X nem clicando fora — a unica saida e um dos dois
+          botoes, porque o ponto e que a informacao NAO passe batido. */}
+      <Dialog
+        open={avisoAtualizacao !== null}
+        onOpenChange={(aberto) => { if (!aberto) setAvisoAtualizacao(null); }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+              Atualize o AcessoFast neste computador
+            </DialogTitle>
+            <DialogDescription className="pt-1">
+              <strong className="text-foreground">
+                {avisoAtualizacao?.alias || avisoAtualizacao?.rustdesk_id}
+              </strong>{" "}
+              está com uma versão antiga, que não se atualiza sozinha e não reporta
+              status para o painel. O acesso funciona normalmente — o que falta é
+              atualizar o programa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+            <p className="font-medium mb-1">Já conectado, cole isto no PowerShell da máquina:</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Baixa e abre o instalador sozinho. Ele atualiza por cima — não precisa
+              desinstalar nada, e a máquina não reinicia.
+            </p>
+            <div className="flex items-start gap-2">
+              <code className="flex-1 min-w-0 rounded border bg-background p-2.5 font-mono text-[11px] leading-relaxed break-all">
+                {COMANDO_ATUALIZAR_AGENTE}
+              </code>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={copiarComandoAtualizacao}
+              >
+                {comandoCopiado ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {comandoCopiado ? "Copiado" : "Copiar"}
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Enquanto não for atualizada, ela aparece como “Sem status” na lista: o painel
+            não consegue saber se está ligada.
+          </p>
+
+          {/* Um botao so, de proposito: nao ha "agora nao". O tecnico ja tem o
+              comando copiado quando a sessao abre, entao a atualizacao e o
+              caminho natural — nao um desvio que da para adiar. */}
+          <DialogFooter>
+            <Button onClick={seguirAposAviso} className="w-full sm:w-auto">
+              Copiei o comando — conectar agora
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={semSaldo} onOpenChange={setSemSaldo}>
         <DialogContent>
           <DialogHeader>
