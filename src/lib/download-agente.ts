@@ -28,16 +28,27 @@ export const URL_INSTALADOR_DIRETO =
 // com o download indo parar numa pasta que o tecnico precisa achar depois.
 // Colar uma linha e um passo so.
 //
-// Detalhes que fazem este comando funcionar em maquina de cliente de verdade:
+// Para colar DENTRO de um PowerShell ja aberto — sem `powershell -Command` na
+// frente. Essa era a versao anterior e ela QUEBRA na pratica: colando
+// `powershell -Command "..."` dentro do proprio PowerShell, o shell de fora
+// consome as aspas e a expressao ($env:TEMP+'\...') chega ao shell de dentro
+// como texto literal. O erro que aparece e:
 //
-// -UseBasicParsing: Windows Server com o IE nunca aberto quebra o Invoke-WebRequest
-//   sem isso, e servidor e justamente onde mais se acha agente velho.
-// ($env:TEMP+'...'): concatenacao com aspas simples em vez de "$env:TEMP\...".
-//   Aspas duplas aninhadas dentro do -Command quebram a linha quando ela e colada,
-//   e o caminho do TEMP tem espaco sempre que o usuario do Windows tem espaco no
-//   nome — que e o caso normal em maquina de cliente.
+//   C:\Users\...\Temp+'\AcessoFastSetup.exe' : O termo ... nao e reconhecido
+//
+// Sem o aninhamento, "$env:TEMP\..." com aspas duplas resolve normal — inclusive
+// quando o caminho tem espaco, que e o caso sempre que o usuario do Windows tem
+// espaco no nome.
+//
+// -UseBasicParsing: Windows Server com o IE nunca aberto quebra o
+//   Invoke-WebRequest sem isso, e servidor e justamente onde mais se acha agente
+//   velho.
 // O instalador roda POR CIMA da instalacao existente: nao desinstala, nao pede
 //   nada, nao reinicia a maquina.
+// A barra e escapada em DOBRO de proposito: em template literal, `\\` produz uma
+// barra so, e `\A` seria consumido como escape — o comando saia
+// "$env:TEMPAcessoFastSetup.exe", sem separador. Pego rodando a string, nao
+// lendo o codigo.
 export const COMANDO_ATUALIZAR_AGENTE =
-  `powershell -Command "iwr -UseBasicParsing '${URL_INSTALADOR_DIRETO}'` +
-  ` -OutFile ($env:TEMP+'\\AcessoFastSetup.exe'); Start-Process ($env:TEMP+'\\AcessoFastSetup.exe')"`;
+  `iwr -UseBasicParsing '${URL_INSTALADOR_DIRETO}'` +
+  ` -OutFile "$env:TEMP\\\\AcessoFastSetup.exe"; Start-Process "$env:TEMP\\\\AcessoFastSetup.exe"`;
