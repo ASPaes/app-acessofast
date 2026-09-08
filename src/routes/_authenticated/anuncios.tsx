@@ -67,8 +67,8 @@ type LinhaCampanha = {
 };
 
 type LinhaSuperficie = {
-  placement: "free_start" | "exhausted";
-  surface: "painel" | "embed";
+  placement: "free_start" | "exhausted" | "agent_exhausted";
+  surface: "painel" | "embed" | "agente";
   exibicoes: number;
   cliques: number;
   ctr: number | null;
@@ -77,12 +77,21 @@ type LinhaSuperficie = {
 const rotuloPlacement: Record<string, string> = {
   free_start: "Início do uso gratuito",
   exhausted: "Acessos esgotados",
+  agent_exhausted: "Acessos esgotados (acesso direto)",
 };
 
 const rotuloSurface: Record<string, string> = {
   painel: "Painel",
   embed: "Janela do DoctorSaaS",
+  agente: "Caixa do agente",
 };
+
+// A caixa do agente é um WTSSendMessage: um botão OK e nada mais. Não há link
+// para clicar — o endereço vai no texto para a pessoa digitar. Logo clicked_at
+// é sempre null nessa superfície e o CTR dela é 0% POR CONSTRUÇÃO. Sem esta
+// marca na tela, o aviso só existiria no comentário da migration, e alguém
+// leria 0% como "peça fraca" e trocaria a peça sem motivo.
+const SEM_CLIQUE = new Set(["agente"]);
 
 const JANELAS = [7, 30, 90] as const;
 
@@ -364,8 +373,21 @@ function AnunciosPage() {
                     </TableCell>
                     <TableCell>{rotuloSurface[s.surface] ?? s.surface}</TableCell>
                     <TableCell className="text-right tabular-nums">{s.exibicoes}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.cliques}</TableCell>
-                    <TableCell className="text-right tabular-nums">{pct(s.ctr)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {SEM_CLIQUE.has(s.surface) ? "—" : s.cliques}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {SEM_CLIQUE.has(s.surface) ? (
+                        <span
+                          className="text-muted-foreground"
+                          title="A caixa do agente não tem link para clicar: o endereço vai no texto. Não há CTR a medir aqui."
+                        >
+                          sem clique
+                        </span>
+                      ) : (
+                        pct(s.ctr)
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
