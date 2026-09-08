@@ -9,7 +9,6 @@ import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
 import { AmbientBackground } from "@/components/ui-shell/ambient-background";
 import { BillingBanner } from "@/components/billing-banner";
-import { BannerAgenteDesatualizado } from "@/components/banner-agente-desatualizado";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Button } from "@/components/ui/button";
 import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
@@ -184,7 +183,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                 contaGratuita={contaGratuita}
               />
             )}
-            <BannerAgenteDesatualizado />
             {children}
           </main>
         </div>
