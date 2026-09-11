@@ -529,7 +529,10 @@ function DispositivosPage() {
 
   const handleConectar = (deviceId: string) => {
     const d = (data ?? []).find((x) => x.id === deviceId);
-    if (d && !d.agent_version) {
+    // So Windows: o comando do aviso e PowerShell. O celular se atualiza pelo
+    // proprio app (Play Store / APK), e um Android sem versao e APK antigo de
+    // teste — mostrar um comando de PowerShell para ele so confundiria.
+    if (d && !d.agent_version && plataformaDe(d.os) === "windows") {
       setAvisoAtualizacao(d);
       return;
     }
@@ -986,7 +989,11 @@ function DispositivosPage() {
       return (
         <span
           className="inline-flex items-center gap-1 text-warning"
-          title="Versão anterior a 10/08/2026: não se atualiza sozinha e não reporta status. O computador continua acessível normalmente; reinstale o AcessoFast quando puder."
+          title={
+            plataformaDe(d.os) === "android"
+              ? "Versão antiga do app, anterior ao reporte de versão. Atualize o AcessoFast no celular."
+              : "Versão anterior a 10/08/2026: não se atualiza sozinha e não reporta status. O computador continua acessível normalmente; reinstale o AcessoFast quando puder."
+          }
         >
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           desatualizado
