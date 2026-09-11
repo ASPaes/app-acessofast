@@ -30,7 +30,7 @@ async function sha256Hex(input: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string; rotacao_modo?: string };
   try {
     body = await req.json();
   } catch {
@@ -50,6 +50,13 @@ Deno.serve(async (req) => {
   // manda, e nesse caso NAO sobrescrevemos a coluna (ver abaixo). Truncado em 40
   // chars — e um rotulo de build, nao um campo livre.
   const agent_version = (body.agent_version ?? "").trim().slice(0, 40) || null;
+  // Passo 1 (Aposentar a senha rotativa): o modo de rotacao que o AGENTE diz estar
+  // aplicando. So aceita os quatro valores — qualquer outra coisa vira null e nao e
+  // gravada, para o painel nunca exibir um modo que o agente nao conhece.
+  const MODOS_ROTACAO = ["session", "shadow", "install_only", "off"];
+  const rotacao_modo_efetivo = MODOS_ROTACAO.includes((body.rotacao_modo ?? "").trim())
+    ? (body.rotacao_modo ?? "").trim()
+    : null;
 
   if (!rustdesk_id || !agent_token || !["start", "heartbeat", "end", "presence"].includes(event)) {
     return json({ error: "missing_or_invalid_fields" }, 400);
@@ -94,7 +101,7 @@ Deno.serve(async (req) => {
   // 1) Resolver o dispositivo pelo rustdesk_id (unico) -> tenant + hash do token.
   let { data: device, error: devErr } = await db
     .from("address_book")
-    .select("id, tenant_id, agent_token_hash, ignorar_presenca, alias")
+    .select("id, tenant_id, agent_token_hash, ignorar_presenca, alias, rotacao_modo_efetivo")
     .eq("rustdesk_id", rustdesk_id)
     .maybeSingle();
   if (devErr) return json({ error: "db_error", detail: devErr.message }, 500);
@@ -156,7 +163,7 @@ Deno.serve(async (req) => {
       // adotado agora (ou já estava) -> re-busca pra seguir o fluxo normal.
       const r = await db
         .from("address_book")
-        .select("id, tenant_id, agent_token_hash, ignorar_presenca, alias")
+        .select("id, tenant_id, agent_token_hash, ignorar_presenca, alias, rotacao_modo_efetivo")
         .eq("rustdesk_id", rustdesk_id)
         .maybeSingle();
       device = r.data;
@@ -233,8 +240,14 @@ Deno.serve(async (req) => {
   // agent_version, entao a visibilidade de frota sai de graca (zero requisicao a
   // mais). So escreve quando o agente informou — um agente antigo, que nao manda o
   // campo, nao deve apagar a versao ja conhecida do dispositivo.
-  const patch: { last_online: string; agent_version?: string } = { last_online: nowIso };
+  const patch: { last_online: string; agent_version?: string; rotacao_modo_efetivo?: string } = { last_online: nowIso };
   if (agent_version) patch.agent_version = agent_version;
+  // Passo 1: grava o modo efetivo SO quando mudou. A coluna tem gatilho de guarda
+  // (UPDATE OF rotacao_modo_efetivo), e reescrever o mesmo valor a cada sinal da
+  // frota acordaria esse gatilho dezenas de milhares de vezes por dia para nada.
+  if (rotacao_modo_efetivo && rotacao_modo_efetivo !== device.rotacao_modo_efetivo) {
+    patch.rotacao_modo_efetivo = rotacao_modo_efetivo;
+  }
   const { error: presErr } = await db
     .from("address_book")
     .update(patch)
@@ -268,9 +281,28 @@ Deno.serve(async (req) => {
       if (a?.titulo && a?.mensagem) aviso = { titulo: a.titulo, mensagem: a.mensagem };
     } catch { /* sem aviso desta vez */ }
 
+    // Passo 1: modo de rotacao em cascata device -> tenant -> global. Vai SEMPRE que
+    // resolver — inclusive "session" —, senao reverter um canario para session nunca
+    // chegaria ao agente. Fail-open: se a resolucao falhar o campo nao vai, e o agente
+    // segue com o modo que tem em cache (ele NAO trata ausencia como session).
+    //
+    // RPC em public, e nao em private: foi o erro que deixou o aviso de frota mudo em
+    // 08/09 — o db.rpc() e um POST ao PostgREST, que so enxerga schema exposto. E o
+    // erro e conferido de proposito: o supabase-js nao lanca, devolve em `error`, e um
+    // try/catch sozinho engoliria a falha calado.
+    let rotacao: string | null = null;
+    try {
+      const { data: modo, error: modoErr } = await db.rpc("resolve_rotacao_modo", {
+        p_device_id: device.id,
+      });
+      if (modoErr) console.warn("resolve_rotacao_modo_falhou", rustdesk_id, modoErr.message);
+      else if (typeof modo === "string" && MODOS_ROTACAO.includes(modo)) rotacao = modo;
+    } catch { /* agente mantem o modo em cache */ }
+
     const corpo: Record<string, unknown> = { ok: true, action: "presence" };
     if (update) corpo.update = update;
     if (aviso) corpo.aviso = aviso;
+    if (rotacao) corpo.rotacao = rotacao;
     return json(corpo);
   }
 
