@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2 } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, Lock, LockOpen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
@@ -110,6 +110,9 @@ type ConnectResult = {
   deep_link?: string;
   source?: "free" | "credit" | "plan" | null;
   charged?: boolean;
+  // Dispositivo privado e quem pediu não é admin: a conexão sai sem senha (password
+  // null) e entra por aceite manual na máquina.
+  privado?: boolean;
   // Billing B1: quando a conta precisa escolher entre free e crédito, o
   // connect-device responde isto SEM emitir senha (needs_choice).
   needs_choice?: boolean;
@@ -129,6 +132,8 @@ type AddressBookRow = {
   created_at: string;
   tenant_id: string | null;
   is_active: boolean;
+  // Dispositivo privado: técnico conecta sem senha, só por aceite manual.
+  privado: boolean;
   client_id: string | null;
   clients?: { name: string; document: string | null; document_type: string | null; phone: string | null } | null;
   tenants: { name: string } | null;
@@ -338,7 +343,8 @@ function DispositivosPage() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectData, setConnectData] = useState<{
     rustdesk_id: string;
-    password: string;
+    // null = dispositivo privado e quem conecta não é admin: entra por aceite manual.
+    password: string | null;
     deep_link: string;
     // Guardado pra resolver a plataforma no modal (aviso de acesso assistido).
     // Usamos o id do device, nao o rustdesk_id, pra casar sempre com a linha certa.
@@ -447,14 +453,16 @@ function DispositivosPage() {
         });
         return;
       }
-      if (!data?.rustdesk_id || !data?.password || !data?.deep_link) {
+      // Dispositivo privado: para técnico o servidor não manda a senha (só admin e
+      // super_admin a veem). A conexão abre igual e entra por aceite manual na máquina.
+      if (!data?.rustdesk_id || !data?.deep_link || (!data?.password && !data?.privado)) {
         toast.error("Resposta inválida do servidor");
         return;
       }
       setChoiceData(null);
       setConnectData({
         rustdesk_id: data.rustdesk_id,
-        password: data.password,
+        password: data.password ?? null,
         deep_link: data.deep_link,
         deviceId,
         source: data.source ?? null,
@@ -548,7 +556,7 @@ function DispositivosPage() {
   };
 
   const copiarSenhaConn = async () => {
-    if (!connectData) return;
+    if (!connectData?.password) return;
     try {
       await navigator.clipboard.writeText(connectData.password);
       setCopiadoConn(true);
@@ -641,7 +649,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, client_id, clients(name, document, document_type, phone), tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, privado, client_id, clients(name, document, document_type, phone), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -886,6 +894,42 @@ function DispositivosPage() {
     },
   });
 
+  // Dispositivo privado: técnico conecta sem senha (só aceite manual). Quem pode marcar
+  // é admin da empresa ou super_admin — a guarda no banco confere de novo, porque a
+  // política de UPDATE do address_book não olha papel.
+  const privadoMutation = useMutation({
+    mutationFn: async (vars: { id: string; privado: boolean }) => {
+      const { error } = await supabase
+        .from("address_book")
+        .update({ privado: vars.privado })
+        .eq("id", vars.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      if (vars.privado) {
+        toast.success("Dispositivo privado", {
+          description:
+            "Técnicos passam a conectar só com aceite manual. Se algum técnico já conhecia a senha, defina uma nova.",
+        });
+      } else {
+        toast.success("Dispositivo deixou de ser privado");
+      }
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // Passo 2: quem pode definir a senha da máquina pelo painel. Em dispositivo privado,
+  // só admin e super_admin — quem define a senha passa a conhecê-la. A edge
+  // definir-senha-dispositivo aplica a mesma regra no servidor.
+  const podeDefinirSenha = (d: AddressBookRow): boolean => {
+    if (!perfil || !aceitaSenhaPeloPainel(d)) return false;
+    if (d.privado) return perfil.role === "super_admin" || perfil.role === "admin";
+    return ["super_admin", "admin", "head", "tech"].includes(perfil.role);
+  };
+
   const toggleFavoritoMutation = useMutation({
     mutationFn: async (vars: { deviceId: string; favoritar: boolean }) => {
       if (vars.favoritar) {
@@ -1111,7 +1155,12 @@ function DispositivosPage() {
               <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
             )}
             <div className="flex flex-col">
-              <span className="font-medium">{d.alias ?? "—"}</span>
+              <span className="font-medium flex items-center gap-1">
+                {d.alias ?? "—"}
+                {d.privado && (
+                  <Lock className="h-3 w-3 text-muted-foreground" aria-label="Dispositivo privado" />
+                )}
+              </span>
               <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
               {(() => {
                 const ids = markersByDevice?.get(d.id) ?? [];
@@ -1244,22 +1293,31 @@ function DispositivosPage() {
                   <Pencil className="h-4 w-4 mr-2" />
                   Editar
                 </DropdownMenuItem>
-                {podeInativar && <DropdownMenuSeparator />}
-                {podeInativar &&
-                  (isSuper && aceitaSenhaPeloPainel(d) ? (
-                    <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
-                      <KeyRound className="h-4 w-4 mr-2" />
-                      Definir senha desta máquina
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem
-                      onClick={() => setConfirmRedefinirId(d.id)}
-                      disabled={redefinindoId === d.id}
-                    >
-                      <KeyRound className="h-4 w-4 mr-2" />
-                      {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
-                    </DropdownMenuItem>
-                  ))}
+                {(podeInativar || podeDefinirSenha(d)) && <DropdownMenuSeparator />}
+                {podeDefinirSenha(d) && (
+                  <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Definir senha desta máquina
+                  </DropdownMenuItem>
+                )}
+                {podeInativar && !aceitaSenhaPeloPainel(d) && (
+                  <DropdownMenuItem
+                    onClick={() => setConfirmRedefinirId(d.id)}
+                    disabled={redefinindoId === d.id}
+                  >
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                  </DropdownMenuItem>
+                )}
+                {podeInativar && (
+                  <DropdownMenuItem
+                    onClick={() => privadoMutation.mutate({ id: d.id, privado: !d.privado })}
+                    disabled={privadoMutation.isPending}
+                  >
+                    {d.privado ? <LockOpen className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                    {d.privado ? "Deixar de ser privado" : "Tornar privado"}
+                  </DropdownMenuItem>
+                )}
                 {podeInativar &&
                   (d.is_active ? (
                     <DropdownMenuItem
@@ -1703,7 +1761,12 @@ function DispositivosPage() {
                       </Button>
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-medium truncate">{d.alias ?? "—"}</span>
+                      <span className="font-medium truncate flex items-center gap-1">
+                        {d.alias ?? "—"}
+                        {d.privado && (
+                          <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Dispositivo privado" />
+                        )}
+                      </span>
                       <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
                       <span className="text-[11px] text-muted-foreground mt-0.5">
                         Agente {agenteVersao(d)}
@@ -1796,22 +1859,31 @@ function DispositivosPage() {
                             <Pencil className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
-                          {podeInativar && <DropdownMenuSeparator />}
-                          {podeInativar &&
-                            (isSuper && aceitaSenhaPeloPainel(d) ? (
-                              <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
-                                <KeyRound className="h-4 w-4 mr-2" />
-                                Definir senha desta máquina
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={() => setConfirmRedefinirId(d.id)}
-                                disabled={redefinindoId === d.id}
-                              >
-                                <KeyRound className="h-4 w-4 mr-2" />
-                                {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
-                              </DropdownMenuItem>
-                            ))}
+                          {(podeInativar || podeDefinirSenha(d)) && <DropdownMenuSeparator />}
+                          {podeDefinirSenha(d) && (
+                            <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Definir senha desta máquina
+                            </DropdownMenuItem>
+                          )}
+                          {podeInativar && !aceitaSenhaPeloPainel(d) && (
+                            <DropdownMenuItem
+                              onClick={() => setConfirmRedefinirId(d.id)}
+                              disabled={redefinindoId === d.id}
+                            >
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                            </DropdownMenuItem>
+                          )}
+                          {podeInativar && (
+                            <DropdownMenuItem
+                              onClick={() => privadoMutation.mutate({ id: d.id, privado: !d.privado })}
+                              disabled={privadoMutation.isPending}
+                            >
+                              {d.privado ? <LockOpen className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                              {d.privado ? "Deixar de ser privado" : "Tornar privado"}
+                            </DropdownMenuItem>
+                          )}
                           {podeInativar &&
                             (d.is_active ? (
                               <DropdownMenuItem
@@ -1962,7 +2034,9 @@ function DispositivosPage() {
           <DialogHeader>
             <DialogTitle>Conectar</DialogTitle>
             <DialogDescription>
-              Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar.
+              {connectData?.password === null
+                ? "Ao abrir a conexão, quem está no computador precisa aceitar."
+                : "Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar."}
             </DialogDescription>
           </DialogHeader>
           {connectData && (
@@ -1981,20 +2055,31 @@ function DispositivosPage() {
                 <Label>ID AcessoFast</Label>
                 <Input readOnly value={connectData.rustdesk_id} className="font-mono text-xs" />
               </div>
-              <div className="space-y-1">
-                <Label>Senha</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={connectData.password}
-                    className="font-mono text-xs"
-                  />
-                  <Button type="button" size="sm" variant="outline" onClick={copiarSenhaConn}>
-                    {copiadoConn ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    <span className="ml-1">{copiadoConn ? "Copiado" : "Copiar"}</span>
-                  </Button>
+              {connectData.password === null ? (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+                  <span className="font-medium text-warning">Dispositivo privado.</span>{" "}
+                  <span className="text-muted-foreground">
+                    A senha deste computador fica só com o administrador. Abra a conexão e peça a
+                    quem está na máquina para aceitar — ou solicite a senha ao administrador
+                    responsável.
+                  </span>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Senha</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={connectData.password}
+                      className="font-mono text-xs"
+                    />
+                    <Button type="button" size="sm" variant="outline" onClick={copiarSenhaConn}>
+                      {copiadoConn ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span className="ml-1">{copiadoConn ? "Copiado" : "Copiar"}</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Slot 'free_start'. Fica DEPOIS da credencial de proposito: o
                   tecnico veio pegar a senha, e ela nao pode ficar atras de nada.
@@ -2383,7 +2468,10 @@ const MOTIVO_SEM_SENHA_PELO_PAINEL: Record<string, string> = {
   rotacao_ativa:
     "Este computador ainda troca a senha a cada sessão (modo de rotação session). A senha definida aqui seria substituída no próximo atendimento — passe o computador para install_only antes.",
   senha_invalida: "Senha fora da regra: 8 a 64 caracteres, com letra e número.",
-  forbidden: "Só super_admin pode definir a senha pelo painel durante o teste.",
+  dispositivo_privado:
+    "Dispositivo privado: só o administrador da empresa define a senha. Peça a ele, ou conecte com aceite na máquina.",
+  forbidden: "Seu perfil não pode definir a senha de computadores.",
+  device_nao_encontrado: "Computador não encontrado.",
 };
 
 function horaCurta(iso: string | null | undefined): string {
@@ -2482,9 +2570,12 @@ function DefinirSenhaDialog({ device, onClose }: { device: AddressBookRow | null
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Definir senha desta máquina
-            <Badge variant="outline" className="text-[10px] font-normal">
-              teste · super_admin
-            </Badge>
+            {device?.privado && (
+              <Badge variant="outline" className="text-[10px] font-normal gap-1">
+                <Lock className="h-3 w-3" />
+                privado
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription>
             {device?.alias ?? device?.rustdesk_id} · A máquina aplica a senha no próximo sinal dela (até 3 minutos,
