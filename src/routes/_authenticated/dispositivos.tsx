@@ -376,6 +376,8 @@ function DispositivosPage() {
   const [confirmRedefinirId, setConfirmRedefinirId] = useState<string | null>(null);
   // Passo 2: "Definir senha desta máquina" (ver DefinirSenhaDialog).
   const [definirSenhaDe, setDefinirSenhaDe] = useState<AddressBookRow | null>(null);
+  // Histórico de quem marcou/desmarcou o dispositivo como privado (ver HistoricoPrivadoDialog).
+  const [historicoPrivadoDe, setHistoricoPrivadoDe] = useState<AddressBookRow | null>(null);
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
     rustdesk_id: string;
@@ -1318,6 +1320,12 @@ function DispositivosPage() {
                     {d.privado ? "Deixar de ser privado" : "Tornar privado"}
                   </DropdownMenuItem>
                 )}
+                {podeInativar && (
+                  <DropdownMenuItem onClick={() => setHistoricoPrivadoDe(d)}>
+                    <CalendarDays className="h-4 w-4 mr-2" />
+                    Histórico de privacidade
+                  </DropdownMenuItem>
+                )}
                 {podeInativar &&
                   (d.is_active ? (
                     <DropdownMenuItem
@@ -1884,6 +1892,12 @@ function DispositivosPage() {
                               {d.privado ? "Deixar de ser privado" : "Tornar privado"}
                             </DropdownMenuItem>
                           )}
+                          {podeInativar && (
+                            <DropdownMenuItem onClick={() => setHistoricoPrivadoDe(d)}>
+                              <CalendarDays className="h-4 w-4 mr-2" />
+                              Histórico de privacidade
+                            </DropdownMenuItem>
+                          )}
                           {podeInativar &&
                             (d.is_active ? (
                               <DropdownMenuItem
@@ -2395,6 +2409,7 @@ function DispositivosPage() {
       </Dialog>
 
       <DefinirSenhaDialog device={definirSenhaDe} onClose={() => setDefinirSenhaDe(null)} />
+      <HistoricoPrivadoDialog device={historicoPrivadoDe} onClose={() => setHistoricoPrivadoDe(null)} />
     </div>
   );
 }
@@ -2727,6 +2742,89 @@ function DefinirSenhaDialog({ device, onClose }: { device: AddressBookRow | null
               </Button>
             </>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Histórico do dispositivo privado: toda vez que alguém marcou ou desmarcou, com
+// quem, com que papel e quando. Escrito por gatilho no banco — ninguém grava nele pela
+// API. Só admin da empresa e super_admin leem (RLS).
+const PAPEL_LEGIVEL: Record<string, string> = {
+  super_admin: "super admin",
+  admin: "admin",
+  head: "head",
+  tech: "técnico",
+};
+
+function HistoricoPrivadoDialog({ device, onClose }: { device: AddressBookRow | null; onClose: () => void }) {
+  const { data: eventos, isLoading, error } = useQuery({
+    queryKey: ["privado_historico", device?.id],
+    enabled: device !== null,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dispositivo_privado_historico")
+        .select("id, privado, alterado_em, alterado_por_email, alterado_por_papel, origem, observacao")
+        .eq("device_id", device!.id)
+        .order("alterado_em", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  return (
+    <Dialog open={device !== null} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Histórico de privacidade</DialogTitle>
+          <DialogDescription>
+            {device?.alias ?? device?.rustdesk_id} · Cada vez que o computador foi marcado ou deixou de ser
+            privado, do mais recente para o mais antigo.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          {isLoading && <Skeleton className="h-16 w-full" />}
+          {error && (
+            <p className="text-sm text-destructive">Não foi possível carregar o histórico.</p>
+          )}
+          {!isLoading && !error && (eventos?.length ?? 0) === 0 && (
+            <p className="text-sm text-muted-foreground">Este computador nunca foi marcado como privado.</p>
+          )}
+          <ol className="space-y-3">
+            {eventos?.map((e) => (
+              <li key={e.id} className="flex gap-3 rounded-md border p-3 text-sm">
+                {e.privado ? (
+                  <Lock className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
+                ) : (
+                  <LockOpen className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                )}
+                <div className="space-y-0.5 min-w-0">
+                  <p className="font-medium">{e.privado ? "Tornado privado" : "Deixou de ser privado"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {horaCurta(e.alterado_em)} ·{" "}
+                    {e.alterado_por_email
+                      ? `${e.alterado_por_email}${e.alterado_por_papel ? ` (${PAPEL_LEGIVEL[e.alterado_por_papel] ?? e.alterado_por_papel})` : ""}`
+                      : e.origem === "painel"
+                        ? "autor não registrado"
+                        : e.origem === "backend"
+                          ? "sistema"
+                          : "manutenção no banco"}
+                  </p>
+                  {e.observacao && <p className="text-xs text-muted-foreground italic">{e.observacao}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" onClick={onClose}>
+            Fechar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
