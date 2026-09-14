@@ -734,6 +734,45 @@ export type Database = {
           },
         ]
       }
+      dispositivo_privado_historico: {
+        Row: {
+          alterado_em: string
+          alterado_por: string | null
+          alterado_por_email: string | null
+          alterado_por_papel: string | null
+          device_id: string
+          id: number
+          observacao: string | null
+          origem: string
+          privado: boolean
+          tenant_id: string
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por?: string | null
+          alterado_por_email?: string | null
+          alterado_por_papel?: string | null
+          device_id: string
+          id?: never
+          observacao?: string | null
+          origem: string
+          privado: boolean
+          tenant_id: string
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string | null
+          alterado_por_email?: string | null
+          alterado_por_papel?: string | null
+          device_id?: string
+          id?: never
+          observacao?: string | null
+          origem?: string
+          privado?: boolean
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       device_favorites: {
         Row: {
           created_at: string
