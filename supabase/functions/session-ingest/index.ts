@@ -19,6 +19,18 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Passo 2 (Aposentar a senha rotativa): primeiro build do agente que aplica a senha
+// pedida pelo painel. Mesma constante da edge definir-senha-dispositivo. Agente mais
+// velho nem consulta o pedido — ignoraria o campo e o pedido ficaria esperando a toa.
+const VERSAO_SENHA_PELO_PAINEL = "2026.09.14";
+
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -299,10 +311,49 @@ Deno.serve(async (req) => {
       else if (typeof modo === "string" && MODOS_ROTACAO.includes(modo)) rotacao = modo;
     } catch { /* agente mantem o modo em cache */ }
 
+    // Passo 2: senha definida no painel (edge definir-senha-dispositivo) e ainda nao
+    // aplicada. Vai em todo presence ate o agente confirmar pelo rotate-device-secret —
+    // e so ai ela vira a senha que o Conectar entrega. So para agente que sabe aplicar.
+    //
+    // Fail-open como o resto do presence: sem senha desta vez, o pedido segue guardado e
+    // volta no proximo. A senha em si nunca vai para log.
+    let senha: { pedido_id: string; senha: string } | null = null;
+    if (agent_version && agent_version >= VERSAO_SENHA_PELO_PAINEL) {
+      try {
+        const { data: pedRows, error: pedErr } = await db.rpc("puxar_senha_pedida", {
+          p_device_id: device.id,
+        });
+        if (pedErr) console.warn("puxar_senha_pedida_falhou", rustdesk_id, pedErr.message);
+        const p = Array.isArray(pedRows) ? pedRows[0] : pedRows;
+        if (!pedErr && p?.pedido_id && p?.ciphertext && p?.iv) {
+          const encKeyB64 = Deno.env.get("DEVICE_SECRET_ENC_KEY");
+          if (!encKeyB64 || p.key_version !== 1) {
+            console.warn("senha_pedida_sem_chave", rustdesk_id, p.key_version);
+          } else {
+            const key = await crypto.subtle.importKey(
+              "raw", b64ToBytes(encKeyB64), { name: "AES-GCM" }, false, ["decrypt"],
+            );
+            const plain = await crypto.subtle.decrypt(
+              {
+                name: "AES-GCM",
+                iv: b64ToBytes(p.iv),
+                additionalData: new TextEncoder().encode(`senha_pedida:${device.id}`),
+              },
+              key, b64ToBytes(p.ciphertext),
+            );
+            senha = { pedido_id: p.pedido_id, senha: new TextDecoder().decode(plain) };
+          }
+        }
+      } catch (e) {
+        console.warn("senha_pedida_nao_entregue", rustdesk_id, String(e));
+      }
+    }
+
     const corpo: Record<string, unknown> = { ok: true, action: "presence" };
     if (update) corpo.update = update;
     if (aviso) corpo.aviso = aviso;
     if (rotacao) corpo.rotacao = rotacao;
+    if (senha) corpo.senha = senha;
     return json(corpo);
   }
 
