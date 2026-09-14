@@ -357,6 +357,23 @@ Deno.serve(async (req) => {
     return json(corpo);
   }
 
+  // Passo 3 (shadow): guarda e classifica o computador que controla a sessao. So
+  // observa — nao muda a resposta, nao corta. Fail-open como tudo aqui: perder uma
+  // classificacao custa um ponto na medicao; derrubar o 'start' custaria a sessao.
+  async function registrarControlador(connectionLogId: string) {
+    if (event !== "start" || !controller_rustdesk_id) return;
+    try {
+      const { data: status, error } = await db.rpc("registrar_controlador", {
+        p_connection_log_id: connectionLogId,
+        p_controller_rustdesk_id: controller_rustdesk_id,
+      });
+      if (error) console.warn("registrar_controlador_falhou", rustdesk_id, error.message);
+      else if (status === "desconhecido") {
+        console.warn("fronteira_shadow_desconhecido", rustdesk_id, controller_rustdesk_id);
+      }
+    } catch { /* medicao e acessoria */ }
+  }
+
   async function latestActive() {
     const { data } = await db
       .from("connection_logs")
@@ -431,6 +448,9 @@ Deno.serve(async (req) => {
         .update({ last_heartbeat_at: nowIso })
         .eq("id", active.id);
       if (error) return json({ error: "db_error", detail: error.message }, 500);
+      // O controlador chega no SEGUNDO 'start' (o agente so o conhece depois do login),
+      // quando a sessao ja existe — este e o caminho comum, painel ou acesso direto.
+      await registrarControlador(active.id);
       const hard_cap_at = await currentHardCap();
       return json({ ok: true, session_id: active.id, action: "heartbeat", hard_cap_at });
     }
@@ -449,6 +469,10 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     if (error) return json({ error: "db_error", detail: error.message }, 500);
+
+    // Passo 3 (shadow): raro, mas o 'start' que CRIA a sessao externa pode ja trazer o
+    // controlador (ex.: o prime no boot do agente, com a conexao ja autenticada).
+    await registrarControlador(inserted.id);
 
     // Billing B6: sessao externa (.exe, direta) agora e MEDIDA aqui. Auto free->credito;
     // reconexao unificada nao cobra; sem saldo/conta bloqueada -> blocked (cortamos).
