@@ -15,9 +15,11 @@
 //   definir   { device_id, senha }              -> cria/substitui o pedido
 //   cancelar  { device_id, pedido_id }          -> apaga o pedido, se ainda vigente
 //
-// CANARIO: so super_admin, por decisao de 14/09/2026. Abrir para admin de empresa e
-// mexer em PAPEIS_QUE_DEFINEM — e, antes, conferir o tenant do device contra o do
-// perfil, como o provision-device-secret faz.
+// QUEM PODE. 14/09/2026: validado em campo so com super_admin; no mesmo dia aberto a
+// admin, head e tecnico — sempre da empresa DONA do dispositivo (super_admin, de
+// qualquer uma). Excecao: dispositivo PRIVADO. Nele so admin e super_admin definem,
+// porque quem define a senha passa a conhece-la, e o privado existe justamente para o
+// tecnico nao conhecer (ver a connect-device e a migration 20260914160000).
 //
 // CONTRATO DE CRIPTO: o de device_secrets (AES-256-GCM, IV 12 bytes, base64,
 // key_version 1, chave DEVICE_SECRET_ENC_KEY), com AAD = "senha_pedida:" + device_id.
@@ -31,7 +33,9 @@ const CORS = {
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const PAPEIS_QUE_DEFINEM = ["super_admin"];
+const PAPEIS_QUE_DEFINEM = ["super_admin", "admin", "head", "tech"];
+// Mesma lista da connect-device: quem ve a senha de um dispositivo privado.
+const PAPEIS_QUE_VEEM_PRIVADO = ["super_admin", "admin"];
 
 // Primeiro build do agente que sabe aplicar a senha pedida. Mesma comparacao por
 // string que o painel usa para versao (AAAA.MM.DD vem primeiro, largura fixa). A
@@ -39,8 +43,8 @@ const PAPEIS_QUE_DEFINEM = ["super_admin"];
 const VERSAO_MINIMA_AGENTE = "2026.09.14";
 
 // Senha propria so faz sentido onde a rotacao de rotina esta desligada (Passo 1): em
-// 'session' o proximo fim de sessao sorteia outra por cima da que o super_admin
-// escolheu, e o painel mostraria "aplicada" para uma senha que ja morreu.
+// 'session' o proximo fim de sessao sorteia outra por cima da que foi escolhida, e o
+// painel mostraria "aplicada" para uma senha que ja morreu.
 const MODOS_SEM_ROTINA = ["install_only", "off"];
 
 // Regra da senha — ESPELHADA em senhaAceitavel (senha_painel.go, repo do agente).
@@ -78,14 +82,16 @@ type Device = {
   rustdesk_id: string;
   os: string | null;
   is_active: boolean | null;
+  privado: boolean | null;
   agent_version: string | null;
   agent_token_hash: string | null;
   rotacao_modo_efetivo: string | null;
   last_online: string | null;
 };
 
-// Por que esta maquina nao pode receber senha pelo painel agora — ou null.
-function bloqueio(d: Device): string | null {
+// Por que ESTE usuario nao pode definir a senha DESTA maquina agora — ou null.
+function bloqueio(d: Device, papel: string): string | null {
+  if (d.privado === true && !PAPEIS_QUE_VEEM_PRIVADO.includes(papel)) return "dispositivo_privado";
   if (d.is_active === false) return "dispositivo_inativo";
   if (!d.agent_token_hash) return "sem_agente";
   if (/^(android|ios)/i.test(d.os ?? "")) return "plataforma_movel";
@@ -126,19 +132,22 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
     const { data: profile } = await admin
-      .from("profiles").select("role, is_active").eq("id", user.id).maybeSingle();
+      .from("profiles").select("role, tenant_id, is_active").eq("id", user.id).maybeSingle();
     if (!profile || profile.is_active === false) return json({ error: "user_inactive_or_missing" }, 403);
     if (!PAPEIS_QUE_DEFINEM.includes(profile.role)) return json({ error: "forbidden" }, 403);
 
     const { data: device, error: devErr } = await admin
       .from("address_book")
-      .select("id, tenant_id, rustdesk_id, os, is_active, agent_version, agent_token_hash, rotacao_modo_efetivo, last_online")
+      .select("id, tenant_id, rustdesk_id, os, is_active, privado, agent_version, agent_token_hash, rotacao_modo_efetivo, last_online")
       .eq("id", deviceId)
       .maybeSingle<Device>();
     if (devErr) return json({ error: "lookup_failed" }, 500);
-    if (!device) return json({ error: "device_nao_encontrado" }, 404);
+    // Dispositivo de outra empresa responde igual a inexistente: nao confirma que existe.
+    if (!device || (profile.role !== "super_admin" && device.tenant_id !== profile.tenant_id)) {
+      return json({ error: "device_nao_encontrado" }, 404);
+    }
 
-    const motivo = bloqueio(device);
+    const motivo = bloqueio(device, profile.role);
 
     // ---------------------------------------------------------------- status
     if (acao === "status") {
@@ -166,6 +175,7 @@ Deno.serve(async (req) => {
       return json({
         estado,
         bloqueio: motivo,
+        privado: device.privado === true,
         pedido_id: r.pedido_id ?? null,
         pedido_em: r.pedido_em ?? null,
         expira_em: r.expira_em ?? null,
@@ -175,6 +185,10 @@ Deno.serve(async (req) => {
         last_online: device.last_online,
       });
     }
+
+    // Privado barra tambem o cancelar: nao ha senha em jogo, mas quem nao pode pedir
+    // tambem nao desfaz o pedido de um admin.
+    if (motivo === "dispositivo_privado") return json({ error: motivo }, 403);
 
     // -------------------------------------------------------------- cancelar
     if (acao === "cancelar") {
@@ -220,8 +234,8 @@ Deno.serve(async (req) => {
     const p = Array.isArray(rows) ? rows[0] : rows;
     if (!p?.pedido_id) return json({ error: "store_failed" }, 500);
 
-    // Sem a senha no log, obvio — so quem pediu, para qual maquina.
-    console.info("senha_pedida", device.rustdesk_id, user.id, p.pedido_id);
+    // Sem a senha no log, obvio — so quem pediu, com qual papel, para qual maquina.
+    console.info("senha_pedida", device.rustdesk_id, user.id, profile.role, p.pedido_id);
     return json({ pedido_id: p.pedido_id, pedido_em: p.pedido_em, expira_em: p.expira_em });
   } catch (_e) {
     return json({ error: "internal_error" }, 500);
