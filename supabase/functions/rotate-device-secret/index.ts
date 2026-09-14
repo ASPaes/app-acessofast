@@ -63,7 +63,7 @@ function isValidPassword(pw: string): boolean {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; password?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; password?: string; pedido_id?: string };
   try {
     body = await req.json();
   } catch {
@@ -73,6 +73,14 @@ Deno.serve(async (req) => {
   const rustdesk_id = (body.rustdesk_id ?? "").trim();
   const agent_token = body.agent_token ?? "";
   const password = body.password ?? "";
+  // Passo 2 (Aposentar a senha rotativa): a senha reportada veio de um pedido do
+  // painel (edge definir-senha-dispositivo), e nao de um sorteio do agente. Opcional —
+  // agente anterior nao manda. Formato invalido e tratado como ausente: a senha JA
+  // esta aplicada na maquina e tem de ser guardada de qualquer jeito.
+  const pedido_id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      .test(body.pedido_id ?? "")
+    ? body.pedido_id!
+    : null;
 
   if (!rustdesk_id || !agent_token || !password) {
     return json({ error: "missing_or_invalid_fields" }, 400);
@@ -155,6 +163,23 @@ Deno.serve(async (req) => {
     ivB64 = bytesToB64(iv);
   } catch {
     return json({ error: "encrypt_failed" }, 500);
+  }
+
+  // 4a) Passo 2: senha que veio de um pedido do painel. A RPC grava em device_secrets e
+  //     apaga o pedido na mesma transacao; grava MESMO que o pedido ja nao exista
+  //     (cancelado/substituido depois de o agente puxar), porque a senha ja esta na
+  //     maquina. updated_by = quem pediu.
+  if (pedido_id) {
+    const { data: casou, error: confErr } = await db.rpc("confirmar_senha_pedida", {
+      p_device_id: deviceId,
+      p_pedido_id: pedido_id,
+      p_ciphertext: ciphertextB64,
+      p_iv: ivB64,
+      p_key_version: 1,
+    });
+    if (confErr) return json({ error: "store_failed", detail: confErr.message }, 500);
+    console.info("senha_pedida_confirmada", rustdesk_id, pedido_id, casou === true);
+    return json({ ok: true, pedido_confirmado: casou === true });
   }
 
   // 4) Gravar via RPC mecanica (so service_role). p_actor = null: quem gira e o agente,

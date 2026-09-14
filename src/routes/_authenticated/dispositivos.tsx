@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
@@ -368,6 +368,8 @@ function DispositivosPage() {
   // pra parar assim que o usuário fechar/cancelar a espera.
   const aguardoCancelado = useRef(false);
   const [confirmRedefinirId, setConfirmRedefinirId] = useState<string | null>(null);
+  // Passo 2: "Definir senha desta máquina" (ver DefinirSenhaDialog).
+  const [definirSenhaDe, setDefinirSenhaDe] = useState<AddressBookRow | null>(null);
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
     rustdesk_id: string;
@@ -1244,7 +1246,12 @@ function DispositivosPage() {
                 </DropdownMenuItem>
                 {podeInativar && <DropdownMenuSeparator />}
                 {podeInativar &&
-                  (
+                  (isSuper && aceitaSenhaPeloPainel(d) ? (
+                    <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
+                      <KeyRound className="h-4 w-4 mr-2" />
+                      Definir senha desta máquina
+                    </DropdownMenuItem>
+                  ) : (
                     <DropdownMenuItem
                       onClick={() => setConfirmRedefinirId(d.id)}
                       disabled={redefinindoId === d.id}
@@ -1252,7 +1259,7 @@ function DispositivosPage() {
                       <KeyRound className="h-4 w-4 mr-2" />
                       {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
                     </DropdownMenuItem>
-                  )}
+                  ))}
                 {podeInativar &&
                   (d.is_active ? (
                     <DropdownMenuItem
@@ -1791,7 +1798,12 @@ function DispositivosPage() {
                           </DropdownMenuItem>
                           {podeInativar && <DropdownMenuSeparator />}
                           {podeInativar &&
-                            (
+                            (isSuper && aceitaSenhaPeloPainel(d) ? (
+                              <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                Definir senha desta máquina
+                              </DropdownMenuItem>
+                            ) : (
                               <DropdownMenuItem
                                 onClick={() => setConfirmRedefinirId(d.id)}
                                 disabled={redefinindoId === d.id}
@@ -1799,7 +1811,7 @@ function DispositivosPage() {
                                 <KeyRound className="h-4 w-4 mr-2" />
                                 {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
                               </DropdownMenuItem>
-                            )}
+                            ))}
                           {podeInativar &&
                             (d.is_active ? (
                               <DropdownMenuItem
@@ -2296,7 +2308,337 @@ function DispositivosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DefinirSenhaDialog device={definirSenhaDe} onClose={() => setDefinirSenhaDe(null)} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Passo 2 do plano "Aposentar a Senha Rotativa" — senha própria da máquina.
+//
+// Diferente do "Redefinir senha" (provision-device-secret), que grava a senha no
+// painel e manda alguém aplicar à mão: aqui a senha vira um PEDIDO, a máquina aplica
+// sozinha no próximo sinal e só depois de ela confirmar o Conectar passa a entregar a
+// nova. Até lá continua a antiga, que é a que a máquina tem.
+//
+// Canário: só super_admin (a edge definir-senha-dispositivo confere de novo), e só em
+// computador cujo agente sabe aplicar. As duas constantes abaixo espelham a edge.
+const VERSAO_SENHA_PELO_PAINEL = "2026.09.14";
+const SENHA_PAINEL_RE = /^[A-Za-z0-9!@#$%*\-_=+.?]+$/;
+const SENHA_PAINEL_POLL_MS = 5000;
+
+function aceitaSenhaPeloPainel(d: AddressBookRow): boolean {
+  return (
+    d.is_active !== false &&
+    !!d.agent_version &&
+    d.agent_version >= VERSAO_SENHA_PELO_PAINEL &&
+    !/^(android|ios)/i.test(d.os ?? "")
+  );
+}
+
+function senhaPainelAceitavel(pw: string): boolean {
+  return (
+    pw.length >= 8 && pw.length <= 64 && SENHA_PAINEL_RE.test(pw) && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw)
+  );
+}
+
+// Sugestão de senha: sem caracteres ambíguos (0 O 1 l I), porque alguém pode ter de
+// ditá-la por telefone. Garante letra e dígito.
+function gerarSenhaPainel(): string {
+  const letras = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digitos = "23456789";
+  const todos = letras + digitos;
+  const buf = new Uint32Array(16);
+  crypto.getRandomValues(buf);
+  const chars = Array.from(buf, (n) => todos[n % todos.length]);
+  chars[buf[0] % 8] = letras[buf[1] % letras.length];
+  chars[8 + (buf[2] % 8)] = digitos[buf[3] % digitos.length];
+  return chars.join("");
+}
+
+type EstadoSenhaPedida = "sem_pedido" | "pendente" | "expirado" | "aplicada" | "substituido";
+
+type StatusSenhaPedida = {
+  estado?: EstadoSenhaPedida;
+  bloqueio?: string | null;
+  pedido_id?: string | null;
+  pedido_em?: string | null;
+  expira_em?: string | null;
+  senha_atualizada_em?: string | null;
+  modo_efetivo?: string | null;
+  agent_version?: string | null;
+  last_online?: string | null;
+  error?: string;
+};
+
+type PedidoSenha = { pedido_id: string; pedido_em: string; expira_em: string };
+
+const MOTIVO_SEM_SENHA_PELO_PAINEL: Record<string, string> = {
+  dispositivo_inativo: "O dispositivo está inativo.",
+  sem_agente: "Este computador não tem o agente AcessoFast matriculado.",
+  plataforma_movel: "Por enquanto só computadores Windows aplicam senha definida pelo painel.",
+  agente_antigo:
+    "O agente deste computador ainda não sabe aplicar senha definida pelo painel. Ele precisa estar numa versão de 14/09/2026 ou mais nova.",
+  rotacao_ativa:
+    "Este computador ainda troca a senha a cada sessão (modo de rotação session). A senha definida aqui seria substituída no próximo atendimento — passe o computador para install_only antes.",
+  senha_invalida: "Senha fora da regra: 8 a 64 caracteres, com letra e número.",
+  forbidden: "Só super_admin pode definir a senha pelo painel durante o teste.",
+};
+
+function horaCurta(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function DefinirSenhaDialog({ device, onClose }: { device: AddressBookRow | null; onClose: () => void }) {
+  const [senha, setSenha] = useState("");
+  const [confirma, setConfirma] = useState("");
+  const [mostrar, setMostrar] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [pedido, setPedido] = useState<PedidoSenha | null>(null);
+  const [status, setStatus] = useState<StatusSenhaPedida | null>(null);
+  const deviceId = device?.id ?? null;
+
+  const consultar = async (id: string, p: PedidoSenha | null) => {
+    const { data, error } = await supabase.functions.invoke<StatusSenhaPedida>("definir-senha-dispositivo", {
+      body: { device_id: id, acao: "status", pedido_id: p?.pedido_id, desde: p?.pedido_em },
+    });
+    if (error || data?.error) {
+      const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+      setStatus({ error: MOTIVO_SEM_SENHA_PELO_PAINEL[raw] ?? (raw || "Falha ao consultar") });
+      return;
+    }
+    setStatus(data ?? null);
+  };
+
+  // Reabre limpo a cada máquina, e já pergunta se ela pode receber.
+  useEffect(() => {
+    setSenha("");
+    setConfirma("");
+    setMostrar(false);
+    setPedido(null);
+    setStatus(null);
+    if (deviceId) void consultar(deviceId, null);
+  }, [deviceId]);
+
+  // Enquanto o pedido desta tela estiver pendente, acompanha até a máquina confirmar.
+  const pendente = pedido !== null && (status?.estado ?? "pendente") === "pendente";
+  useEffect(() => {
+    if (!deviceId || !pedido || !pendente) return;
+    const t = setInterval(() => void consultar(deviceId, pedido), SENHA_PAINEL_POLL_MS);
+    return () => clearInterval(t);
+  }, [deviceId, pedido, pendente]);
+
+  const definir = async () => {
+    if (!deviceId) return;
+    setEnviando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<PedidoSenha & { error?: string }>(
+        "definir-senha-dispositivo",
+        { body: { device_id: deviceId, acao: "definir", senha } },
+      );
+      if (error || data?.error || !data?.pedido_id) {
+        const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+        toast.error(MOTIVO_SEM_SENHA_PELO_PAINEL[raw] ?? (raw || "Falha ao definir a senha"));
+        return;
+      }
+      const p = { pedido_id: data.pedido_id, pedido_em: data.pedido_em, expira_em: data.expira_em };
+      setSenha("");
+      setConfirma("");
+      setPedido(p);
+      setStatus((s) => ({ ...s, estado: "pendente", pedido_id: p.pedido_id, pedido_em: p.pedido_em, expira_em: p.expira_em }));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const cancelar = async () => {
+    if (!deviceId || !pedido) return;
+    const { error } = await supabase.functions.invoke("definir-senha-dispositivo", {
+      body: { device_id: deviceId, acao: "cancelar", pedido_id: pedido.pedido_id },
+    });
+    if (error) {
+      toast.error((await invokeErrorMessage(error)) || "Falha ao cancelar");
+      return;
+    }
+    // O agente pode ter aplicado entre o último poll e o cancelamento — quem diz é o status.
+    await consultar(deviceId, pedido);
+  };
+
+  const bloqueio = status?.bloqueio ?? null;
+  const senhaOk = senhaPainelAceitavel(senha);
+  const confereOk = senha === confirma;
+  const estado = status?.estado;
+
+  return (
+    <Dialog open={device !== null} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Definir senha desta máquina
+            <Badge variant="outline" className="text-[10px] font-normal">
+              teste · super_admin
+            </Badge>
+          </DialogTitle>
+          <DialogDescription>
+            {device?.alias ?? device?.rustdesk_id} · A máquina aplica a senha no próximo sinal dela (até 3 minutos,
+            se estiver ligada). Até confirmar, o Conectar continua entregando a senha atual.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!pedido && (
+          <div className="space-y-3">
+            {status?.error && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                {status.error}
+              </div>
+            )}
+            {bloqueio && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                {MOTIVO_SEM_SENHA_PELO_PAINEL[bloqueio] ?? bloqueio}
+              </div>
+            )}
+            {!bloqueio && estado === "pendente" && (
+              <div className="rounded-md border p-3 text-xs text-muted-foreground">
+                Já existe uma senha pedida em {horaCurta(status?.pedido_em)} esperando a máquina aplicar. Definir
+                outra agora substitui aquele pedido.
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="senha-painel">Nova senha</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="senha-painel"
+                  type={mostrar ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  className="font-mono text-xs"
+                  disabled={!!bloqueio}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  title={mostrar ? "Ocultar" : "Mostrar"}
+                  onClick={() => setMostrar((m) => !m)}
+                >
+                  {mostrar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!!bloqueio}
+                  onClick={() => {
+                    const s = gerarSenhaPainel();
+                    setSenha(s);
+                    setConfirma(s);
+                    setMostrar(true);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Gerar
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="senha-painel-confirma">Confirmar senha</Label>
+              <Input
+                id="senha-painel-confirma"
+                type={mostrar ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirma}
+                onChange={(e) => setConfirma(e.target.value)}
+                className="font-mono text-xs"
+                disabled={!!bloqueio}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              8 a 64 caracteres, com letra e número. Símbolos aceitos: ! @ # $ % * - _ = + . ?
+              {senha && !senhaOk && <span className="text-destructive"> · fora da regra</span>}
+              {senhaOk && confirma && !confereOk && <span className="text-destructive"> · as senhas não conferem</span>}
+            </p>
+          </div>
+        )}
+
+        {pedido && (
+          <div className="space-y-3 text-sm">
+            {estado === "pendente" && (
+              <div className="flex items-start gap-3 rounded-md border p-3">
+                <Loader2 className="h-4 w-4 mt-0.5 animate-spin text-muted-foreground" />
+                <div className="space-y-1">
+                  <p>Aguardando a máquina aplicar a senha…</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pedido em {horaCurta(pedido.pedido_em)} · expira em {horaCurta(pedido.expira_em)} · último sinal
+                    da máquina {horaCurta(status?.last_online)}
+                  </p>
+                </div>
+              </div>
+            )}
+            {estado === "aplicada" && (
+              <div className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-3">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 text-success" />
+                <p>
+                  A máquina aplicou e confirmou a senha em {horaCurta(status?.senha_atualizada_em)}. O Conectar já
+                  entrega a senha nova.
+                </p>
+              </div>
+            )}
+            {estado === "expirado" && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-warning">
+                O pedido expirou sem a máquina aplicar. A senha atual continua valendo.
+              </div>
+            )}
+            {estado === "substituido" && (
+              <div className="rounded-md border p-3 text-muted-foreground">
+                Outro pedido de senha substituiu este. A senha que vale é a do pedido mais novo.
+              </div>
+            )}
+            {estado === "sem_pedido" && (
+              <div className="rounded-md border p-3 text-muted-foreground">
+                Pedido cancelado antes de a máquina aplicar. A senha atual continua valendo.
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          {!pedido ? (
+            <>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={!!bloqueio || !status || !!status.error || !senhaOk || !confereOk || enviando}
+                onClick={() => void definir()}
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                {enviando ? "Enviando..." : "Definir senha"}
+              </Button>
+            </>
+          ) : (
+            <>
+              {estado === "pendente" && (
+                <Button type="button" variant="outline" onClick={() => void cancelar()}>
+                  Cancelar pedido
+                </Button>
+              )}
+              <Button type="button" onClick={onClose}>
+                Fechar
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

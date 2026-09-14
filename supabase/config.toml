@@ -12,6 +12,9 @@ verify_jwt = true
 [functions.provision-device-secret]
 verify_jwt = true
 
+[functions.definir-senha-dispositivo]
+verify_jwt = true
+
 [functions.session-ingest]
 verify_jwt = false
 
