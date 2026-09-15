@@ -435,6 +435,8 @@ function DispositivosPage() {
           toast.error(
             "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
           );
+        } else if (raw.includes("conta_inativa")) {
+          toast.error("Empresa inativa. Fale com o suporte para reativar a conta.");
         } else if (raw.includes("free_requires_individual")) {
           toast.error(
             "O acesso gratuito só vale para uma conexão por vez. Use um crédito para conexões simultâneas.",

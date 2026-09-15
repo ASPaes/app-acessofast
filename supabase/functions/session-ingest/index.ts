@@ -482,7 +482,10 @@ Deno.serve(async (req) => {
       p_peer_ip: peer_ip,
     });
     if (meterErr) {
-      // Medicao falhou: nao derruba a sessao (fail-open); segue sem cap.
+      // Medicao falhou: nao derruba a sessao (fail-open); segue sem cap. Mas LOGA: em
+      // 15/09/2026 este ramo, mudo, deixava conta suspensa entrar por fora do painel sem
+      // corte e sem ninguem saber (cast de billing_status quebrado na RPC).
+      console.error("meter_external_session_falhou", rustdesk_id, meterErr.message);
       return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null });
     }
     const meter = Array.isArray(meterRows) ? meterRows[0] : meterRows;
