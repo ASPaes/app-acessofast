@@ -128,12 +128,18 @@ Deno.serve(async (req) => {
       p_device_id: deviceId,
       p_actor: user.id,
     });
-    if (eligErr) return json({ error: "eligibility_failed" }, 500);
+    if (eligErr) {
+      // Em 15/09/2026 este 500 escondia um cast quebrado (conta suspensa) — sem log,
+      // o painel so via "falha ao conectar". Registrar o motivo e o que torna o erro achavel.
+      console.error("billing_eligibility_falhou", deviceId, eligErr.message);
+      return json({ error: "eligibility_failed" }, 500);
+    }
     const elig = Array.isArray(eligRows) ? eligRows[0] : eligRows;
     if (!elig) return json({ error: "eligibility_failed" }, 500);
 
     if (elig.blocked_reason) {
       if (elig.blocked_reason === "device_not_found") return json({ error: "forbidden_or_not_found" }, 403);
+      if (elig.blocked_reason === "conta_inativa") return json({ error: "conta_inativa" }, 403);
       if (elig.blocked_reason === "billing_blocked") return json({ error: "billing_blocked" }, 403);
       if (elig.blocked_reason === "quota_exceeded") return json({ error: "quota_exceeded" }, 429);
       if (elig.blocked_reason === "no_credits") return json({ error: "no_credits" }, 402);
@@ -174,6 +180,7 @@ Deno.serve(async (req) => {
         });
       }
       if (msg.includes("quota_exceeded")) return json({ error: "quota_exceeded" }, 429);
+      if (msg.includes("conta_inativa")) return json({ error: "conta_inativa" }, 403);
       if (msg.includes("billing_blocked")) return json({ error: "billing_blocked" }, 403);
       if (msg.includes("free_exhausted") || msg.includes("no_credits")) return json({ error: "no_credits" }, 402);
       if (msg.includes("free_requires_individual")) return json({ error: "free_requires_individual" }, 409);
