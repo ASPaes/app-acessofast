@@ -197,6 +197,7 @@ export type Database = {
           enrolled_via_secret_id: string | null
           enrollment_status: Database["public"]["Enums"]["enrollment_status"]
           id: string
+          ignorar_presenca: boolean
           is_active: boolean
           last_online: string | null
           os: string | null
@@ -223,6 +224,7 @@ export type Database = {
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
           os?: string | null
@@ -249,6 +251,7 @@ export type Database = {
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
           os?: string | null

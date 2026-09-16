@@ -16,6 +16,7 @@ import { StatCard } from "@/components/stat-card";
 import { PainelOperacao } from "@/components/painel-operacao";
 import { FaixaAgora, type ItemAgora } from "@/components/faixa-agora";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { limiteOnlineISO } from "@/lib/presenca";
 import type { KpiInfo } from "@/components/kpi-info";
 import {
   Table,
@@ -174,16 +175,17 @@ function Dashboard() {
             .select("id", { count: "exact", head: true })
             .gte("session_start", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
         ),
-        // Maquinas alcancaveis AGORA. Mesmo corte de 5 min que o resto do
-        // painel usa para "presente": o agente reporta presenca a cada 60s, e
-        // uma janela mais curta transformaria um beat perdido em maquina
-        // offline.
+        // Maquinas vistas AGORA. A janela sai de lib/presenca e nao de um
+        // numero escrito aqui: ela e dimensionada pela cadencia do `presence`
+        // do agente (que ja passou de 60s para 180s), e esta tela chegou a
+        // usar 5 min enquanto o resto do painel usava 7 — o mesmo dispositivo
+        // contava como online na lista e fora da conta do dashboard.
         withTenant(
           supabase
             .from("address_book")
             .select("id", { count: "exact", head: true })
             .eq("is_active", true)
-            .gt("last_online", new Date(Date.now() - 5 * 60 * 1000).toISOString()),
+            .gt("last_online", limiteOnlineISO()),
         ),
       ]);
       return {

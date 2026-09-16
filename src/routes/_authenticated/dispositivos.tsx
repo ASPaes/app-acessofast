@@ -64,7 +64,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { limiteOnlineISO } from "@/lib/presenca";
+import { limiteOnlineISO, statusDispositivo, tituloSemStatus } from "@/lib/presenca";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
@@ -132,6 +132,10 @@ type AddressBookRow = {
   created_at: string;
   tenant_id: string | null;
   is_active: boolean;
+  // Quando true o servidor descarta o `presence` desta máquina: `last_online`
+  // só anda durante sessão e não serve para dizer se ela está ligada agora.
+  // Ver statusDispositivo() em lib/presenca.
+  ignorar_presenca: boolean;
   // Dispositivo privado: técnico conecta sem senha, só por aceite manual.
   privado: boolean;
   client_id: string | null;
@@ -653,7 +657,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, privado, client_id, clients(name, document, document_type, phone), tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, ignorar_presenca, privado, client_id, clients(name, document, document_type, phone), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -1125,14 +1129,10 @@ function DispositivosPage() {
   };
 
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
-    const status =
-      d.is_active === false
-        ? "inativo"
-        : sessoesAtivas?.has(d.id)
-          ? "atendimento"
-          : dispositivosOnline?.has(d.id)
-            ? "online"
-            : "offline";
+    const status = statusDispositivo(d, {
+      emAtendimento: sessoesAtivas?.has(d.id) ?? false,
+      online: dispositivosOnline?.has(d.id) ?? false,
+    });
     const iconColor =
       status === "atendimento"
         ? "text-warning"
@@ -1236,28 +1236,23 @@ function DispositivosPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
               Online
             </Badge>
-          ) : (
+          ) : status === "sem_status" ? (
+            /* O servidor descarta o presence desta maquina, entao NAO sabemos se
+               ela esta ligada. Dizer "Offline" seria afirmar o que nao se sabe, e
+               mandaria o tecnico procurar defeito numa maquina que provavelmente
+               esta funcionando. Quem decide isso e statusDispositivo(). */
             <Badge
               variant="outline"
-              className={`gap-1.5 ${d.agent_version ? "text-muted-foreground" : "text-warning border-warning/30"}`}
-              title={
-                d.agent_version
-                  ? undefined
-                  : "Esta máquina roda uma versão que não reporta status. Ela pode estar ligada — o AcessoFast continua acessando normalmente."
-              }
+              className="gap-1.5 text-warning border-warning/30"
+              title={tituloSemStatus(d)}
             >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${d.agent_version ? "bg-muted-foreground/40" : "bg-warning/60"}`}
-              />
-              {/* Sem agent_version o servidor descarta o presence desta maquina
-                  (ignorar_presenca), entao NAO sabemos se ela esta ligada. Dizer
-                  "Offline" seria afirmar o que nao se sabe, e mandaria o tecnico
-                  procurar defeito numa maquina que provavelmente esta funcionando. */}
-              {!d.agent_version
-                ? "Sem status"
-                : d.last_online
-                  ? `Offline · ${tempoRelativo(d.last_online)}`
-                  : "Offline"}
+              <span className="h-1.5 w-1.5 rounded-full bg-warning/60" />
+              Sem status
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+              {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
             </Badge>
           )}
         </TableCell>
@@ -1740,14 +1735,10 @@ function DispositivosPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((d) => {
-                const status =
-                  d.is_active === false
-                    ? "inativo"
-                    : sessoesAtivas?.has(d.id)
-                      ? "atendimento"
-                      : dispositivosOnline?.has(d.id)
-                        ? "online"
-                        : "offline";
+                const status = statusDispositivo(d, {
+                  emAtendimento: sessoesAtivas?.has(d.id) ?? false,
+                  online: dispositivosOnline?.has(d.id) ?? false,
+                });
                 const iconColor =
                   status === "atendimento"
                     ? "text-warning"
@@ -1794,6 +1785,15 @@ function DispositivosPage() {
                         <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15">
                           <span className="h-1.5 w-1.5 rounded-full bg-success" />
                           Online
+                        </Badge>
+                      ) : status === "sem_status" ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1.5 text-warning border-warning/30"
+                          title={tituloSemStatus(d)}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-warning/60" />
+                          Sem status
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="gap-1.5 text-muted-foreground">

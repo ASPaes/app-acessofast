@@ -49,7 +49,7 @@ import {
   normalizarDocumento,
   normalizarTexto,
 } from "@/lib/clientes";
-import { limiteOnlineISO } from "@/lib/presenca";
+import { limiteOnlineISO, presencaSilenciada, tituloSemStatus } from "@/lib/presenca";
 
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
@@ -118,6 +118,10 @@ type DeviceRow = {
   last_online: string | null;
   client_id: string | null;
   is_active: boolean;
+  // Presença: sem estes dois o rótulo mente "Offline" para máquina cujo
+  // `presence` o servidor descarta. Ver statusDispositivo() em lib/presenca.
+  agent_version: string | null;
+  ignorar_presenca: boolean;
 };
 
 type AdoptResult = {
@@ -422,7 +426,7 @@ function ConectarPage() {
       // "nao existe" (secao 11) e precisa render a mensagem certa.
       const { data, error } = await supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca")
         .in("client_id", idsDoGrupo)
         .order("alias");
       if (error) throw error;
@@ -455,7 +459,7 @@ function ConectarPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, clients(name)")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, clients(name)")
         .eq("is_active", true)
         .order("alias");
       if (error) throw error;
@@ -1672,22 +1676,29 @@ function LinhaDispositivo({
   onConectar: () => void;
   subtitulo?: string;
 }) {
+  // Mesma regra da tela de Dispositivos: numa máquina com o `presence`
+  // descartado o `last_online` é resto da última sessão, e chamar isso de
+  // "Offline" manda o técnico procurar defeito onde não há.
+  const semStatus = !ativo && presencaSilenciada(device);
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 p-2.5">
       <span
         className={
-          "h-2 w-2 shrink-0 rounded-full " + (ativo ? "bg-green-500" : "bg-muted-foreground/40")
+          "h-2 w-2 shrink-0 rounded-full " +
+          (ativo ? "bg-green-500" : semStatus ? "bg-warning/60" : "bg-muted-foreground/40")
         }
         aria-hidden
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{device.alias || device.rustdesk_id}</p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-xs text-muted-foreground" title={semStatus ? tituloSemStatus(device) : undefined}>
           {ativo
             ? "Online"
-            : device.last_online
-              ? `Offline · ${tempoRelativo(device.last_online)}`
-              : "Offline"}
+            : semStatus
+              ? "Sem status"
+              : device.last_online
+                ? `Offline · ${tempoRelativo(device.last_online)}`
+                : "Offline"}
           {device.os ? ` · ${device.os}` : ""}
           {subtitulo ? ` · ${subtitulo}` : ""}
         </p>
