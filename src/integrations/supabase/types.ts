@@ -197,9 +197,13 @@ export type Database = {
           enrolled_via_secret_id: string | null
           enrollment_status: Database["public"]["Enums"]["enrollment_status"]
           id: string
+          ignorar_presenca: boolean
           is_active: boolean
           last_online: string | null
           os: string | null
+          privado: boolean
+          privado_em: string | null
+          privado_por: string | null
           rustdesk_id: string
           tenant_id: string
           updated_at: string
@@ -220,9 +224,13 @@ export type Database = {
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
           os?: string | null
+          privado?: boolean
+          privado_em?: string | null
+          privado_por?: string | null
           rustdesk_id: string
           tenant_id: string
           updated_at?: string
@@ -243,9 +251,13 @@ export type Database = {
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
           os?: string | null
+          privado?: boolean
+          privado_em?: string | null
+          privado_por?: string | null
           rustdesk_id?: string
           tenant_id?: string
           updated_at?: string
@@ -724,6 +736,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dispositivo_privado_historico: {
+        Row: {
+          alterado_em: string
+          alterado_por: string | null
+          alterado_por_email: string | null
+          alterado_por_papel: string | null
+          device_id: string
+          id: number
+          observacao: string | null
+          origem: string
+          privado: boolean
+          tenant_id: string
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por?: string | null
+          alterado_por_email?: string | null
+          alterado_por_papel?: string | null
+          device_id: string
+          id?: never
+          observacao?: string | null
+          origem: string
+          privado: boolean
+          tenant_id: string
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string | null
+          alterado_por_email?: string | null
+          alterado_por_papel?: string | null
+          device_id?: string
+          id?: never
+          observacao?: string | null
+          origem?: string
+          privado?: boolean
+          tenant_id?: string
+        }
+        Relationships: []
       }
       device_favorites: {
         Row: {

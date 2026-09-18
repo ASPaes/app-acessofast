@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, Lock, LockOpen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
@@ -64,7 +64,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { limiteOnlineISO } from "@/lib/presenca";
+import { limiteOnlineISO, statusDispositivo, tituloSemStatus } from "@/lib/presenca";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
@@ -110,6 +110,9 @@ type ConnectResult = {
   deep_link?: string;
   source?: "free" | "credit" | "plan" | null;
   charged?: boolean;
+  // Dispositivo privado e quem pediu não é admin: a conexão sai sem senha (password
+  // null) e entra por aceite manual na máquina.
+  privado?: boolean;
   // Billing B1: quando a conta precisa escolher entre free e crédito, o
   // connect-device responde isto SEM emitir senha (needs_choice).
   needs_choice?: boolean;
@@ -129,6 +132,12 @@ type AddressBookRow = {
   created_at: string;
   tenant_id: string | null;
   is_active: boolean;
+  // Quando true o servidor descarta o `presence` desta máquina: `last_online`
+  // só anda durante sessão e não serve para dizer se ela está ligada agora.
+  // Ver statusDispositivo() em lib/presenca.
+  ignorar_presenca: boolean;
+  // Dispositivo privado: técnico conecta sem senha, só por aceite manual.
+  privado: boolean;
   client_id: string | null;
   clients?: { name: string; document: string | null; document_type: string | null; phone: string | null } | null;
   tenants: { name: string } | null;
@@ -338,7 +347,8 @@ function DispositivosPage() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectData, setConnectData] = useState<{
     rustdesk_id: string;
-    password: string;
+    // null = dispositivo privado e quem conecta não é admin: entra por aceite manual.
+    password: string | null;
     deep_link: string;
     // Guardado pra resolver a plataforma no modal (aviso de acesso assistido).
     // Usamos o id do device, nao o rustdesk_id, pra casar sempre com a linha certa.
@@ -368,6 +378,10 @@ function DispositivosPage() {
   // pra parar assim que o usuário fechar/cancelar a espera.
   const aguardoCancelado = useRef(false);
   const [confirmRedefinirId, setConfirmRedefinirId] = useState<string | null>(null);
+  // Passo 2: "Definir senha desta máquina" (ver DefinirSenhaDialog).
+  const [definirSenhaDe, setDefinirSenhaDe] = useState<AddressBookRow | null>(null);
+  // Histórico de quem marcou/desmarcou o dispositivo como privado (ver HistoricoPrivadoDialog).
+  const [historicoPrivadoDe, setHistoricoPrivadoDe] = useState<AddressBookRow | null>(null);
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
     rustdesk_id: string;
@@ -425,6 +439,8 @@ function DispositivosPage() {
           toast.error(
             "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
           );
+        } else if (raw.includes("conta_inativa")) {
+          toast.error("Empresa inativa. Fale com o suporte para reativar a conta.");
         } else if (raw.includes("free_requires_individual")) {
           toast.error(
             "O acesso gratuito só vale para uma conexão por vez. Use um crédito para conexões simultâneas.",
@@ -445,14 +461,16 @@ function DispositivosPage() {
         });
         return;
       }
-      if (!data?.rustdesk_id || !data?.password || !data?.deep_link) {
+      // Dispositivo privado: para técnico o servidor não manda a senha (só admin e
+      // super_admin a veem). A conexão abre igual e entra por aceite manual na máquina.
+      if (!data?.rustdesk_id || !data?.deep_link || (!data?.password && !data?.privado)) {
         toast.error("Resposta inválida do servidor");
         return;
       }
       setChoiceData(null);
       setConnectData({
         rustdesk_id: data.rustdesk_id,
-        password: data.password,
+        password: data.password ?? null,
         deep_link: data.deep_link,
         deviceId,
         source: data.source ?? null,
@@ -546,7 +564,7 @@ function DispositivosPage() {
   };
 
   const copiarSenhaConn = async () => {
-    if (!connectData) return;
+    if (!connectData?.password) return;
     try {
       await navigator.clipboard.writeText(connectData.password);
       setCopiadoConn(true);
@@ -639,7 +657,7 @@ function DispositivosPage() {
 
       let query = supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, client_id, clients(name, document, document_type, phone), tenants(name)")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, ignorar_presenca, privado, client_id, clients(name, document, document_type, phone), tenants(name)")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -884,6 +902,42 @@ function DispositivosPage() {
     },
   });
 
+  // Dispositivo privado: técnico conecta sem senha (só aceite manual). Quem pode marcar
+  // é admin da empresa ou super_admin — a guarda no banco confere de novo, porque a
+  // política de UPDATE do address_book não olha papel.
+  const privadoMutation = useMutation({
+    mutationFn: async (vars: { id: string; privado: boolean }) => {
+      const { error } = await supabase
+        .from("address_book")
+        .update({ privado: vars.privado })
+        .eq("id", vars.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      if (vars.privado) {
+        toast.success("Dispositivo privado", {
+          description:
+            "Técnicos passam a conectar só com aceite manual. Se algum técnico já conhecia a senha, defina uma nova.",
+        });
+      } else {
+        toast.success("Dispositivo deixou de ser privado");
+      }
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  // Passo 2: quem pode definir a senha da máquina pelo painel. Em dispositivo privado,
+  // só admin e super_admin — quem define a senha passa a conhecê-la. A edge
+  // definir-senha-dispositivo aplica a mesma regra no servidor.
+  const podeDefinirSenha = (d: AddressBookRow): boolean => {
+    if (!perfil || !aceitaSenhaPeloPainel(d)) return false;
+    if (d.privado) return perfil.role === "super_admin" || perfil.role === "admin";
+    return ["super_admin", "admin", "head", "tech"].includes(perfil.role);
+  };
+
   const toggleFavoritoMutation = useMutation({
     mutationFn: async (vars: { deviceId: string; favoritar: boolean }) => {
       if (vars.favoritar) {
@@ -1075,14 +1129,10 @@ function DispositivosPage() {
   };
 
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
-    const status =
-      d.is_active === false
-        ? "inativo"
-        : sessoesAtivas?.has(d.id)
-          ? "atendimento"
-          : dispositivosOnline?.has(d.id)
-            ? "online"
-            : "offline";
+    const status = statusDispositivo(d, {
+      emAtendimento: sessoesAtivas?.has(d.id) ?? false,
+      online: dispositivosOnline?.has(d.id) ?? false,
+    });
     const iconColor =
       status === "atendimento"
         ? "text-warning"
@@ -1109,7 +1159,12 @@ function DispositivosPage() {
               <Monitor className={`h-4 w-4 shrink-0 ${iconColor}`} />
             )}
             <div className="flex flex-col">
-              <span className="font-medium">{d.alias ?? "—"}</span>
+              <span className="font-medium flex items-center gap-1">
+                {d.alias ?? "—"}
+                {d.privado && (
+                  <Lock className="h-3 w-3 text-muted-foreground" aria-label="Dispositivo privado" />
+                )}
+              </span>
               <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
               {(() => {
                 const ids = markersByDevice?.get(d.id) ?? [];
@@ -1181,28 +1236,23 @@ function DispositivosPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
               Online
             </Badge>
-          ) : (
+          ) : status === "sem_status" ? (
+            /* O servidor descarta o presence desta maquina, entao NAO sabemos se
+               ela esta ligada. Dizer "Offline" seria afirmar o que nao se sabe, e
+               mandaria o tecnico procurar defeito numa maquina que provavelmente
+               esta funcionando. Quem decide isso e statusDispositivo(). */
             <Badge
               variant="outline"
-              className={`gap-1.5 ${d.agent_version ? "text-muted-foreground" : "text-warning border-warning/30"}`}
-              title={
-                d.agent_version
-                  ? undefined
-                  : "Esta máquina roda uma versão que não reporta status. Ela pode estar ligada — o AcessoFast continua acessando normalmente."
-              }
+              className="gap-1.5 text-warning border-warning/30"
+              title={tituloSemStatus(d)}
             >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${d.agent_version ? "bg-muted-foreground/40" : "bg-warning/60"}`}
-              />
-              {/* Sem agent_version o servidor descarta o presence desta maquina
-                  (ignorar_presenca), entao NAO sabemos se ela esta ligada. Dizer
-                  "Offline" seria afirmar o que nao se sabe, e mandaria o tecnico
-                  procurar defeito numa maquina que provavelmente esta funcionando. */}
-              {!d.agent_version
-                ? "Sem status"
-                : d.last_online
-                  ? `Offline · ${tempoRelativo(d.last_online)}`
-                  : "Offline"}
+              <span className="h-1.5 w-1.5 rounded-full bg-warning/60" />
+              Sem status
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+              {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
             </Badge>
           )}
         </TableCell>
@@ -1242,17 +1292,37 @@ function DispositivosPage() {
                   <Pencil className="h-4 w-4 mr-2" />
                   Editar
                 </DropdownMenuItem>
-                {podeInativar && <DropdownMenuSeparator />}
-                {podeInativar &&
-                  (
-                    <DropdownMenuItem
-                      onClick={() => setConfirmRedefinirId(d.id)}
-                      disabled={redefinindoId === d.id}
-                    >
-                      <KeyRound className="h-4 w-4 mr-2" />
-                      {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
-                    </DropdownMenuItem>
-                  )}
+                {(podeInativar || podeDefinirSenha(d)) && <DropdownMenuSeparator />}
+                {podeDefinirSenha(d) && (
+                  <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Definir senha desta máquina
+                  </DropdownMenuItem>
+                )}
+                {podeInativar && !aceitaSenhaPeloPainel(d) && (
+                  <DropdownMenuItem
+                    onClick={() => setConfirmRedefinirId(d.id)}
+                    disabled={redefinindoId === d.id}
+                  >
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                  </DropdownMenuItem>
+                )}
+                {podeInativar && (
+                  <DropdownMenuItem
+                    onClick={() => privadoMutation.mutate({ id: d.id, privado: !d.privado })}
+                    disabled={privadoMutation.isPending}
+                  >
+                    {d.privado ? <LockOpen className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                    {d.privado ? "Deixar de ser privado" : "Tornar privado"}
+                  </DropdownMenuItem>
+                )}
+                {podeInativar && (
+                  <DropdownMenuItem onClick={() => setHistoricoPrivadoDe(d)}>
+                    <CalendarDays className="h-4 w-4 mr-2" />
+                    Histórico de privacidade
+                  </DropdownMenuItem>
+                )}
                 {podeInativar &&
                   (d.is_active ? (
                     <DropdownMenuItem
@@ -1665,14 +1735,10 @@ function DispositivosPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((d) => {
-                const status =
-                  d.is_active === false
-                    ? "inativo"
-                    : sessoesAtivas?.has(d.id)
-                      ? "atendimento"
-                      : dispositivosOnline?.has(d.id)
-                        ? "online"
-                        : "offline";
+                const status = statusDispositivo(d, {
+                  emAtendimento: sessoesAtivas?.has(d.id) ?? false,
+                  online: dispositivosOnline?.has(d.id) ?? false,
+                });
                 const iconColor =
                   status === "atendimento"
                     ? "text-warning"
@@ -1696,7 +1762,12 @@ function DispositivosPage() {
                       </Button>
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-medium truncate">{d.alias ?? "—"}</span>
+                      <span className="font-medium truncate flex items-center gap-1">
+                        {d.alias ?? "—"}
+                        {d.privado && (
+                          <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Dispositivo privado" />
+                        )}
+                      </span>
                       <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
                       <span className="text-[11px] text-muted-foreground mt-0.5">
                         Agente {agenteVersao(d)}
@@ -1714,6 +1785,15 @@ function DispositivosPage() {
                         <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15">
                           <span className="h-1.5 w-1.5 rounded-full bg-success" />
                           Online
+                        </Badge>
+                      ) : status === "sem_status" ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1.5 text-warning border-warning/30"
+                          title={tituloSemStatus(d)}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-warning/60" />
+                          Sem status
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="gap-1.5 text-muted-foreground">
@@ -1789,17 +1869,37 @@ function DispositivosPage() {
                             <Pencil className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
-                          {podeInativar && <DropdownMenuSeparator />}
-                          {podeInativar &&
-                            (
-                              <DropdownMenuItem
-                                onClick={() => setConfirmRedefinirId(d.id)}
-                                disabled={redefinindoId === d.id}
-                              >
-                                <KeyRound className="h-4 w-4 mr-2" />
-                                {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
-                              </DropdownMenuItem>
-                            )}
+                          {(podeInativar || podeDefinirSenha(d)) && <DropdownMenuSeparator />}
+                          {podeDefinirSenha(d) && (
+                            <DropdownMenuItem onClick={() => setDefinirSenhaDe(d)}>
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Definir senha desta máquina
+                            </DropdownMenuItem>
+                          )}
+                          {podeInativar && !aceitaSenhaPeloPainel(d) && (
+                            <DropdownMenuItem
+                              onClick={() => setConfirmRedefinirId(d.id)}
+                              disabled={redefinindoId === d.id}
+                            >
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              {redefinindoId === d.id ? "Redefinindo..." : "Redefinir senha"}
+                            </DropdownMenuItem>
+                          )}
+                          {podeInativar && (
+                            <DropdownMenuItem
+                              onClick={() => privadoMutation.mutate({ id: d.id, privado: !d.privado })}
+                              disabled={privadoMutation.isPending}
+                            >
+                              {d.privado ? <LockOpen className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                              {d.privado ? "Deixar de ser privado" : "Tornar privado"}
+                            </DropdownMenuItem>
+                          )}
+                          {podeInativar && (
+                            <DropdownMenuItem onClick={() => setHistoricoPrivadoDe(d)}>
+                              <CalendarDays className="h-4 w-4 mr-2" />
+                              Histórico de privacidade
+                            </DropdownMenuItem>
+                          )}
                           {podeInativar &&
                             (d.is_active ? (
                               <DropdownMenuItem
@@ -1950,7 +2050,9 @@ function DispositivosPage() {
           <DialogHeader>
             <DialogTitle>Conectar</DialogTitle>
             <DialogDescription>
-              Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar.
+              {connectData?.password === null
+                ? "Ao abrir a conexão, quem está no computador precisa aceitar."
+                : "Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar."}
             </DialogDescription>
           </DialogHeader>
           {connectData && (
@@ -1969,20 +2071,31 @@ function DispositivosPage() {
                 <Label>ID AcessoFast</Label>
                 <Input readOnly value={connectData.rustdesk_id} className="font-mono text-xs" />
               </div>
-              <div className="space-y-1">
-                <Label>Senha</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={connectData.password}
-                    className="font-mono text-xs"
-                  />
-                  <Button type="button" size="sm" variant="outline" onClick={copiarSenhaConn}>
-                    {copiadoConn ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    <span className="ml-1">{copiadoConn ? "Copiado" : "Copiar"}</span>
-                  </Button>
+              {connectData.password === null ? (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+                  <span className="font-medium text-warning">Dispositivo privado.</span>{" "}
+                  <span className="text-muted-foreground">
+                    A senha deste computador fica só com o administrador. Abra a conexão e peça a
+                    quem está na máquina para aceitar — ou solicite a senha ao administrador
+                    responsável.
+                  </span>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Senha</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={connectData.password}
+                      className="font-mono text-xs"
+                    />
+                    <Button type="button" size="sm" variant="outline" onClick={copiarSenhaConn}>
+                      {copiadoConn ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span className="ml-1">{copiadoConn ? "Copiado" : "Copiar"}</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Slot 'free_start'. Fica DEPOIS da credencial de proposito: o
                   tecnico veio pegar a senha, e ela nao pode ficar atras de nada.
@@ -2296,7 +2409,427 @@ function DispositivosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DefinirSenhaDialog device={definirSenhaDe} onClose={() => setDefinirSenhaDe(null)} />
+      <HistoricoPrivadoDialog device={historicoPrivadoDe} onClose={() => setHistoricoPrivadoDe(null)} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Passo 2 do plano "Aposentar a Senha Rotativa" — senha própria da máquina.
+//
+// Diferente do "Redefinir senha" (provision-device-secret), que grava a senha no
+// painel e manda alguém aplicar à mão: aqui a senha vira um PEDIDO, a máquina aplica
+// sozinha no próximo sinal e só depois de ela confirmar o Conectar passa a entregar a
+// nova. Até lá continua a antiga, que é a que a máquina tem.
+//
+// Canário: só super_admin (a edge definir-senha-dispositivo confere de novo), e só em
+// computador cujo agente sabe aplicar. As duas constantes abaixo espelham a edge.
+const VERSAO_SENHA_PELO_PAINEL = "2026.09.14";
+const SENHA_PAINEL_RE = /^[A-Za-z0-9!@#$%*\-_=+.?]+$/;
+const SENHA_PAINEL_POLL_MS = 5000;
+
+function aceitaSenhaPeloPainel(d: AddressBookRow): boolean {
+  return (
+    d.is_active !== false &&
+    !!d.agent_version &&
+    d.agent_version >= VERSAO_SENHA_PELO_PAINEL &&
+    !/^(android|ios)/i.test(d.os ?? "")
+  );
+}
+
+function senhaPainelAceitavel(pw: string): boolean {
+  return (
+    pw.length >= 8 && pw.length <= 64 && SENHA_PAINEL_RE.test(pw) && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw)
+  );
+}
+
+// Sugestão de senha: sem caracteres ambíguos (0 O 1 l I), porque alguém pode ter de
+// ditá-la por telefone. Garante letra e dígito.
+function gerarSenhaPainel(): string {
+  const letras = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digitos = "23456789";
+  const todos = letras + digitos;
+  const buf = new Uint32Array(16);
+  crypto.getRandomValues(buf);
+  const chars = Array.from(buf, (n) => todos[n % todos.length]);
+  chars[buf[0] % 8] = letras[buf[1] % letras.length];
+  chars[8 + (buf[2] % 8)] = digitos[buf[3] % digitos.length];
+  return chars.join("");
+}
+
+type EstadoSenhaPedida = "sem_pedido" | "pendente" | "expirado" | "aplicada" | "substituido";
+
+type StatusSenhaPedida = {
+  estado?: EstadoSenhaPedida;
+  bloqueio?: string | null;
+  pedido_id?: string | null;
+  pedido_em?: string | null;
+  expira_em?: string | null;
+  senha_atualizada_em?: string | null;
+  modo_efetivo?: string | null;
+  agent_version?: string | null;
+  last_online?: string | null;
+  error?: string;
+};
+
+type PedidoSenha = { pedido_id: string; pedido_em: string; expira_em: string };
+
+const MOTIVO_SEM_SENHA_PELO_PAINEL: Record<string, string> = {
+  dispositivo_inativo: "O dispositivo está inativo.",
+  sem_agente: "Este computador não tem o agente AcessoFast matriculado.",
+  plataforma_movel: "Por enquanto só computadores Windows aplicam senha definida pelo painel.",
+  agente_antigo:
+    "O agente deste computador ainda não sabe aplicar senha definida pelo painel. Ele precisa estar numa versão de 14/09/2026 ou mais nova.",
+  rotacao_ativa:
+    "Este computador ainda troca a senha a cada sessão (modo de rotação session). A senha definida aqui seria substituída no próximo atendimento — passe o computador para install_only antes.",
+  senha_invalida: "Senha fora da regra: 8 a 64 caracteres, com letra e número.",
+  dispositivo_privado:
+    "Dispositivo privado: só o administrador da empresa define a senha. Peça a ele, ou conecte com aceite na máquina.",
+  forbidden: "Seu perfil não pode definir a senha de computadores.",
+  device_nao_encontrado: "Computador não encontrado.",
+};
+
+function horaCurta(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function DefinirSenhaDialog({ device, onClose }: { device: AddressBookRow | null; onClose: () => void }) {
+  const [senha, setSenha] = useState("");
+  const [confirma, setConfirma] = useState("");
+  const [mostrar, setMostrar] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [pedido, setPedido] = useState<PedidoSenha | null>(null);
+  const [status, setStatus] = useState<StatusSenhaPedida | null>(null);
+  const deviceId = device?.id ?? null;
+
+  const consultar = async (id: string, p: PedidoSenha | null) => {
+    const { data, error } = await supabase.functions.invoke<StatusSenhaPedida>("definir-senha-dispositivo", {
+      body: { device_id: id, acao: "status", pedido_id: p?.pedido_id, desde: p?.pedido_em },
+    });
+    if (error || data?.error) {
+      const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+      setStatus({ error: MOTIVO_SEM_SENHA_PELO_PAINEL[raw] ?? (raw || "Falha ao consultar") });
+      return;
+    }
+    setStatus(data ?? null);
+  };
+
+  // Reabre limpo a cada máquina, e já pergunta se ela pode receber.
+  useEffect(() => {
+    setSenha("");
+    setConfirma("");
+    setMostrar(false);
+    setPedido(null);
+    setStatus(null);
+    if (deviceId) void consultar(deviceId, null);
+  }, [deviceId]);
+
+  // Enquanto o pedido desta tela estiver pendente, acompanha até a máquina confirmar.
+  const pendente = pedido !== null && (status?.estado ?? "pendente") === "pendente";
+  useEffect(() => {
+    if (!deviceId || !pedido || !pendente) return;
+    const t = setInterval(() => void consultar(deviceId, pedido), SENHA_PAINEL_POLL_MS);
+    return () => clearInterval(t);
+  }, [deviceId, pedido, pendente]);
+
+  const definir = async () => {
+    if (!deviceId) return;
+    setEnviando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<PedidoSenha & { error?: string }>(
+        "definir-senha-dispositivo",
+        { body: { device_id: deviceId, acao: "definir", senha } },
+      );
+      if (error || data?.error || !data?.pedido_id) {
+        const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+        toast.error(MOTIVO_SEM_SENHA_PELO_PAINEL[raw] ?? (raw || "Falha ao definir a senha"));
+        return;
+      }
+      const p = { pedido_id: data.pedido_id, pedido_em: data.pedido_em, expira_em: data.expira_em };
+      setSenha("");
+      setConfirma("");
+      setPedido(p);
+      setStatus((s) => ({ ...s, estado: "pendente", pedido_id: p.pedido_id, pedido_em: p.pedido_em, expira_em: p.expira_em }));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const cancelar = async () => {
+    if (!deviceId || !pedido) return;
+    const { error } = await supabase.functions.invoke("definir-senha-dispositivo", {
+      body: { device_id: deviceId, acao: "cancelar", pedido_id: pedido.pedido_id },
+    });
+    if (error) {
+      toast.error((await invokeErrorMessage(error)) || "Falha ao cancelar");
+      return;
+    }
+    // O agente pode ter aplicado entre o último poll e o cancelamento — quem diz é o status.
+    await consultar(deviceId, pedido);
+  };
+
+  const bloqueio = status?.bloqueio ?? null;
+  const senhaOk = senhaPainelAceitavel(senha);
+  const confereOk = senha === confirma;
+  const estado = status?.estado;
+
+  return (
+    <Dialog open={device !== null} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Definir senha desta máquina
+            {device?.privado && (
+              <Badge variant="outline" className="text-[10px] font-normal gap-1">
+                <Lock className="h-3 w-3" />
+                privado
+              </Badge>
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {device?.alias ?? device?.rustdesk_id} · A máquina aplica a senha no próximo sinal dela (até 3 minutos,
+            se estiver ligada). Até confirmar, o Conectar continua entregando a senha atual.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!pedido && (
+          <div className="space-y-3">
+            {status?.error && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                {status.error}
+              </div>
+            )}
+            {bloqueio && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                {MOTIVO_SEM_SENHA_PELO_PAINEL[bloqueio] ?? bloqueio}
+              </div>
+            )}
+            {!bloqueio && estado === "pendente" && (
+              <div className="rounded-md border p-3 text-xs text-muted-foreground">
+                Já existe uma senha pedida em {horaCurta(status?.pedido_em)} esperando a máquina aplicar. Definir
+                outra agora substitui aquele pedido.
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="senha-painel">Nova senha</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="senha-painel"
+                  type={mostrar ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  className="font-mono text-xs"
+                  disabled={!!bloqueio}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  title={mostrar ? "Ocultar" : "Mostrar"}
+                  onClick={() => setMostrar((m) => !m)}
+                >
+                  {mostrar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!!bloqueio}
+                  onClick={() => {
+                    const s = gerarSenhaPainel();
+                    setSenha(s);
+                    setConfirma(s);
+                    setMostrar(true);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Gerar
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="senha-painel-confirma">Confirmar senha</Label>
+              <Input
+                id="senha-painel-confirma"
+                type={mostrar ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirma}
+                onChange={(e) => setConfirma(e.target.value)}
+                className="font-mono text-xs"
+                disabled={!!bloqueio}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              8 a 64 caracteres, com letra e número. Símbolos aceitos: ! @ # $ % * - _ = + . ?
+              {senha && !senhaOk && <span className="text-destructive"> · fora da regra</span>}
+              {senhaOk && confirma && !confereOk && <span className="text-destructive"> · as senhas não conferem</span>}
+            </p>
+          </div>
+        )}
+
+        {pedido && (
+          <div className="space-y-3 text-sm">
+            {estado === "pendente" && (
+              <div className="flex items-start gap-3 rounded-md border p-3">
+                <Loader2 className="h-4 w-4 mt-0.5 animate-spin text-muted-foreground" />
+                <div className="space-y-1">
+                  <p>Aguardando a máquina aplicar a senha…</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pedido em {horaCurta(pedido.pedido_em)} · expira em {horaCurta(pedido.expira_em)} · último sinal
+                    da máquina {horaCurta(status?.last_online)}
+                  </p>
+                </div>
+              </div>
+            )}
+            {estado === "aplicada" && (
+              <div className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-3">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 text-success" />
+                <p>
+                  A máquina aplicou e confirmou a senha em {horaCurta(status?.senha_atualizada_em)}. O Conectar já
+                  entrega a senha nova.
+                </p>
+              </div>
+            )}
+            {estado === "expirado" && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-warning">
+                O pedido expirou sem a máquina aplicar. A senha atual continua valendo.
+              </div>
+            )}
+            {estado === "substituido" && (
+              <div className="rounded-md border p-3 text-muted-foreground">
+                Outro pedido de senha substituiu este. A senha que vale é a do pedido mais novo.
+              </div>
+            )}
+            {estado === "sem_pedido" && (
+              <div className="rounded-md border p-3 text-muted-foreground">
+                Pedido cancelado antes de a máquina aplicar. A senha atual continua valendo.
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          {!pedido ? (
+            <>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={!!bloqueio || !status || !!status.error || !senhaOk || !confereOk || enviando}
+                onClick={() => void definir()}
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                {enviando ? "Enviando..." : "Definir senha"}
+              </Button>
+            </>
+          ) : (
+            <>
+              {estado === "pendente" && (
+                <Button type="button" variant="outline" onClick={() => void cancelar()}>
+                  Cancelar pedido
+                </Button>
+              )}
+              <Button type="button" onClick={onClose}>
+                Fechar
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Histórico do dispositivo privado: toda vez que alguém marcou ou desmarcou, com
+// quem, com que papel e quando. Escrito por gatilho no banco — ninguém grava nele pela
+// API. Só admin da empresa e super_admin leem (RLS).
+const PAPEL_LEGIVEL: Record<string, string> = {
+  super_admin: "super admin",
+  admin: "admin",
+  head: "head",
+  tech: "técnico",
+};
+
+function HistoricoPrivadoDialog({ device, onClose }: { device: AddressBookRow | null; onClose: () => void }) {
+  const { data: eventos, isLoading, error } = useQuery({
+    queryKey: ["privado_historico", device?.id],
+    enabled: device !== null,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dispositivo_privado_historico")
+        .select("id, privado, alterado_em, alterado_por_email, alterado_por_papel, origem, observacao")
+        .eq("device_id", device!.id)
+        .order("alterado_em", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  return (
+    <Dialog open={device !== null} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Histórico de privacidade</DialogTitle>
+          <DialogDescription>
+            {device?.alias ?? device?.rustdesk_id} · Cada vez que o computador foi marcado ou deixou de ser
+            privado, do mais recente para o mais antigo.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          {isLoading && <Skeleton className="h-16 w-full" />}
+          {error && (
+            <p className="text-sm text-destructive">Não foi possível carregar o histórico.</p>
+          )}
+          {!isLoading && !error && (eventos?.length ?? 0) === 0 && (
+            <p className="text-sm text-muted-foreground">Este computador nunca foi marcado como privado.</p>
+          )}
+          <ol className="space-y-3">
+            {eventos?.map((e) => (
+              <li key={e.id} className="flex gap-3 rounded-md border p-3 text-sm">
+                {e.privado ? (
+                  <Lock className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
+                ) : (
+                  <LockOpen className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                )}
+                <div className="space-y-0.5 min-w-0">
+                  <p className="font-medium">{e.privado ? "Tornado privado" : "Deixou de ser privado"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {horaCurta(e.alterado_em)} ·{" "}
+                    {e.alterado_por_email
+                      ? `${e.alterado_por_email}${e.alterado_por_papel ? ` (${PAPEL_LEGIVEL[e.alterado_por_papel] ?? e.alterado_por_papel})` : ""}`
+                      : e.origem === "painel"
+                        ? "autor não registrado"
+                        : e.origem === "backend"
+                          ? "sistema"
+                          : "manutenção no banco"}
+                  </p>
+                  {e.observacao && <p className="text-xs text-muted-foreground italic">{e.observacao}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" onClick={onClose}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

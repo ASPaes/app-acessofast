@@ -19,6 +19,18 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Passo 2 (Aposentar a senha rotativa): primeiro build do agente que aplica a senha
+// pedida pelo painel. Mesma constante da edge definir-senha-dispositivo. Agente mais
+// velho nem consulta o pedido — ignoraria o campo e o pedido ficaria esperando a toa.
+const VERSAO_SENHA_PELO_PAINEL = "2026.09.14";
+
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -299,11 +311,67 @@ Deno.serve(async (req) => {
       else if (typeof modo === "string" && MODOS_ROTACAO.includes(modo)) rotacao = modo;
     } catch { /* agente mantem o modo em cache */ }
 
+    // Passo 2: senha definida no painel (edge definir-senha-dispositivo) e ainda nao
+    // aplicada. Vai em todo presence ate o agente confirmar pelo rotate-device-secret —
+    // e so ai ela vira a senha que o Conectar entrega. So para agente que sabe aplicar.
+    //
+    // Fail-open como o resto do presence: sem senha desta vez, o pedido segue guardado e
+    // volta no proximo. A senha em si nunca vai para log.
+    let senha: { pedido_id: string; senha: string } | null = null;
+    if (agent_version && agent_version >= VERSAO_SENHA_PELO_PAINEL) {
+      try {
+        const { data: pedRows, error: pedErr } = await db.rpc("puxar_senha_pedida", {
+          p_device_id: device.id,
+        });
+        if (pedErr) console.warn("puxar_senha_pedida_falhou", rustdesk_id, pedErr.message);
+        const p = Array.isArray(pedRows) ? pedRows[0] : pedRows;
+        if (!pedErr && p?.pedido_id && p?.ciphertext && p?.iv) {
+          const encKeyB64 = Deno.env.get("DEVICE_SECRET_ENC_KEY");
+          if (!encKeyB64 || p.key_version !== 1) {
+            console.warn("senha_pedida_sem_chave", rustdesk_id, p.key_version);
+          } else {
+            const key = await crypto.subtle.importKey(
+              "raw", b64ToBytes(encKeyB64), { name: "AES-GCM" }, false, ["decrypt"],
+            );
+            const plain = await crypto.subtle.decrypt(
+              {
+                name: "AES-GCM",
+                iv: b64ToBytes(p.iv),
+                additionalData: new TextEncoder().encode(`senha_pedida:${device.id}`),
+              },
+              key, b64ToBytes(p.ciphertext),
+            );
+            senha = { pedido_id: p.pedido_id, senha: new TextDecoder().decode(plain) };
+          }
+        }
+      } catch (e) {
+        console.warn("senha_pedida_nao_entregue", rustdesk_id, String(e));
+      }
+    }
+
     const corpo: Record<string, unknown> = { ok: true, action: "presence" };
     if (update) corpo.update = update;
     if (aviso) corpo.aviso = aviso;
     if (rotacao) corpo.rotacao = rotacao;
+    if (senha) corpo.senha = senha;
     return json(corpo);
+  }
+
+  // Passo 3 (shadow): guarda e classifica o computador que controla a sessao. So
+  // observa — nao muda a resposta, nao corta. Fail-open como tudo aqui: perder uma
+  // classificacao custa um ponto na medicao; derrubar o 'start' custaria a sessao.
+  async function registrarControlador(connectionLogId: string) {
+    if (event !== "start" || !controller_rustdesk_id) return;
+    try {
+      const { data: status, error } = await db.rpc("registrar_controlador", {
+        p_connection_log_id: connectionLogId,
+        p_controller_rustdesk_id: controller_rustdesk_id,
+      });
+      if (error) console.warn("registrar_controlador_falhou", rustdesk_id, error.message);
+      else if (status === "desconhecido") {
+        console.warn("fronteira_shadow_desconhecido", rustdesk_id, controller_rustdesk_id);
+      }
+    } catch { /* medicao e acessoria */ }
   }
 
   async function latestActive() {
@@ -380,6 +448,9 @@ Deno.serve(async (req) => {
         .update({ last_heartbeat_at: nowIso })
         .eq("id", active.id);
       if (error) return json({ error: "db_error", detail: error.message }, 500);
+      // O controlador chega no SEGUNDO 'start' (o agente so o conhece depois do login),
+      // quando a sessao ja existe — este e o caminho comum, painel ou acesso direto.
+      await registrarControlador(active.id);
       const hard_cap_at = await currentHardCap();
       return json({ ok: true, session_id: active.id, action: "heartbeat", hard_cap_at });
     }
@@ -399,6 +470,10 @@ Deno.serve(async (req) => {
       .single();
     if (error) return json({ error: "db_error", detail: error.message }, 500);
 
+    // Passo 3 (shadow): raro, mas o 'start' que CRIA a sessao externa pode ja trazer o
+    // controlador (ex.: o prime no boot do agente, com a conexao ja autenticada).
+    await registrarControlador(inserted.id);
+
     // Billing B6: sessao externa (.exe, direta) agora e MEDIDA aqui. Auto free->credito;
     // reconexao unificada nao cobra; sem saldo/conta bloqueada -> blocked (cortamos).
     const { data: meterRows, error: meterErr } = await db.rpc("meter_external_session", {
@@ -407,7 +482,10 @@ Deno.serve(async (req) => {
       p_peer_ip: peer_ip,
     });
     if (meterErr) {
-      // Medicao falhou: nao derruba a sessao (fail-open); segue sem cap.
+      // Medicao falhou: nao derruba a sessao (fail-open); segue sem cap. Mas LOGA: em
+      // 15/09/2026 este ramo, mudo, deixava conta suspensa entrar por fora do painel sem
+      // corte e sem ninguem saber (cast de billing_status quebrado na RPC).
+      console.error("meter_external_session_falhou", rustdesk_id, meterErr.message);
       return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null });
     }
     const meter = Array.isArray(meterRows) ? meterRows[0] : meterRows;

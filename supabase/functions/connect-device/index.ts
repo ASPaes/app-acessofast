@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     // AUTHZ DELEGADA A RLS: ve o dispositivo => autorizado.
     const { data: device, error: devErr } = await userClient
       .from("address_book")
-      .select("id, tenant_id, rustdesk_id")
+      .select("id, tenant_id, rustdesk_id, privado")
       .eq("id", deviceId)
       .maybeSingle();
     if (devErr) return json({ error: "lookup_failed" }, 500);
@@ -79,8 +79,16 @@ Deno.serve(async (req) => {
 
     // is_active nao e coberto pela RLS do address_book -> checa explicito.
     const { data: profile } = await admin
-      .from("profiles").select("is_active").eq("id", user.id).maybeSingle();
+      .from("profiles").select("is_active, role").eq("id", user.id).maybeSingle();
     if (!profile || profile.is_active === false) return json({ error: "user_inactive" }, 403);
+
+    // DISPOSITIVO PRIVADO (14/09/2026): so admin e super_admin recebem a senha. Para os
+    // demais a conexao sai igual — grant, cobranca, deep link —, mas SEM senha: entra
+    // por aceite manual na maquina, ou com a senha que o admin responsavel passar. A
+    // regra mora aqui, no servidor, porque e daqui que a senha sai; esconder so na tela
+    // deixaria a senha na resposta da API. Mesma lista da definir-senha-dispositivo.
+    const PAPEIS_QUE_VEEM_PRIVADO = ["super_admin", "admin"];
+    const senhaOculta = device.privado === true && !PAPEIS_QUE_VEEM_PRIVADO.includes(profile.role);
 
     // Device "com agente" = tem agent_token_hash (matriculado). Nele a senha e
     // publicada pelo proprio endpoint (rotate-device-secret); sem agente, a senha e
@@ -102,6 +110,9 @@ Deno.serve(async (req) => {
     // grant — se o poll da tela usasse o connect normal, cada tentativa criaria e
     // estornaria atendimento/credito a cada 3s.
     if (probe) {
+      // Privado sem permissao: a senha nao importa para quem vai entrar por aceite
+      // manual — responder "tem" evita a tela ficar esperando uma senha que nunca vera.
+      if (senhaOculta) return json({ probe: true, has_secret: true, awaiting_agent: false, privado: true });
       const { erro, row: probeRow } = await lerSegredo();
       if (erro) return json({ error: "secret_fetch_failed" }, 500);
       const hasSecret = !!probeRow;
@@ -117,12 +128,18 @@ Deno.serve(async (req) => {
       p_device_id: deviceId,
       p_actor: user.id,
     });
-    if (eligErr) return json({ error: "eligibility_failed" }, 500);
+    if (eligErr) {
+      // Em 15/09/2026 este 500 escondia um cast quebrado (conta suspensa) — sem log,
+      // o painel so via "falha ao conectar". Registrar o motivo e o que torna o erro achavel.
+      console.error("billing_eligibility_falhou", deviceId, eligErr.message);
+      return json({ error: "eligibility_failed" }, 500);
+    }
     const elig = Array.isArray(eligRows) ? eligRows[0] : eligRows;
     if (!elig) return json({ error: "eligibility_failed" }, 500);
 
     if (elig.blocked_reason) {
       if (elig.blocked_reason === "device_not_found") return json({ error: "forbidden_or_not_found" }, 403);
+      if (elig.blocked_reason === "conta_inativa") return json({ error: "conta_inativa" }, 403);
       if (elig.blocked_reason === "billing_blocked") return json({ error: "billing_blocked" }, 403);
       if (elig.blocked_reason === "quota_exceeded") return json({ error: "quota_exceeded" }, 429);
       if (elig.blocked_reason === "no_credits") return json({ error: "no_credits" }, 402);
@@ -163,6 +180,7 @@ Deno.serve(async (req) => {
         });
       }
       if (msg.includes("quota_exceeded")) return json({ error: "quota_exceeded" }, 429);
+      if (msg.includes("conta_inativa")) return json({ error: "conta_inativa" }, 403);
       if (msg.includes("billing_blocked")) return json({ error: "billing_blocked" }, 403);
       if (msg.includes("free_exhausted") || msg.includes("no_credits")) return json({ error: "no_credits" }, 402);
       if (msg.includes("free_requires_individual")) return json({ error: "free_requires_individual" }, 409);
@@ -179,6 +197,24 @@ Deno.serve(async (req) => {
     const rollbackGrant = async () => {
       await admin.rpc("revoke_access_grant", { p_grant_id: grantId });
     };
+
+    // Normaliza o ID pra digitos antes do deep link (RustDesk exibe com espacos; a URI nao pode ter).
+    const rid = String(device.rustdesk_id).replace(/\D/g, "");
+
+    // Dispositivo privado, quem conecta nao e admin: a senha nem e lida. O grant fica
+    // (e sessao de verdade, conta e cobra), a conexao abre, e a maquina pede aceite.
+    // Vem antes da checagem de senha gravada de proposito: aceite manual funciona mesmo
+    // em maquina que ainda nao publicou senha.
+    if (senhaOculta) {
+      return json({
+        rustdesk_id: rid,
+        password: null,
+        privado: true,
+        deep_link: `${DEEP_LINK_SCHEME}://connection/new/${rid}`,
+        source: grant.source ?? null,
+        charged: grant.charged ?? false,
+      });
+    }
 
     // Ciphertext via RPC mecanica (so service_role executa).
     const { erro: secErr, row } = await lerSegredo();
@@ -210,9 +246,6 @@ Deno.serve(async (req) => {
       await rollbackGrant();
       return json({ error: "decrypt_failed" }, 500);
     }
-
-    // Normaliza o ID pra digitos antes do deep link (RustDesk exibe com espacos; a URI nao pode ter).
-    const rid = String(device.rustdesk_id).replace(/\D/g, "");
 
     return json({
       rustdesk_id: rid,

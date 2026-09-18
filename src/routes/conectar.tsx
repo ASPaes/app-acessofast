@@ -49,7 +49,7 @@ import {
   normalizarDocumento,
   normalizarTexto,
 } from "@/lib/clientes";
-import { limiteOnlineISO } from "@/lib/presenca";
+import { limiteOnlineISO, presencaSilenciada, tituloSemStatus } from "@/lib/presenca";
 
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
@@ -88,8 +88,10 @@ const TABELA_VINCULOS = "doctorsaas_conversation_links";
 
 type ConnectResult = {
   rustdesk_id?: string;
-  password?: string;
+  password?: string | null;
   deep_link?: string;
+  // Dispositivo privado e quem conecta não é admin: sem senha, entra por aceite manual.
+  privado?: boolean;
   source?: "free" | "credit" | "plan" | null;
   charged?: boolean;
   // Billing B1: quando a conta precisa escolher entre free e credito, o
@@ -116,6 +118,10 @@ type DeviceRow = {
   last_online: string | null;
   client_id: string | null;
   is_active: boolean;
+  // Presença: sem estes dois o rótulo mente "Offline" para máquina cujo
+  // `presence` o servidor descarta. Ver statusDispositivo() em lib/presenca.
+  agent_version: string | null;
+  ignorar_presenca: boolean;
 };
 
 type AdoptResult = {
@@ -246,7 +252,8 @@ function ConectarPage() {
   const [novoDoc, setNovoDoc] = useState("");
   const [connectData, setConnectData] = useState<{
     rustdesk_id: string;
-    password: string;
+    // null = dispositivo privado e quem conecta não é admin: entra por aceite manual.
+    password: string | null;
     deep_link: string;
     // Fase 1 dos anuncios: o slot 'free_start' so aparece quando o servidor diz
     // que o atendimento saiu do uso gratuito.
@@ -419,7 +426,7 @@ function ConectarPage() {
       // "nao existe" (secao 11) e precisa render a mensagem certa.
       const { data, error } = await supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca")
         .in("client_id", idsDoGrupo)
         .order("alias");
       if (error) throw error;
@@ -452,7 +459,7 @@ function ConectarPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("address_book")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, clients(name)")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, clients(name)")
         .eq("is_active", true)
         .order("alias");
       if (error) throw error;
@@ -610,6 +617,8 @@ function ConectarPage() {
           toast.error(
             "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
           );
+        } else if (raw.includes("conta_inativa")) {
+          toast.error("Empresa inativa. Fale com o suporte para reativar a conta.");
         } else if (raw.includes("free_requires_individual")) {
           toast.error(
             "O acesso gratuito só vale para uma conexão por vez. Use um crédito para conexões simultâneas.",
@@ -629,14 +638,16 @@ function ConectarPage() {
         });
         return;
       }
-      if (!data?.rustdesk_id || !data?.password || !data?.deep_link) {
+      // Dispositivo privado: para técnico o servidor não manda a senha (só admin e
+      // super_admin a veem). A conexão abre igual e entra por aceite manual na máquina.
+      if (!data?.rustdesk_id || !data?.deep_link || (!data?.password && !data?.privado)) {
         toast.error("Resposta inválida do servidor");
         return;
       }
       setChoiceData(null);
       setConnectData({
         rustdesk_id: data.rustdesk_id,
-        password: data.password,
+        password: data.password ?? null,
         deep_link: data.deep_link,
         source: data.source ?? null,
       });
@@ -647,7 +658,7 @@ function ConectarPage() {
   };
 
   async function copiarSenha() {
-    if (!connectData) return;
+    if (!connectData?.password) return;
     try {
       await navigator.clipboard.writeText(connectData.password);
       setCopiado(true);
@@ -1208,7 +1219,9 @@ function ConectarPage() {
           <DialogHeader>
             <DialogTitle>Conectar</DialogTitle>
             <DialogDescription>
-              Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar.
+              {connectData?.password === null
+                ? "Ao abrir a conexão, quem está no computador precisa aceitar."
+                : "Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar."}
             </DialogDescription>
           </DialogHeader>
           {connectData && (
@@ -1217,21 +1230,32 @@ function ConectarPage() {
                 <Label>ID AcessoFast</Label>
                 <Input readOnly value={connectData.rustdesk_id} className="font-mono text-xs" />
               </div>
-              <div className="space-y-1">
-                <Label>Senha</Label>
-                <div className="flex items-center gap-2">
-                  <Input readOnly value={connectData.password} className="font-mono text-xs" />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void copiarSenha()}
-                  >
-                    {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    <span className="ml-1">{copiado ? "Copiado" : "Copiar"}</span>
-                  </Button>
+              {connectData.password === null ? (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+                  <span className="font-medium text-warning">Dispositivo privado.</span>{" "}
+                  <span className="text-muted-foreground">
+                    A senha deste computador fica só com o administrador. Abra a conexão e peça a
+                    quem está na máquina para aceitar — ou solicite a senha ao administrador
+                    responsável.
+                  </span>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Senha</Label>
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value={connectData.password} className="font-mono text-xs" />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void copiarSenha()}
+                    >
+                      {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span className="ml-1">{copiado ? "Copiado" : "Copiar"}</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
               {/* Slot 'free_start'. So o momento de inicio entra nesta janela: a
                   tela do saldo esgotado (402) leva pra /financeiro, e mandar uma
                   popup de 520px pra outra rota do painel quebra o fluxo do chat.
@@ -1652,22 +1676,29 @@ function LinhaDispositivo({
   onConectar: () => void;
   subtitulo?: string;
 }) {
+  // Mesma regra da tela de Dispositivos: numa máquina com o `presence`
+  // descartado o `last_online` é resto da última sessão, e chamar isso de
+  // "Offline" manda o técnico procurar defeito onde não há.
+  const semStatus = !ativo && presencaSilenciada(device);
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 p-2.5">
       <span
         className={
-          "h-2 w-2 shrink-0 rounded-full " + (ativo ? "bg-green-500" : "bg-muted-foreground/40")
+          "h-2 w-2 shrink-0 rounded-full " +
+          (ativo ? "bg-green-500" : semStatus ? "bg-warning/60" : "bg-muted-foreground/40")
         }
         aria-hidden
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{device.alias || device.rustdesk_id}</p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-xs text-muted-foreground" title={semStatus ? tituloSemStatus(device) : undefined}>
           {ativo
             ? "Online"
-            : device.last_online
-              ? `Offline · ${tempoRelativo(device.last_online)}`
-              : "Offline"}
+            : semStatus
+              ? "Sem status"
+              : device.last_online
+                ? `Offline · ${tempoRelativo(device.last_online)}`
+                : "Offline"}
           {device.os ? ` · ${device.os}` : ""}
           {subtitulo ? ` · ${subtitulo}` : ""}
         </p>
