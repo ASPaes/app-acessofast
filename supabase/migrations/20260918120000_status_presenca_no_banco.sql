@@ -64,6 +64,38 @@ on conflict (id) do nothing;
 comment on table private.presenca_config is
   'Janelas da presença. Mexer AQUI, nunca numa tela: a view e a sonda leem daqui.';
 
+-- Convenção do projeto: TODA tabela em `private` tem RLS ligada e ZERO policies
+-- — só o dono e as funções `security definer` entram. Ligada aqui de propósito,
+-- e não deixada para o botão do SQL Editor, porque a escolha tem consequência
+-- (ver a função de acesso logo abaixo).
+alter table private.presenca_config enable row level security;
+
+-- A PORTA da config para quem não é dono.
+--
+-- A view abaixo é `security_invoker`, então ela lê a config com os direitos de
+-- quem consultou — e `authenticated` não entra em `private`. Se a view fizesse
+-- `cross join` direto na tabela, o join traria ZERO linhas e a view inteira
+-- voltaria vazia: o painel mostraria "nenhum dispositivo", sem erro nenhum.
+-- Medido: cross join direto devolve 0 linhas para `authenticated`, via esta
+-- função devolve 1.
+--
+-- Por isso a config sai por uma função `security definer` em `public`: a tabela
+-- continua selada (sem grant, sem policy) e existe uma única entrada conhecida.
+create or replace function public.presenca_janelas()
+returns table (janela_online interval, janela_heartbeat interval, cadencia_presence interval)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select janela_online, janela_heartbeat, cadencia_presence
+    from private.presenca_config
+   where id;
+$$;
+
+revoke all on function public.presenca_janelas() from public, anon;
+grant execute on function public.presenca_janelas() to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 2) A view que o painel lê.
 --
@@ -138,7 +170,8 @@ select
     else 'offline'
   end as status_presenca
 from public.address_book ab
-cross join private.presenca_config cfg
+-- Pela FUNÇÃO, nunca pela tabela: ver presenca_janelas() acima.
+cross join public.presenca_janelas() cfg
 left join public.clients c on c.id = ab.client_id
 left join public.tenants t on t.id = ab.tenant_id;
 
@@ -147,7 +180,6 @@ comment on view public.v_dispositivo_status is
   'de online/offline lê status_presenca daqui. Ver migration 20260918120000.';
 
 grant select on public.v_dispositivo_status to authenticated;
-grant select on private.presenca_config to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3) Diagnóstico sob demanda: a tela está mentindo agora?
@@ -195,8 +227,12 @@ as $$
   having count(*) > 0;
 $$;
 
-revoke all on function public.presenca_diagnostico() from public, anon;
-grant execute on function public.presenca_diagnostico() to authenticated;
+-- Sem grant para `authenticated` de propósito: sendo `security definer`, esta
+-- função conta a frota INTEIRA, atravessando o isolamento por empresa. São só
+-- contagens de incoerência, mas um admin de uma empresa não tem por que ver o
+-- tamanho do problema nas outras. Fica como ferramenta de SQL Editor. Quando
+-- alguma tela precisar, entra a checagem de papel do chamador junto com o grant.
+revoke all on function public.presenca_diagnostico() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 4) Sonda: mede a cadência REAL e guarda a série.
@@ -227,6 +263,10 @@ create table if not exists private.presenca_saude (
 comment on table private.presenca_saude is
   'Serie da saude da presenca, 1 linha/5min. idade_p95_seg encostando em '
   'janela_seg = a janela ficou menor que a cadencia real do agente.';
+
+-- Mesma convenção: RLS ligada, zero policies. Aqui não há a armadilha da config
+-- — quem escreve e lê é o cron, como dono, e dono não é barrado por RLS.
+alter table private.presenca_saude enable row level security;
 
 create or replace function private.presenca_amostrar()
 returns void
