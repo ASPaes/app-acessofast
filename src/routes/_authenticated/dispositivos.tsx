@@ -64,7 +64,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { limiteOnlineISO, statusDispositivo, tituloSemStatus } from "@/lib/presenca";
+import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
@@ -132,15 +132,22 @@ type AddressBookRow = {
   created_at: string;
   tenant_id: string | null;
   is_active: boolean;
-  // Quando true o servidor descarta o `presence` desta máquina: `last_online`
-  // só anda durante sessão e não serve para dizer se ela está ligada agora.
-  // Ver statusDispositivo() em lib/presenca.
+  // Quando true o servidor descarta o `presence` desta máquina. Fica na linha
+  // por causa do texto do selo "Sem status", que explica o motivo do descarte.
+  // A DECISÃO de status não é tomada aqui — vem pronta em status_presenca.
   ignorar_presenca: boolean;
   // Dispositivo privado: técnico conecta sem senha, só por aceite manual.
   privado: boolean;
   client_id: string | null;
-  clients?: { name: string; document: string | null; document_type: string | null; phone: string | null } | null;
-  tenants: { name: string } | null;
+  // Cliente e empresa vêm resolvidos pela view, não por embedding.
+  cliente_nome: string | null;
+  cliente_documento: string | null;
+  cliente_documento_tipo: string | null;
+  cliente_telefone: string | null;
+  empresa_nome: string | null;
+  // A resposta do banco. Ver a migration 20260918120000: esta coluna é a fonte
+  // única, e nenhuma tela recalcula presença a partir de last_online.
+  status_presenca: StatusDispositivo;
 };
 
 type DeviceMarker = {
@@ -656,8 +663,11 @@ function DispositivosPage() {
       if (pErr) throw pErr;
 
       let query = supabase
-        .from("address_book")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, ignorar_presenca, privado, client_id, clients(name, document, document_type, phone), tenants(name)")
+        // A VIEW, não a tabela: status_presenca já vem decidido, e com ele vão
+        // embora a consulta de "quem está online", a de sessões ativas e a
+        // regra copiada no JSX. Ver migration 20260918120000.
+        .from("v_dispositivo_status")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, ignorar_presenca, privado, client_id, cliente_nome, cliente_documento, cliente_documento_tipo, cliente_telefone, empresa_nome, status_presenca")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -668,24 +678,23 @@ function DispositivosPage() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data ?? [];
+      // O cast existe por uma limitação do PostgREST, não por descuido: ele não
+      // consegue provar NOT NULL através de uma view, então tipa TODA coluna
+      // como anulável — inclusive `id`, que vem da chave primária. As colunas
+      // que este tipo declara não-nulas são não-nulas no address_book, e a view
+      // só faz LEFT JOIN em clients/tenants (cujos campos já são anuláveis aqui).
+      // Um cast documentado num lugar é melhor que checagem de null em 40.
+      return (data ?? []) as unknown as AddressBookRow[];
     },
   });
 
-  const { data: sessoesAtivas } = useQuery({
-    queryKey: ["sessoes_ativas"],
-    refetchInterval: 15000,
-    queryFn: async () => {
-      const limiteHb = new Date(Date.now() - 90000).toISOString();
-      const { data, error } = await supabase
-        .from("connection_logs")
-        .select("address_book_id")
-        .eq("status", "active")
-        .gt("last_heartbeat_at", limiteHb);
-      if (error) throw error;
-      return new Set((data ?? []).map((r) => r.address_book_id as string));
-    },
-  });
+  // A consulta de sessões ativas saiu daqui: a view já responde "atendimento"
+  // no status_presenca, com a mesma janela de 90s — que agora mora em
+  // private.presenca_config e não mais escrita à mão neste arquivo.
+  //
+  // Some junto uma fonte de discordância que ninguém tinha notado: a lista, o
+  // conjunto "online" e o de sessões vinham de TRÊS consultas em três
+  // instantes, e podiam se contradizer na tela.
 
   // Billing: atendimentos abertos (janela ainda valida) por device -> coluna Consumo.
   const { data: atendimentosAtivos } = useQuery({
@@ -753,19 +762,8 @@ function DispositivosPage() {
     },
   });
 
-  const { data: dispositivosOnline } = useQuery({
-    queryKey: ["dispositivos_online"],
-    refetchInterval: 30000,
-    queryFn: async () => {
-      const limite = limiteOnlineISO();
-      const { data, error } = await supabase
-        .from("address_book")
-        .select("id")
-        .gt("last_online", limite);
-      if (error) throw error;
-      return new Set((data ?? []).map((r) => r.id as string));
-    },
-  });
+  // A consulta de "quem está online" também saiu: era ela que carregava a
+  // janela de 7 minutos escrita no painel. A janela agora é do banco.
 
   const { data: favoritos } = useQuery({
     queryKey: ["favoritos"],
@@ -851,8 +849,8 @@ function DispositivosPage() {
           d.rustdesk_id.toLowerCase().includes(t) ||
           (d.alias ?? "").toLowerCase().includes(t) ||
           (d.device_group ?? "").toLowerCase().includes(t) ||
-          (d.clients?.name ?? "").toLowerCase().includes(t) ||
-          (digits.length > 0 && (d.clients?.document ?? "").includes(digits));
+          (d.cliente_nome ?? "").toLowerCase().includes(t) ||
+          (digits.length > 0 && (d.cliente_documento ?? "").includes(digits));
         if (!match) return false;
       }
       return true;
@@ -866,16 +864,23 @@ function DispositivosPage() {
       : base;
   }, [data, isSuper, tenantFilter]);
 
+  // Contagem por status_presenca, e não por conjuntos vindos de outras
+  // consultas. "sem status" ganha número próprio: elas estavam sendo somadas
+  // dentro de "offline", então o chip dizia ~92 offline enquanto a lista
+  // mostrava 11 offline e 81 sem status.
   const contagem = useMemo(() => {
-    let online = 0, offline = 0, atendimento = 0;
+    let online = 0, offline = 0, atendimento = 0, semStatus = 0;
     for (const d of escopoContagem) {
-      if (d.is_active === false) continue;
-      if (sessoesAtivas?.has(d.id)) atendimento++;
-      else if (dispositivosOnline?.has(d.id)) online++;
-      else offline++;
+      switch (d.status_presenca) {
+        case "inativo": break; // inativo é cadastro, não presença: não entra
+        case "atendimento": atendimento++; break;
+        case "online": online++; break;
+        case "sem_status": semStatus++; break;
+        default: offline++;
+      }
     }
-    return { online, offline, atendimento };
-  }, [escopoContagem, sessoesAtivas, dispositivosOnline]);
+    return { online, offline, atendimento, semStatus };
+  }, [escopoContagem]);
 
   // TEMPORARIO (bootstrap da frota): quantas maquinas ainda nao reportam versao.
   // Conta no escopo do filtro de empresa, como os outros contadores, para o numero
@@ -982,8 +987,13 @@ function DispositivosPage() {
   //
   // connection_logs e atendimentos mudam so quando existe sessao de verdade
   // (poucos milhares/dia no total), e sao justamente as duas que movem o status
-  // de atendimento. Online/offline continua no refetch periodico, que agora nao
-  // pisca mais porque a janela foi corrigida (ver lib/presenca).
+  // de atendimento. Online/offline continua no refetch periodico, limitado pela
+  // cadencia do presence do agente — e e isso que a conexao persistente resolve
+  // quando chegar a vez dela.
+  //
+  // Passou a invalidar ["address_book"] e nao mais ["sessoes_ativas"]: o status
+  // de atendimento agora vem dentro da propria linha, no status_presenca, entao
+  // quem precisa ser refeito e a consulta da lista.
   useEffect(() => {
     const canal = supabase
       .channel("dispositivos_atendimento_rt")
@@ -991,7 +1001,7 @@ function DispositivosPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "connection_logs" },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["sessoes_ativas"] });
+          queryClient.invalidateQueries({ queryKey: ["address_book"] });
         },
       )
       .on(
@@ -1129,10 +1139,8 @@ function DispositivosPage() {
   };
 
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
-    const status = statusDispositivo(d, {
-      emAtendimento: sessoesAtivas?.has(d.id) ?? false,
-      online: dispositivosOnline?.has(d.id) ?? false,
-    });
+    // Vem pronto do banco. Ver migration 20260918120000.
+    const status = d.status_presenca;
     const iconColor =
       status === "atendimento"
         ? "text-warning"
@@ -1194,13 +1202,13 @@ function DispositivosPage() {
             telefone ficaria de fora justo na visao que junta as maquinas de quem
             a gente precisa ligar. */}
         {!mostrarGrupo && mostrarContato && (
-          <TableCell>{contatoTelefone(d.clients?.phone)}</TableCell>
+          <TableCell>{contatoTelefone(d.cliente_telefone)}</TableCell>
         )}
         {mostrarGrupo && (
           <TableCell>
             {(() => {
-              const nome = d.clients?.name ?? d.device_group;
-              const doc = formatarDocumento(d.clients?.document, d.clients?.document_type);
+              const nome = d.cliente_nome ?? d.device_group;
+              const doc = formatarDocumento(d.cliente_documento, d.cliente_documento_tipo);
               if (!nome) return <span className="text-muted-foreground">—</span>;
               return (
                 <div className="flex flex-col">
@@ -1208,7 +1216,7 @@ function DispositivosPage() {
                   {doc && (
                     <span className="text-[10px] text-muted-foreground/70 mt-1 tabular-nums">{doc}</span>
                   )}
-                  {mostrarContato && contatoTelefone(d.clients?.phone)}
+                  {mostrarContato && contatoTelefone(d.cliente_telefone)}
                 </div>
               );
             })()}
@@ -1220,7 +1228,7 @@ function DispositivosPage() {
         <TableCell className="text-xs">{agenteVersao(d)}</TableCell>
         {isSuper && (
           <TableCell className="text-xs">
-            {d.tenants?.name ?? <span className="text-muted-foreground">—</span>}
+            {d.empresa_nome ?? <span className="text-muted-foreground">—</span>}
           </TableCell>
         )}
         <TableCell>
@@ -1240,7 +1248,7 @@ function DispositivosPage() {
             /* O servidor descarta o presence desta maquina, entao NAO sabemos se
                ela esta ligada. Dizer "Offline" seria afirmar o que nao se sabe, e
                mandaria o tecnico procurar defeito numa maquina que provavelmente
-               esta funcionando. Quem decide isso e statusDispositivo(). */
+               esta funcionando. Quem decide isso e o banco, em v_dispositivo_status. */
             <Badge
               variant="outline"
               className="gap-1.5 text-warning border-warning/30"
@@ -1360,23 +1368,25 @@ function DispositivosPage() {
       map.get(key)!.devices.push(d);
     }
     const arr = Array.from(map.entries()).map(([key, v]) => {
-      let online = 0, atendimento = 0, offline = 0;
+      let online = 0, atendimento = 0, offline = 0, semStatus = 0;
       let ultimo: string | null = null;
       let document: string | null = null;
       let document_type: string | null = null;
       for (const d of v.devices) {
-        if (d.is_active === false) {
-          // inativos não contam nos indicadores
-        } else if (sessoesAtivas?.has(d.id)) atendimento++;
-        else if (dispositivosOnline?.has(d.id)) online++;
-        else offline++;
+        switch (d.status_presenca) {
+          case "inativo": break; // inativos não contam nos indicadores
+          case "atendimento": atendimento++; break;
+          case "online": online++; break;
+          case "sem_status": semStatus++; break;
+          default: offline++;
+        }
         if (d.last_online && (!ultimo || d.last_online > ultimo)) ultimo = d.last_online;
-        if (!document && d.clients?.document) {
-          document = d.clients.document;
-          document_type = d.clients.document_type ?? null;
+        if (!document && d.cliente_documento) {
+          document = d.cliente_documento;
+          document_type = d.cliente_documento_tipo ?? null;
         }
       }
-      return { key, label: v.label, devices: v.devices, total: v.devices.length, online, atendimento, offline, ultimo, document, document_type };
+      return { key, label: v.label, devices: v.devices, total: v.devices.length, online, atendimento, offline, semStatus, ultimo, document, document_type };
     });
     arr.sort((a, b) => {
       if (a.key === "__sem_grupo__") return 1;
@@ -1384,7 +1394,7 @@ function DispositivosPage() {
       return a.label.localeCompare(b.label, "pt-BR");
     });
     return arr;
-  }, [filtered, sessoesAtivas, dispositivosOnline]);
+  }, [filtered]);
 
   return (
     <div className="p-6 space-y-6">
@@ -1463,6 +1473,19 @@ function DispositivosPage() {
                 <span className="text-lg font-semibold tabular-nums">{contagem.offline}</span>
                 <span className="text-sm text-muted-foreground">offline</span>
               </div>
+              {/* Separado de "offline" porque não é a mesma afirmação: destas o
+                  servidor descarta o sinal, então não se sabe se estão ligadas.
+                  Somadas em offline, o chip dizia ~92 onde a lista mostrava 11. */}
+              {contagem.semStatus > 0 && (
+                <div
+                  className="flex items-center gap-2"
+                  title="O servidor descarta o sinal de presença destas máquinas. Podem estar ligadas — o AcessoFast continua acessando normalmente."
+                >
+                  <span className="h-2 w-2 rounded-full bg-warning/60" />
+                  <span className="text-lg font-semibold tabular-nums">{contagem.semStatus}</span>
+                  <span className="text-sm text-muted-foreground">sem status</span>
+                </div>
+              )}
             </div>
 
             <span aria-hidden className="mx-1 hidden h-6 w-px bg-border/60 xl:block" />
@@ -1735,10 +1758,7 @@ function DispositivosPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((d) => {
-                const status = statusDispositivo(d, {
-                  emAtendimento: sessoesAtivas?.has(d.id) ?? false,
-                  online: dispositivosOnline?.has(d.id) ?? false,
-                });
+                const status = d.status_presenca;
                 const iconColor =
                   status === "atendimento"
                     ? "text-warning"
@@ -1803,7 +1823,7 @@ function DispositivosPage() {
                       )}
                       {showConsumo && consumoBadge(d.id)}
                       {(() => {
-                        const nome = d.clients?.name ?? d.device_group;
+                        const nome = d.cliente_nome ?? d.device_group;
                         return nome ? <Badge variant="secondary">{nome}</Badge> : null;
                       })()}
                       {(markersByDevice?.get(d.id) ?? []).map((mid) => {
@@ -1828,13 +1848,13 @@ function DispositivosPage() {
                       <div className="flex flex-col">
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground">CNPJ</span>
                         <span className="text-muted-foreground tabular-nums">
-                          {formatarDocumento(d.clients?.document, d.clients?.document_type) ?? "—"}
+                          {formatarDocumento(d.cliente_documento, d.cliente_documento_tipo) ?? "—"}
                         </span>
                       </div>
                       {isSuper && (
                         <div className="flex flex-col col-span-2">
                           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Empresa</span>
-                          <span className="text-muted-foreground">{d.tenants?.name ?? "—"}</span>
+                          <span className="text-muted-foreground">{d.empresa_nome ?? "—"}</span>
                         </div>
                       )}
                     </div>

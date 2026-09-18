@@ -52,7 +52,6 @@ import {
   normalizarTelefone,
   normalizarTexto,
 } from "@/lib/clientes";
-import { JANELA_ONLINE_MS } from "@/lib/presenca";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   head: () => ({
@@ -107,8 +106,8 @@ function LinhaCliente({
     enabled: aberta,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("address_book")
-        .select("id, alias, rustdesk_id, os, last_online, is_active")
+        .from("v_dispositivo_status")
+        .select("id, alias, rustdesk_id, os, last_online, is_active, status_presenca")
         .eq("tenant_id", tenantId)
         .eq("client_id", cliente.id)
         .order("alias");
@@ -117,10 +116,9 @@ function LinhaCliente({
     },
   });
 
-  const agora = Date.now();
-  const online = (maquinas ?? []).filter(
-    (m) => m.last_online && agora - new Date(m.last_online).getTime() < JANELA_ONLINE_MS,
-  ).length;
+  // Contado pelo status do banco, não por uma janela repetida aqui. Esta tela
+  // tinha a terceira cópia da regra — e era a que ninguém lembrava de atualizar.
+  const online = (maquinas ?? []).filter((m) => m.status_presenca === "online").length;
 
   return (
     <>
@@ -194,9 +192,7 @@ function LinhaCliente({
                     </TableHeader>
                     <TableBody>
                       {maquinas?.map((m) => {
-                        const ativa =
-                          m.last_online &&
-                          agora - new Date(m.last_online).getTime() < JANELA_ONLINE_MS;
+                        const ativa = m.status_presenca === "online";
                         return (
                           <TableRow key={m.id}>
                             <TableCell>
