@@ -16,6 +16,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ConectarRouteImport } from './routes/conectar'
 import { Route as DefinirSenhaRouteImport } from './routes/definir-senha'
+import { Route as ExclusaoDeDadosRouteImport } from './routes/exclusao-de-dados'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as AuthenticatedAnunciosRouteImport } from './routes/_authenticated/anuncios'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
@@ -59,6 +61,16 @@ const ConectarRoute = ConectarRouteImport.update({
 const DefinirSenhaRoute = DefinirSenhaRouteImport.update({
   id: '/definir-senha',
   path: '/definir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExclusaoDeDadosRoute = ExclusaoDeDadosRouteImport.update({
+  id: '/exclusao-de-dados',
+  path: '/exclusao-de-dados',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAnunciosRoute = AuthenticatedAnunciosRouteImport.update({
@@ -122,6 +134,8 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/exclusao-de-dados': typeof ExclusaoDeDadosRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/anuncios': typeof AuthenticatedAnunciosRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
@@ -140,6 +154,8 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/exclusao-de-dados': typeof ExclusaoDeDadosRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/anuncios': typeof AuthenticatedAnunciosRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
@@ -160,6 +176,8 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/conectar': typeof ConectarRoute
   '/definir-senha': typeof DefinirSenhaRoute
+  '/exclusao-de-dados': typeof ExclusaoDeDadosRoute
+  '/privacidade': typeof PrivacidadeRoute
   '/_authenticated/anuncios': typeof AuthenticatedAnunciosRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
@@ -180,6 +198,8 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/exclusao-de-dados'
+    | '/privacidade'
     | '/anuncios'
     | '/auditoria'
     | '/clientes'
@@ -198,6 +218,8 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/exclusao-de-dados'
+    | '/privacidade'
     | '/anuncios'
     | '/auditoria'
     | '/clientes'
@@ -217,6 +239,8 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/conectar'
     | '/definir-senha'
+    | '/exclusao-de-dados'
+    | '/privacidade'
     | '/_authenticated/anuncios'
     | '/_authenticated/auditoria'
     | '/_authenticated/clientes'
@@ -237,6 +261,8 @@ export interface RootRouteChildren {
   CadastroRoute: typeof CadastroRoute
   ConectarRoute: typeof ConectarRoute
   DefinirSenhaRoute: typeof DefinirSenhaRoute
+  ExclusaoDeDadosRoute: typeof ExclusaoDeDadosRoute
+  PrivacidadeRoute: typeof PrivacidadeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -288,6 +314,20 @@ declare module '@tanstack/react-router' {
       path: '/definir-senha'
       fullPath: '/definir-senha'
       preLoaderRoute: typeof DefinirSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exclusao-de-dados': {
+      id: '/exclusao-de-dados'
+      path: '/exclusao-de-dados'
+      fullPath: '/exclusao-de-dados'
+      preLoaderRoute: typeof ExclusaoDeDadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/anuncios': {
@@ -400,6 +440,8 @@ const rootRouteChildren: RootRouteChildren = {
   CadastroRoute: CadastroRoute,
   ConectarRoute: ConectarRoute,
   DefinirSenhaRoute: DefinirSenhaRoute,
+  ExclusaoDeDadosRoute: ExclusaoDeDadosRoute,
+  PrivacidadeRoute: PrivacidadeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
