@@ -199,6 +199,7 @@ export type Database = {
           id: string
           is_active: boolean
           last_online: string | null
+          observacoes: string | null
           os: string | null
           privado: boolean
           privado_em: string | null
@@ -225,6 +226,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_online?: string | null
+          observacoes?: string | null
           os?: string | null
           privado?: boolean
           privado_em?: string | null
@@ -251,6 +253,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_online?: string | null
+          observacoes?: string | null
           os?: string | null
           privado?: boolean
           privado_em?: string | null
