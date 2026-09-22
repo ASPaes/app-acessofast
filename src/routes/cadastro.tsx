@@ -419,7 +419,15 @@ function CadastroPage() {
                     className="mt-0.5"
                   />
                   <Label htmlFor="aceite" className="text-sm font-normal cursor-pointer leading-snug">
-                    Autorizo o uso dos meus dados para criar e manter esta conta.
+                    Autorizo o uso dos meus dados para criar e manter esta conta, conforme a{" "}
+                    <Link
+                      to="/privacidade"
+                      target="_blank"
+                      className="underline underline-offset-4 hover:text-foreground"
+                    >
+                      Política de Privacidade
+                    </Link>
+                    .
                   </Label>
                 </div>
 
