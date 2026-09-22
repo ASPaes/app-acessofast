@@ -49,7 +49,7 @@ import {
   normalizarDocumento,
   normalizarTexto,
 } from "@/lib/clientes";
-import { limiteOnlineISO } from "@/lib/presenca";
+import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
 
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
@@ -118,6 +118,11 @@ type DeviceRow = {
   last_online: string | null;
   client_id: string | null;
   is_active: boolean;
+  agent_version: string | null;
+  ignorar_presenca: boolean;
+  // A resposta do banco, pronta. Ver a migration 20260918120000: esta tela não
+  // recalcula presença — antes ela tinha a própria cópia da regra.
+  status_presenca: StatusDispositivo;
 };
 
 type AdoptResult = {
@@ -421,30 +426,18 @@ function ConectarPage() {
       // Sem filtro de is_active: maquina desativada e um estado distinto de
       // "nao existe" (secao 11) e precisa render a mensagem certa.
       const { data, error } = await supabase
-        .from("address_book")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active")
+        .from("v_dispositivo_status")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, status_presenca")
         .in("client_id", idsDoGrupo)
         .order("alias");
       if (error) throw error;
-      return (data ?? []) as DeviceRow[];
+      return (data ?? []) as unknown as DeviceRow[];
     },
   });
 
-  // Mesma regra da tela de Dispositivos (JANELA_ONLINE_MS, em lib/presenca).
-  const online = useQuery({
-    enabled: idsDoGrupo.length > 0 || modoTodas,
-    queryKey: ["conectar_online"],
-    refetchInterval: 30000,
-    queryFn: async () => {
-      const limite = limiteOnlineISO();
-      const { data, error } = await supabase
-        .from("address_book")
-        .select("id")
-        .gt("last_online", limite);
-      if (error) throw error;
-      return new Set((data ?? []).map((r) => r.id as string));
-    },
-  });
+  // A consulta "quem está online" saiu daqui: o status vem na própria linha,
+  // decidido pelo banco. Era mais uma cópia da regra — e, por vir de outra
+  // consulta em outro instante, podia discordar da lista ao lado.
 
   // --- todas as maquinas, quando o atendimento nao tem cliente --------------
   // A RLS ja recorta pelo tenant. Online primeiro porque e o que da para usar
@@ -454,12 +447,12 @@ function ConectarPage() {
     queryKey: ["conectar_todas"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("address_book")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, clients(name)")
+        .from("v_dispositivo_status")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, status_presenca, cliente_nome")
         .eq("is_active", true)
         .order("alias");
       if (error) throw error;
-      return (data ?? []) as unknown as (DeviceRow & { clients: { name: string } | null })[];
+      return (data ?? []) as unknown as (DeviceRow & { cliente_nome: string | null })[];
     },
   });
 
@@ -736,7 +729,7 @@ function ConectarPage() {
     const encontradas = (todas.data ?? [])
       .filter((d) => {
         if (!termo) return true;
-        const alvo = `${d.alias ?? ""} ${d.rustdesk_id} ${d.clients?.name ?? ""}`;
+        const alvo = `${d.alias ?? ""} ${d.rustdesk_id} ${d.cliente_nome ?? ""}`;
         if (normalizarTexto(alvo).includes(termo)) return true;
         // Tambem pelos DIGITOS: a tela mostra o id agrupado ("307 871 329") e
         // quem copia o que ve digita com espacos, mas rustdesk_id e gravado
@@ -746,8 +739,8 @@ function ConectarPage() {
         return digitos.length > 0 && d.rustdesk_id.includes(digitos);
       })
       .sort((a, b) => {
-        const oa = online.data?.has(a.id) ? 0 : 1;
-        const ob = online.data?.has(b.id) ? 0 : 1;
+        const oa = a.status_presenca === "online" ? 0 : 1;
+        const ob = b.status_presenca === "online" ? 0 : 1;
         if (oa !== ob) return oa - ob;
         return (a.alias ?? a.rustdesk_id).localeCompare(b.alias ?? b.rustdesk_id);
       });
@@ -787,11 +780,11 @@ function ConectarPage() {
               <LinhaDispositivo
                 key={d.id}
                 device={d}
-                ativo={online.data?.has(d.id) ?? false}
+                ativo={d.status_presenca === "online"}
                 conectando={connectingId === d.id}
                 desabilitado={connectingId !== null}
                 onConectar={() => void doConnect(d.id)}
-                subtitulo={d.clients?.name ?? "Sem cliente"}
+                subtitulo={d.cliente_nome ?? "Sem cliente"}
               />
             ))}
             {encontradas.length > TETO && (
@@ -1035,7 +1028,7 @@ function ConectarPage() {
   // V3, secao 11: os tres estados de maquina que nao podem virar um erro so.
   const ativas = lista.filter((d) => d.is_active);
   const desativadas = lista.filter((d) => !d.is_active);
-  const nenhumaOnline = ativas.length > 0 && !ativas.some((d) => online.data?.has(d.id));
+  const nenhumaOnline = ativas.length > 0 && !ativas.some((d) => d.status_presenca === "online");
   const clienteDaConversa = clientesDoGrupo.find((c) => c.id === clienteAlvo) ?? null;
 
   async function revalidar() {
@@ -1107,7 +1100,7 @@ function ConectarPage() {
                   <LinhaDispositivo
                     key={d.id}
                     device={d}
-                    ativo={online.data?.has(d.id) ?? false}
+                    ativo={d.status_presenca === "online"}
                     conectando={connectingId === d.id}
                     desabilitado={connectingId !== null}
                     onConectar={() => void doConnect(d.id)}
@@ -1672,22 +1665,29 @@ function LinhaDispositivo({
   onConectar: () => void;
   subtitulo?: string;
 }) {
+  // Mesma regra da tela de Dispositivos: numa máquina com o `presence`
+  // descartado o `last_online` é resto da última sessão, e chamar isso de
+  // "Offline" manda o técnico procurar defeito onde não há.
+  const semStatus = device.status_presenca === "sem_status";
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 p-2.5">
       <span
         className={
-          "h-2 w-2 shrink-0 rounded-full " + (ativo ? "bg-green-500" : "bg-muted-foreground/40")
+          "h-2 w-2 shrink-0 rounded-full " +
+          (ativo ? "bg-green-500" : semStatus ? "bg-warning/60" : "bg-muted-foreground/40")
         }
         aria-hidden
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{device.alias || device.rustdesk_id}</p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-xs text-muted-foreground" title={semStatus ? tituloSemStatus(device) : undefined}>
           {ativo
             ? "Online"
-            : device.last_online
-              ? `Offline · ${tempoRelativo(device.last_online)}`
-              : "Offline"}
+            : semStatus
+              ? "Sem status"
+              : device.last_online
+                ? `Offline · ${tempoRelativo(device.last_online)}`
+                : "Offline"}
           {device.os ? ` · ${device.os}` : ""}
           {subtitulo ? ` · ${subtitulo}` : ""}
         </p>

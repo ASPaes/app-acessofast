@@ -1,23 +1,49 @@
-// Janela de presença — quanto tempo sem sinal até um dispositivo virar "Offline".
+// Presença — o que sobrou no painel depois que a decisão foi para o banco.
 //
-// O agente carimba `address_book.last_online` em TODO evento autenticado, e quando
-// está ocioso o único evento é o `presence`. Ou seja: esta janela precisa ser maior
-// que a cadência do `presence`, senão a máquina pisca offline entre dois batimentos
-// e a frota inteira aparece morta no painel.
+// ONDE A REGRA MORA: `public.v_dispositivo_status.status_presenca`, criada pela
+// migration `20260918120000_status_presenca_no_banco.sql`. As telas leem essa
+// coluna e desenham. Nenhuma delas calcula presença a partir de `last_online`,
+// e é de propósito — este arquivo já teve a regra, e ela vazou em cópias.
 //
-// ORDEM DE IMPLANTAÇÃO (importa): esta constante sobe ANTES de o agente afrouxar o
-// `presence`. Alargar a janela é compatível com agente antigo — ele só bate mais
-// vezes do que o necessário. Encurtar depois não é. Durante a rodada de bootstrap a
-// frota fica misturada (agente a 60s e a 180s ao mesmo tempo), e a janela larga
-// atende os dois.
+// POR QUE MUDOU DE LUGAR. O status quebrou três vezes seguidas, sempre igual:
 //
-// Dimensionamento: `presence` a 180s, com folga para dois batimentos perdidos mais
-// atraso de rede. O preço é honesto e conhecido: uma máquina que morre continua
-// aparecendo online por até 7 minutos, em vez de 2. Para uma ferramenta de suporte
-// isso é aceitável — quem descobre a máquina morta é quem tenta conectar nela.
-export const JANELA_ONLINE_MS = 7 * 60 * 1000;
+//   28/08  a janela foi de 2 para 7 min no painel porque o agente ia afrouxar o
+//          `presence` de 60s para 180s. Duas mudanças, dois repositórios, e a
+//          ordem entre elas importava.
+//   06/09  o servidor passou a DESCARTAR o `presence` de parte da frota para
+//          poupar escrita. `last_online` mudou de significado para essas
+//          máquinas — e nenhuma tela ficou sabendo.
+//   16/09  a lista dizia "Offline · há 10 min" com o técnico conectado dentro.
+//          No mesmo dia: lista com janela de 7 min, dashboard com 5, e a visão
+//          em cartões sem o selo "Sem status".
+//
+// Não era descuido: enquanto mais de um lugar respondesse "esta máquina está
+// online?", a próxima otimização de banco desencontrava as respostas de novo.
+//
+// SE VOCÊ VEIO AQUI PARA MEXER NA JANELA: ela está em
+// `private.presenca_config`. Trocar lá vale para o painel inteiro de uma vez,
+// sem deploy. E existe uma sonda (`private.presenca_saude`) medindo a cadência
+// real do agente contra a janela configurada, justamente para avisar quando uma
+// ficar apertada para a outra.
 
-/** Instante a partir do qual `last_online` ainda conta como "online agora". */
-export function limiteOnlineISO(): string {
-  return new Date(Date.now() - JANELA_ONLINE_MS).toISOString();
+/** Os valores de `v_dispositivo_status.status_presenca`. */
+export type StatusDispositivo =
+  | "inativo"
+  | "atendimento"
+  | "online"
+  | "sem_status"
+  | "offline";
+
+/**
+ * Texto do `title` do selo "Sem status", por motivo do descarte.
+ *
+ * Isto é redação, não regra — por isso continua no painel. O servidor descarta
+ * o `presence` por dois caminhos, e o operador precisa saber qual é o dele: um
+ * se resolve reinstalando o agente, o outro é decisão de cadastro.
+ */
+export function tituloSemStatus(d: { agent_version: string | null }): string {
+  if (!d.agent_version) {
+    return "Esta máquina roda uma versão que não reporta status. Ela pode estar ligada — o AcessoFast continua acessando normalmente.";
+  }
+  return "O servidor está descartando o sinal de presença desta máquina (marcada no cadastro). Ela pode estar ligada — o AcessoFast continua acessando normalmente.";
 }

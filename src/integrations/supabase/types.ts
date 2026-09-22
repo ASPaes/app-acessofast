@@ -197,6 +197,7 @@ export type Database = {
           enrolled_via_secret_id: string | null
           enrollment_status: Database["public"]["Enums"]["enrollment_status"]
           id: string
+          ignorar_presenca: boolean
           is_active: boolean
           last_online: string | null
           observacoes: string | null
@@ -224,6 +225,7 @@ export type Database = {
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
           observacoes?: string | null
@@ -251,6 +253,7 @@ export type Database = {
           enrolled_via_secret_id?: string | null
           enrollment_status?: Database["public"]["Enums"]["enrollment_status"]
           id?: string
+          ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
           observacoes?: string | null
@@ -2125,6 +2128,36 @@ export type Database = {
       }
     }
     Views: {
+      v_dispositivo_status: {
+        Row: {
+          agent_target_version: string | null
+          agent_version: string | null
+          alias: string | null
+          cliente_documento: string | null
+          cliente_documento_tipo: string | null
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          client_id: string | null
+          created_at: string | null
+          device_group: string | null
+          empresa_nome: string | null
+          enrollment_status: Database["public"]["Enums"]["enrollment_status"] | null
+          id: string | null
+          ignorar_presenca: boolean | null
+          is_active: boolean | null
+          last_online: string | null
+          observacoes: string | null
+          os: string | null
+          privado: boolean | null
+          rotacao_modo: string | null
+          rotacao_modo_efetivo: string | null
+          rustdesk_id: string | null
+          status_presenca: string | null
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
       v_agent_health: {
         Row: {
           abertas_agora: number | null

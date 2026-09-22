@@ -91,9 +91,9 @@ const INFO: Record<string, KpiInfo> = {
     oQue: "Computadores com o agente reportando presença agora.",
     porQue:
       "É quem está alcançável neste instante. Parque grande com poucos online significa que o suporte não vai conseguir agir quando precisar — e é isso, não o total cadastrado, que limita o atendimento de hoje.",
-    comoCalculamos: "dispositivos ativos com última presença nos últimos 5 minutos",
+    comoCalculamos: "dispositivos com status_presenca = online na view v_dispositivo_status",
     referencia:
-      "A janela é de 5 min porque o agente reporta presença a cada 60s; mais curta, um beat perdido viraria máquina offline.",
+      "A janela é de 7 min e vem do banco, a mesma que a lista de Dispositivos usa. Ela acompanha a cadência do agente, que reporta a cada 3 min: mais curta, um beat perdido viraria máquina offline. Máquinas cujo sinal o servidor descarta não entram aqui nem como online nem como offline — ficam em “Sem status”.",
   },
   dispositivos: {
     oQue: "Máquinas cadastradas no address book, ligadas ou não.",
@@ -174,16 +174,19 @@ function Dashboard() {
             .select("id", { count: "exact", head: true })
             .gte("session_start", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
         ),
-        // Maquinas alcancaveis AGORA. Mesmo corte de 5 min que o resto do
-        // painel usa para "presente": o agente reporta presenca a cada 60s, e
-        // uma janela mais curta transformaria um beat perdido em maquina
-        // offline.
+        // Maquinas vistas AGORA — contadas pelo status que o BANCO decide, e
+        // nao por uma janela escrita aqui. Esta tela chegou a usar 5 min
+        // enquanto a lista usava 7, e o mesmo dispositivo contava como online
+        // num lugar e nao no outro. Agora e a mesma resposta nos dois.
+        //
+        // De quebra o numero deixa de inflar: contando por `last_online` as
+        // maquinas silenciadas entravam aqui logo depois de um atendimento,
+        // com o carimbo fresco da sessao que tinha acabado de fechar.
         withTenant(
           supabase
-            .from("address_book")
+            .from("v_dispositivo_status")
             .select("id", { count: "exact", head: true })
-            .eq("is_active", true)
-            .gt("last_online", new Date(Date.now() - 5 * 60 * 1000).toISOString()),
+            .eq("status_presenca", "online"),
         ),
       ]);
       return {
