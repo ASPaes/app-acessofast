@@ -329,3 +329,63 @@ outro app, do zero, sem os usuários. Última chance de revisar.
    titular, senão o prazo vence tratado como chamado comum.
 4. **Leaked Password Protection está desligada** no Supabase Auth. Não contradiz nada que a
    política afirme, e não bloqueia a Play — mas é um clique.
+
+---
+
+## 12. Recursos gráficos da ficha da loja
+
+### 12.1 Prontos
+
+Gerados em 21/09/2026 a partir da marca real do produto — não são arte nova, são a mesma
+identidade que já roda no cliente Windows (`acessofast-agent-repo/branding/`).
+
+| Arquivo | Formato | Observação |
+| --- | --- | --- |
+| `play-store/icone-512.png` | 512×512, PNG 32 bits, 138 KB | Zero pixels transparentes (a Play exige) |
+| `play-store/recurso-grafico-1024x500.png` | 1024×500, PNG, 174 KB | Nada essencial nas margens: a Play recorta em algumas superfícies |
+
+**De onde saiu:** `branding/logo.png` tem a marca em 775×576 **com fundo transparente**, então o
+ícone foi montado em 512 nativo — não é ampliação do `icon.png` de 256. O fundo navy foi
+amostrado do ícone atual (`rgb(0,9,32)`) para a ficha da loja bater com o que o cliente já
+mostra no Windows.
+
+> ⚠️ O que **não** é da marca: a palavra "AcessoFast" no recurso gráfico está composta em Segoe
+> UI Bold, porque não existe wordmark oficial em nenhum dos repos — só o símbolo. Se existir um
+> arquivo de marca com a tipografia certa, vale trocar.
+
+### 12.2 Capturas de tela — não dá para gerar, e não é limitação de ferramenta
+
+A Play exige que as capturas sejam **do app rodando de verdade**. Imagem montada que simula uma
+interface é deturpação da ficha da loja: o revisor compara com o APK, e isso derruba a
+submissão — e, se passar, derruba o app depois.
+
+**A boa notícia é que o app roda.** O cabeçalho do [MOBILE-DESIGN.md](MOBILE-DESIGN.md) está
+desatualizado — diz "nada implementado", mas o mesmo arquivo registra mais abaixo:
+
+- linha 237: `APK buildando — ✅ run #2 verde, 31m24s`
+- linha 277: `✅ VALIDADO EM APARELHO REAL — 2026-07-31`
+- linha 279: `Conexão desktop → Android FUNCIONA. Testado com aparelho Samsung`
+
+Ou seja: existe APK e existe aparelho onde ele já rodou. As capturas saem de lá.
+
+### 12.3 Quais telas capturar
+
+Três bastam, e cada uma serve a um propósito diferente na revisão:
+
+1. **Tela inicial com ID e senha** — é o que o usuário vê ao abrir, e é o que o roteiro do §2
+   manda o revisor usar.
+2. **Assistente de permissões** (`onboarding.dart`, já validado no aparelho) — mostra que
+   Acessibilidade e captura de tela são pedidas com explicação e aceite. Reforça a declaração
+   do §10.1 e a divulgação em destaque do §10.2.
+3. **Sessão ativa**, com o indicador do Android na barra de notificações visível — prova que o
+   acesso é sinalizado, não silencioso.
+
+### 12.4 Antes de subir
+
+- **Aparelho de teste, nunca de cliente.** A captura fica pública para sempre; o ID que aparece
+  na tela é de um aparelho real.
+- **Borre a senha** exibida na tela inicial. Ela rotaciona, mas não há motivo para publicá-la.
+- Vertical (9:16), PNG ou JPEG, sem transparência. O número mínimo de capturas e os limites de
+  lado o próprio Console informa no campo — confirme lá, não aqui.
+- `adb exec-out screencap -p > tela1.png` sai mais limpo que a captura pelo botão do aparelho
+  (sem barra de gestos capturada torta, sem notificação de "captura salva").
