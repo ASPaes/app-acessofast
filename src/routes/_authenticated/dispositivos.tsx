@@ -46,8 +46,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  NotaObservacao,
+  SwitchObservacaoHover,
+  useObservacaoHover,
+} from "@/components/nota-observacao";
 import {
   Command,
   CommandEmpty,
@@ -252,60 +256,6 @@ function tempoRelativo(iso: string | null | undefined): string {
   return `há ${d} d`;
 }
 
-// Preferência de leitura da observação: nota flutuante ao passar o mouse
-// (padrão) ou só quando a pessoa abre "Observações" no menu de ações. Mora no
-// navegador, e não no perfil, porque é gosto de quem opera — cada técnico
-// escolhe o seu sem que isso vire regra da empresa.
-const OBS_HOVER_LS_KEY = "acessofast:observacoes-hover";
-
-// Selo da observação, ao lado do nome da máquina. Só aparece quando há nota:
-// máquina sem observação não ganha enfeite nenhum. Com `hover` ligado a nota
-// sai flutuando ao passar o mouse; desligado, o selo continua avisando que a
-// nota existe — o texto abre pelo menu de ações. O clique abre o editor nos
-// dois modos: quem já está com o mouse em cima não devia ter de caçar o menu.
-function NotaDoDispositivo({
-  texto,
-  hover,
-  onAbrir,
-}: {
-  texto: string | null;
-  hover: boolean;
-  onAbrir: () => void;
-}) {
-  const nota = texto?.trim();
-  if (!nota) return null;
-
-  const selo = (
-    <button
-      type="button"
-      onClick={onAbrir}
-      title={hover ? undefined : "Ver observações"}
-      aria-label="Observações desta máquina"
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-warning hover:text-warning/70"
-    >
-      <StickyNote className="h-3.5 w-3.5" />
-    </button>
-  );
-
-  if (!hover) return selo;
-
-  return (
-    <HoverCard openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>{selo}</HoverCardTrigger>
-      <HoverCardContent align="start" className="w-72 p-3">
-        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <StickyNote className="h-3 w-3" />
-          Observações
-        </div>
-        {/* whitespace-pre-wrap para a nota sair com as quebras de linha que a
-            pessoa digitou; break-words para um caminho de rede colado ali não
-            esticar o cartão. */}
-        <p className="mt-1.5 whitespace-pre-wrap break-words text-xs">{nota}</p>
-      </HoverCardContent>
-    </HoverCard>
-  );
-}
-
 // Versao do agente (coluna Agente). O rotulo gravado pelo agente e
 // "AAAA.MM.DD-<sha7>" (ver build-agent.yml no repo do agente): os 10 primeiros
 // caracteres sao a data do build, em largura fixa — entao comparar as strings ja
@@ -448,22 +398,7 @@ function DispositivosPage() {
   // Histórico de quem marcou/desmarcou o dispositivo como privado (ver HistoricoPrivadoDialog).
   const [historicoPrivadoDe, setHistoricoPrivadoDe] = useState<AddressBookRow | null>(null);
   const [observacoesDe, setObservacoesDe] = useState<AddressBookRow | null>(null);
-  const [obsNoHover, setObsNoHover] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      return window.localStorage.getItem(OBS_HOVER_LS_KEY) !== "0";
-    } catch {
-      return true;
-    }
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(OBS_HOVER_LS_KEY, obsNoHover ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [obsNoHover]);
+  const [obsNoHover, setObsNoHover] = useObservacaoHover();
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
     rustdesk_id: string;
@@ -1252,7 +1187,7 @@ function DispositivosPage() {
                 {d.privado && (
                   <Lock className="h-3 w-3 text-muted-foreground" aria-label="Dispositivo privado" />
                 )}
-                <NotaDoDispositivo
+                <NotaObservacao
                   texto={d.observacoes}
                   hover={obsNoHover}
                   onAbrir={() => setObservacoesDe(d)}
@@ -1629,20 +1564,7 @@ function DispositivosPage() {
                 Mostrar inativos
               </Label>
             </div>
-            {/* Desligado, o selo da nota continua na linha — o que muda é só
-                por onde o texto aparece: menu de ações em vez de cartão
-                flutuante. A preferência é deste navegador. */}
-            <div className="flex items-center gap-2 px-2">
-              <Switch id="obs-hover" checked={obsNoHover} onCheckedChange={setObsNoHover} />
-              <Label
-                htmlFor="obs-hover"
-                className="text-xs text-muted-foreground flex items-center gap-1"
-                title="Ligado: a observação aparece flutuando ao passar o mouse sobre o selo. Desligado: só abre em Observações, no menu de ações."
-              >
-                <StickyNote className="h-3 w-3" />
-                Observação ao passar o mouse
-              </Label>
-            </div>
+            <SwitchObservacaoHover hover={obsNoHover} onChange={setObsNoHover} />
             {/* TEMPORARIO — some daqui quando o contador zerar. Ver o comentario
                 do estado soDesconhecidos e ATUALIZACAO-FROTA.md. */}
             {isSuper && (
@@ -1890,7 +1812,7 @@ function DispositivosPage() {
                         {d.privado && (
                           <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Dispositivo privado" />
                         )}
-                        <NotaDoDispositivo
+                        <NotaObservacao
                           texto={d.observacoes}
                           hover={obsNoHover}
                           onAbrir={() => setObservacoesDe(d)}

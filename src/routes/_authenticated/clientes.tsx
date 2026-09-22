@@ -45,6 +45,12 @@ import { Link } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ImportarClientesDialog } from "@/components/importar-clientes-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  NotaObservacao,
+  SwitchObservacaoHover,
+  useObservacaoHover,
+} from "@/components/nota-observacao";
 import {
   formatarDocumento,
   formatarTelefone,
@@ -67,6 +73,9 @@ type ClientRow = {
   document_type: string | null;
   phone: string | null;
   is_active: boolean;
+  // Nota livre sobre QUEM se atende ("falar com a Marta", "não atende
+  // sábado") — a nota da máquina é outra, e mora no address_book.
+  observacoes: string | null;
 };
 
 /**
@@ -87,6 +96,7 @@ function LinhaCliente({
   temTelefone,
   totalColunas,
   aberta,
+  obsHover,
   onToggle,
   onEditar,
 }: {
@@ -96,6 +106,7 @@ function LinhaCliente({
   temTelefone: boolean;
   totalColunas: number;
   aberta: boolean;
+  obsHover: boolean;
   onToggle: () => void;
   onEditar: () => void;
 }) {
@@ -141,7 +152,17 @@ function LinhaCliente({
             </Button>
           )}
         </TableCell>
-        <TableCell className="font-medium">{cliente.name}</TableCell>
+        <TableCell className="font-medium">
+          <span className="flex items-center gap-1.5">
+            {cliente.name}
+            <NotaObservacao
+              texto={cliente.observacoes}
+              hover={obsHover}
+              onAbrir={onEditar}
+              rotulo="Observações do cliente"
+            />
+          </span>
+        </TableCell>
         <TableCell className="text-sm text-muted-foreground">
           {formatarDocumento(cliente.document, cliente.document_type) ?? "—"}
         </TableCell>
@@ -291,7 +312,7 @@ function ClientesPage() {
     queryKey: ["clientes-lista", effectiveTenant],
     enabled: !!effectiveTenant,
     queryFn: async () => {
-      const colunas = "id, name, document, document_type, is_active";
+      const colunas = "id, name, document, document_type, is_active, observacoes";
       const comTelefone = await supabase
         .from("clients")
         .select(`${colunas}, phone`)
@@ -323,6 +344,7 @@ function ClientesPage() {
   const totalColunas = (temTelefone ? 5 : 4) + 1;
 
   const [clienteAberto, setClienteAberto] = useState<string | null>(null);
+  const [obsHover, setObsHover] = useObservacaoHover();
 
   const [busca, setBusca] = useState("");
 
@@ -468,15 +490,18 @@ function ClientesPage() {
                   : `${clientes.length} cliente(s)`}
               </CardDescription>
             </div>
-            <div className="relative w-full sm:w-[288px]">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                placeholder="Buscar por nome, CNPJ/CPF ou telefone…"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                disabled={!effectiveTenant}
-              />
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <SwitchObservacaoHover hover={obsHover} onChange={setObsHover} />
+              <div className="relative w-full sm:w-[288px]">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Buscar por nome, CNPJ/CPF ou telefone…"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  disabled={!effectiveTenant}
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -537,6 +562,7 @@ function ClientesPage() {
                       temTelefone={temTelefone}
                       totalColunas={totalColunas}
                       aberta={clienteAberto === c.id}
+                      obsHover={obsHover}
                       onToggle={() =>
                         setClienteAberto((a) => (a === c.id ? null : c.id))
                       }
@@ -588,12 +614,14 @@ function ClienteDialog({
   const [nome, setNome] = useState("");
   const [documento, setDocumento] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [observacoes, setObservacoes] = useState("");
 
   useMemo(() => {
     if (open) {
       setNome(editing?.name ?? "");
       setDocumento(editing?.document?.replace(/\D/g, "") ?? "");
       setTelefone(formatarTelefone(editing?.phone ?? null) ?? "");
+      setObservacoes(editing?.observacoes ?? "");
     }
   }, [open, editing]);
 
@@ -611,6 +639,7 @@ function ClienteDialog({
         name: nomeTrim,
         document: doc.document,
         document_type: doc.document_type,
+        observacoes: observacoes.trim() || null,
         ...(temTelefone ? { phone: tel.phone } : {}),
       };
 
@@ -686,6 +715,20 @@ function ClienteDialog({
               />
             </div>
           )}
+          <div className="space-y-2">
+            <Label htmlFor="cliente-obs">Observações</Label>
+            <Textarea
+              id="cliente-obs"
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={4}
+              placeholder="Ex.: falar com a Marta. Não atende sábado."
+            />
+            <p className="text-xs text-muted-foreground">
+              Aparece na lista como uma nota ao lado do nome. Quem enxerga o cliente
+              enxerga a nota — não guarde senha aqui.
+            </p>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
