@@ -64,14 +64,20 @@ export function NotaObservacao({
 }: {
   texto: string | null;
   hover: boolean;
-  onAbrir: () => void;
+  /** Ausente = selo só de leitura, para telas que não editam a nota. */
+  onAbrir?: () => void;
   /** Cabeçalho do cartão e rótulo do leitor de tela. */
   rotulo?: string;
 }) {
   const nota = texto?.trim();
   if (!nota) return null;
 
-  const selo = (
+  const classe =
+    "inline-flex h-4 w-4 shrink-0 items-center justify-center text-warning";
+
+  // Sem editor não vira botão: um botão que não faz nada ao clique promete uma
+  // ação que não existe, e o leitor de tela anuncia a promessa.
+  const selo = onAbrir ? (
     <button
       type="button"
       onClick={(e) => {
@@ -82,10 +88,14 @@ export function NotaObservacao({
       }}
       title={hover ? undefined : "Ver observações"}
       aria-label={rotulo}
-      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-warning hover:text-warning/70"
+      className={classe + " hover:text-warning/70"}
     >
       <StickyNote className="h-3.5 w-3.5" />
     </button>
+  ) : (
+    <span title={hover ? undefined : nota} aria-label={rotulo} className={classe}>
+      <StickyNote className="h-3.5 w-3.5" />
+    </span>
   );
 
   if (!hover) return selo;

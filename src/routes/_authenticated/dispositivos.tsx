@@ -2899,6 +2899,7 @@ function AdicionarDispositivoDialog({
   const [open, setOpen] = useState(false);
   const [rustdeskId, setRustdeskId] = useState("");
   const [alias, setAlias] = useState("");
+  const [observacoes, setObservacoes] = useState("");
   const [tenantSelecionado, setTenantSelecionado] = useState<string>("");
   const [clienteId, setClienteId] = useState<string>("");
   const [clienteNome, setClienteNome] = useState<string>("");
@@ -2906,6 +2907,7 @@ function AdicionarDispositivoDialog({
   const [criandoCliente, setCriandoCliente] = useState(false);
   const [novoClienteNome, setNovoClienteNome] = useState("");
   const [novoClienteDoc, setNovoClienteDoc] = useState("");
+  const [novoClienteObs, setNovoClienteObs] = useState("");
   const [salvandoCliente, setSalvandoCliente] = useState(false);
   const [marcadoresSel, setMarcadoresSel] = useState<Set<string>>(new Set());
   const [marcadoresOpen, setMarcadoresOpen] = useState(false);
@@ -2999,6 +3001,7 @@ function AdicionarDispositivoDialog({
   const resetForm = () => {
     setRustdeskId("");
     setAlias("");
+    setObservacoes("");
     setTenantSelecionado("");
     setClienteId("");
     setClienteNome("");
@@ -3006,6 +3009,7 @@ function AdicionarDispositivoDialog({
     setCriandoCliente(false);
     setNovoClienteNome("");
     setNovoClienteDoc("");
+    setNovoClienteObs("");
     setMarcadoresSel(new Set());
     setMarcadoresOpen(false);
     setMarcadorBusca("");
@@ -3038,7 +3042,13 @@ function AdicionarDispositivoDialog({
     try {
       const { data, error } = await supabase
         .from("clients")
-        .insert({ tenant_id: effectiveTenant, name: nome, document, document_type })
+        .insert({
+          tenant_id: effectiveTenant,
+          name: nome,
+          document,
+          document_type,
+          observacoes: novoClienteObs.trim() || null,
+        })
         .select("id, name, document, document_type")
         .single();
       if (error) {
@@ -3057,6 +3067,7 @@ function AdicionarDispositivoDialog({
           setCriandoCliente(false);
           setNovoClienteNome("");
           setNovoClienteDoc("");
+          setNovoClienteObs("");
           setClienteOpen(false);
           toast.success("Cliente já existia — selecionado");
           return;
@@ -3069,6 +3080,7 @@ function AdicionarDispositivoDialog({
       setCriandoCliente(false);
       setNovoClienteNome("");
       setNovoClienteDoc("");
+      setNovoClienteObs("");
       setClienteOpen(false);
       toast.success("Cliente criado");
     } catch (err) {
@@ -3110,15 +3122,29 @@ function AdicionarDispositivoDialog({
         throw new Error(raw || "Falha ao adotar dispositivo");
       }
       const adopted = data ?? {};
-      let grupoFalhou = false;
+      let cadastroFalhou = false;
       let marcadoresFalhou = false;
       if (adopted.was_inserted && adopted.device_id) {
+        // Cliente e nota no MESMO update: o adopt-device nao conhece nenhum
+        // dos dois (e o endpoint que o agente tambem usa), e duas idas ao
+        // banco aqui so dobrariam a chance de meia-gravacao. O update agora
+        // acontece tambem quando SO ha nota — antes ele dependia de cliente.
+        const patch: {
+          client_id?: string;
+          device_group?: string;
+          observacoes?: string;
+        } = {};
         if (clienteId && clienteNome) {
+          patch.client_id = clienteId;
+          patch.device_group = clienteNome;
+        }
+        if (observacoes.trim()) patch.observacoes = observacoes.trim();
+        if (Object.keys(patch).length > 0) {
           const { error: gErr } = await supabase
             .from("address_book")
-            .update({ client_id: clienteId, device_group: clienteNome })
+            .update(patch)
             .eq("id", adopted.device_id);
-          if (gErr) grupoFalhou = true;
+          if (gErr) cadastroFalhou = true;
         }
         if (marcadoresSel.size > 0 && effectiveTenant) {
           const rows = [...marcadoresSel].map((marker_id) => ({
@@ -3132,15 +3158,15 @@ function AdicionarDispositivoDialog({
           if (mErr) marcadoresFalhou = true;
         }
       }
-      return { ...adopted, grupoFalhou, marcadoresFalhou };
+      return { ...adopted, cadastroFalhou, marcadoresFalhou };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["address_book"] });
       queryClient.invalidateQueries({ queryKey: ["clients_lista", effectiveTenant] });
       queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
-      if (data.grupoFalhou) {
+      if (data.cadastroFalhou) {
         toast.warning(
-          "Dispositivo adotado, mas não consegui vincular o cliente — ajuste pelo Editar.",
+          "Dispositivo adotado, mas não consegui gravar cliente/observações — ajuste pelo Editar.",
         );
       }
       if (data.marcadoresFalhou) {
@@ -3213,6 +3239,16 @@ function AdicionarDispositivoDialog({
             />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="dev-obs">Observações</Label>
+            <Textarea
+              id="dev-obs"
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={3}
+              placeholder="Ex.: caixa do fundo, do lado do servidor."
+            />
+          </div>
+          <div className="space-y-2">
             <Label>Cliente</Label>
             <Popover open={clienteOpen} onOpenChange={(v) => {
               setClienteOpen(v);
@@ -3255,6 +3291,16 @@ function AdicionarDispositivoDialog({
                         placeholder="Somente dígitos"
                       />
                     </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="novo-cliente-obs" className="text-xs">Observações</Label>
+                      <Textarea
+                        id="novo-cliente-obs"
+                        value={novoClienteObs}
+                        onChange={(e) => setNovoClienteObs(e.target.value)}
+                        rows={2}
+                        placeholder="Ex.: falar com a Marta."
+                      />
+                    </div>
                     <div className="flex justify-end gap-2">
                       <Button
                         type="button"
@@ -3264,6 +3310,7 @@ function AdicionarDispositivoDialog({
                           setCriandoCliente(false);
                           setNovoClienteNome("");
                           setNovoClienteDoc("");
+                          setNovoClienteObs("");
                         }}
                       >
                         Cancelar
@@ -3542,6 +3589,7 @@ function EditarDispositivoDialog({
   const [criandoCliente, setCriandoCliente] = useState(false);
   const [novoClienteNome, setNovoClienteNome] = useState("");
   const [novoClienteDoc, setNovoClienteDoc] = useState("");
+  const [novoClienteObs, setNovoClienteObs] = useState("");
   const [salvandoCliente, setSalvandoCliente] = useState(false);
 
   const tenantScope = device.tenant_id;
@@ -3594,7 +3642,13 @@ function EditarDispositivoDialog({
     try {
       const { data, error } = await supabase
         .from("clients")
-        .insert({ tenant_id: tenantScope, name: nome, document, document_type })
+        .insert({
+          tenant_id: tenantScope,
+          name: nome,
+          document,
+          document_type,
+          observacoes: novoClienteObs.trim() || null,
+        })
         .select("id, name, document, document_type")
         .single();
       if (error) {
@@ -3612,6 +3666,7 @@ function EditarDispositivoDialog({
           setCriandoCliente(false);
           setNovoClienteNome("");
           setNovoClienteDoc("");
+          setNovoClienteObs("");
           setClienteOpen(false);
           toast.success("Cliente já existia — selecionado");
           return;
@@ -3624,6 +3679,7 @@ function EditarDispositivoDialog({
       setCriandoCliente(false);
       setNovoClienteNome("");
       setNovoClienteDoc("");
+      setNovoClienteObs("");
       setClienteOpen(false);
       toast.success("Cliente criado");
     } catch (err) {
@@ -3725,6 +3781,16 @@ function EditarDispositivoDialog({
                         placeholder="Somente dígitos"
                       />
                     </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-novo-cliente-obs" className="text-xs">Observações</Label>
+                      <Textarea
+                        id="edit-novo-cliente-obs"
+                        value={novoClienteObs}
+                        onChange={(e) => setNovoClienteObs(e.target.value)}
+                        rows={2}
+                        placeholder="Ex.: falar com a Marta."
+                      />
+                    </div>
                     <div className="flex justify-end gap-2">
                       <Button
                         type="button"
@@ -3734,6 +3800,7 @@ function EditarDispositivoDialog({
                           setCriandoCliente(false);
                           setNovoClienteNome("");
                           setNovoClienteDoc("");
+                          setNovoClienteObs("");
                         }}
                       >
                         Cancelar

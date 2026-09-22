@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NotaObservacao, useObservacaoHover } from "@/components/nota-observacao";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -120,6 +122,9 @@ type DeviceRow = {
   is_active: boolean;
   agent_version: string | null;
   ignorar_presenca: boolean;
+  // Nota da máquina. Aqui é só LEITURA: quem edita é a tela de Dispositivos —
+  // esta janelinha existe para atender rápido, não para manter cadastro.
+  observacoes: string | null;
   // A resposta do banco, pronta. Ver a migration 20260918120000: esta tela não
   // recalcula presença — antes ela tinha a própria cópia da regra.
   status_presenca: StatusDispositivo;
@@ -251,6 +256,7 @@ function ConectarPage() {
   const [criando, setCriando] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [novoDoc, setNovoDoc] = useState("");
+  const [novoObs, setNovoObs] = useState("");
   const [connectData, setConnectData] = useState<{
     rustdesk_id: string;
     // null = dispositivo privado e quem conecta não é admin: entra por aceite manual.
@@ -427,7 +433,7 @@ function ConectarPage() {
       // "nao existe" (secao 11) e precisa render a mensagem certa.
       const { data, error } = await supabase
         .from("v_dispositivo_status")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, status_presenca")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, observacoes, status_presenca")
         .in("client_id", idsDoGrupo)
         .order("alias");
       if (error) throw error;
@@ -448,7 +454,7 @@ function ConectarPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("v_dispositivo_status")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, status_presenca, cliente_nome")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, observacoes, status_presenca, cliente_nome")
         .eq("is_active", true)
         .order("alias");
       if (error) throw error;
@@ -552,7 +558,13 @@ function ConectarPage() {
 
       const { data, error } = await supabase
         .from("clients")
-        .insert({ tenant_id: tenantId, name: nome, document, document_type })
+        .insert({
+          tenant_id: tenantId,
+          name: nome,
+          document,
+          document_type,
+          observacoes: novoObs.trim() || null,
+        })
         .select("id, name, document, document_type, tenant_id")
         .single();
       if (error) {
@@ -575,6 +587,7 @@ function ConectarPage() {
       setCriando(false);
       setNovoNome("");
       setNovoDoc("");
+      setNovoObs("");
       await queryClient.invalidateQueries({ queryKey: ["conectar_clientes"] });
       vincular.mutate(cliente);
     },
@@ -874,6 +887,16 @@ function ConectarPage() {
                   ? "Pode ficar em branco. Sem CNPJ o cadastro funciona igual — só não agrupa filiais."
                   : "Com CNPJ, matriz e filiais do mesmo grupo passam a aparecer numa lista só."}
               </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="novo-cliente-obs">Observações (opcional)</Label>
+              <Textarea
+                id="novo-cliente-obs"
+                value={novoObs}
+                onChange={(e) => setNovoObs(e.target.value)}
+                rows={2}
+                placeholder="Ex.: falar com a Marta. Não atende sábado."
+              />
             </div>
             <div className="flex gap-2">
               <Button
@@ -1332,6 +1355,7 @@ function ResolverMaquina({
   const [enviado, setEnviado] = useState(false);
   const [novoId, setNovoId] = useState("");
   const [novoApelido, setNovoApelido] = useState("");
+  const [novaObsMaquina, setNovaObsMaquina] = useState("");
 
   const digitos = termo.replace(/\D/g, "");
   // O ID do AcessoFast e so digito; o resto e busca por nome da maquina.
@@ -1411,13 +1435,24 @@ function ResolverMaquina({
         return;
       }
       if (data?.device_id) {
+        // A nota entra no mesmo UPDATE do vinculo: o adopt-device nao a
+        // conhece, e uma segunda ida ao banco so criaria meia-gravacao.
+        const patch: {
+          client_id: string;
+          device_group: string;
+          observacoes?: string;
+        } = {
+          client_id: cliente.id,
+          device_group: cliente.name,
+        };
+        if (novaObsMaquina.trim()) patch.observacoes = novaObsMaquina.trim();
         const { error: gErr } = await supabase
           .from("address_book")
-          .update({ client_id: cliente.id, device_group: cliente.name })
+          .update(patch)
           .eq("id", data.device_id);
         if (gErr) {
           toast.warning(
-            "Computador adotado, mas não consegui vincular ao cliente — ajuste na tela de Dispositivos.",
+            "Computador adotado, mas não consegui gravar o cliente/observações — ajuste na tela de Dispositivos.",
           );
         } else {
           toast.success(
@@ -1429,6 +1464,7 @@ function ResolverMaquina({
       setTermo("");
       setNovoId("");
       setNovoApelido("");
+      setNovaObsMaquina("");
       await onMudou();
     } finally {
       setOcupado(false);
@@ -1595,6 +1631,12 @@ function ResolverMaquina({
             className="flex-1"
           />
         </div>
+        <Textarea
+          value={novaObsMaquina}
+          onChange={(e) => setNovaObsMaquina(e.target.value)}
+          rows={2}
+          placeholder="Observações (opcional) — ex.: caixa do fundo."
+        />
         <Button
           type="button"
           size="sm"
@@ -1665,6 +1707,7 @@ function LinhaDispositivo({
   onConectar: () => void;
   subtitulo?: string;
 }) {
+  const [obsHover] = useObservacaoHover();
   // Mesma regra da tela de Dispositivos: numa máquina com o `presence`
   // descartado o `last_online` é resto da última sessão, e chamar isso de
   // "Offline" manda o técnico procurar defeito onde não há.
@@ -1679,7 +1722,14 @@ function LinhaDispositivo({
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">{device.alias || device.rustdesk_id}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm">
+          {device.alias || device.rustdesk_id}
+          <NotaObservacao
+            texto={device.observacoes}
+            hover={obsHover}
+            rotulo="Observações da máquina"
+          />
+        </p>
         <p className="truncate text-xs text-muted-foreground" title={semStatus ? tituloSemStatus(device) : undefined}>
           {ativo
             ? "Online"
