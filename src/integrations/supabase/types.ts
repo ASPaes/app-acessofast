@@ -200,6 +200,7 @@ export type Database = {
           ignorar_presenca: boolean
           is_active: boolean
           last_online: string | null
+          observacoes: string | null
           os: string | null
           privado: boolean
           privado_em: string | null
@@ -227,6 +228,7 @@ export type Database = {
           ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
+          observacoes?: string | null
           os?: string | null
           privado?: boolean
           privado_em?: string | null
@@ -254,6 +256,7 @@ export type Database = {
           ignorar_presenca?: boolean
           is_active?: boolean
           last_online?: string | null
+          observacoes?: string | null
           os?: string | null
           privado?: boolean
           privado_em?: string | null
@@ -2143,6 +2146,7 @@ export type Database = {
           ignorar_presenca: boolean | null
           is_active: boolean | null
           last_online: string | null
+          observacoes: string | null
           os: string | null
           privado: boolean | null
           rotacao_modo: string | null

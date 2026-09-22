@@ -41,11 +41,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, Lock, LockOpen } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, Lock, LockOpen, StickyNote } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Command,
   CommandEmpty,
@@ -138,6 +140,8 @@ type AddressBookRow = {
   ignorar_presenca: boolean;
   // Dispositivo privado: técnico conecta sem senha, só por aceite manual.
   privado: boolean;
+  // Nota livre sobre a máquina, escrita e lida no painel (ObservacoesDialog).
+  observacoes: string | null;
   client_id: string | null;
   // Cliente e empresa vêm resolvidos pela view, não por embedding.
   cliente_nome: string | null;
@@ -246,6 +250,60 @@ function tempoRelativo(iso: string | null | undefined): string {
   if (h < 24) return `há ${h} h`;
   const d = Math.floor(h / 24);
   return `há ${d} d`;
+}
+
+// Preferência de leitura da observação: nota flutuante ao passar o mouse
+// (padrão) ou só quando a pessoa abre "Observações" no menu de ações. Mora no
+// navegador, e não no perfil, porque é gosto de quem opera — cada técnico
+// escolhe o seu sem que isso vire regra da empresa.
+const OBS_HOVER_LS_KEY = "acessofast:observacoes-hover";
+
+// Selo da observação, ao lado do nome da máquina. Só aparece quando há nota:
+// máquina sem observação não ganha enfeite nenhum. Com `hover` ligado a nota
+// sai flutuando ao passar o mouse; desligado, o selo continua avisando que a
+// nota existe — o texto abre pelo menu de ações. O clique abre o editor nos
+// dois modos: quem já está com o mouse em cima não devia ter de caçar o menu.
+function NotaDoDispositivo({
+  texto,
+  hover,
+  onAbrir,
+}: {
+  texto: string | null;
+  hover: boolean;
+  onAbrir: () => void;
+}) {
+  const nota = texto?.trim();
+  if (!nota) return null;
+
+  const selo = (
+    <button
+      type="button"
+      onClick={onAbrir}
+      title={hover ? undefined : "Ver observações"}
+      aria-label="Observações desta máquina"
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-warning hover:text-warning/70"
+    >
+      <StickyNote className="h-3.5 w-3.5" />
+    </button>
+  );
+
+  if (!hover) return selo;
+
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>{selo}</HoverCardTrigger>
+      <HoverCardContent align="start" className="w-72 p-3">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+          <StickyNote className="h-3 w-3" />
+          Observações
+        </div>
+        {/* whitespace-pre-wrap para a nota sair com as quebras de linha que a
+            pessoa digitou; break-words para um caminho de rede colado ali não
+            esticar o cartão. */}
+        <p className="mt-1.5 whitespace-pre-wrap break-words text-xs">{nota}</p>
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
 // Versao do agente (coluna Agente). O rotulo gravado pelo agente e
@@ -389,6 +447,23 @@ function DispositivosPage() {
   const [definirSenhaDe, setDefinirSenhaDe] = useState<AddressBookRow | null>(null);
   // Histórico de quem marcou/desmarcou o dispositivo como privado (ver HistoricoPrivadoDialog).
   const [historicoPrivadoDe, setHistoricoPrivadoDe] = useState<AddressBookRow | null>(null);
+  const [observacoesDe, setObservacoesDe] = useState<AddressBookRow | null>(null);
+  const [obsNoHover, setObsNoHover] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return window.localStorage.getItem(OBS_HOVER_LS_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(OBS_HOVER_LS_KEY, obsNoHover ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [obsNoHover]);
   const [redefinindoId, setRedefinindoId] = useState<string | null>(null);
   const [senhaRedefinida, setSenhaRedefinida] = useState<{
     rustdesk_id: string;
@@ -666,8 +741,13 @@ function DispositivosPage() {
         // A VIEW, não a tabela: status_presenca já vem decidido, e com ele vão
         // embora a consulta de "quem está online", a de sessões ativas e a
         // regra copiada no JSX. Ver migration 20260918120000.
+        //
+        // `observacoes` só chega aqui porque a view passou a expô-la
+        // (migration 20260922130000): a view lista coluna por coluna, então
+        // coluna nova do address_book que o painel precise LER tem de entrar
+        // nela — a escrita continua indo direto na tabela.
         .from("v_dispositivo_status")
-        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, ignorar_presenca, privado, client_id, cliente_nome, cliente_documento, cliente_documento_tipo, cliente_telefone, empresa_nome, status_presenca")
+        .select("id, rustdesk_id, alias, device_group, os, last_online, agent_version, created_at, tenant_id, is_active, ignorar_presenca, privado, observacoes, client_id, cliente_nome, cliente_documento, cliente_documento_tipo, cliente_telefone, empresa_nome, status_presenca")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -1172,6 +1252,11 @@ function DispositivosPage() {
                 {d.privado && (
                   <Lock className="h-3 w-3 text-muted-foreground" aria-label="Dispositivo privado" />
                 )}
+                <NotaDoDispositivo
+                  texto={d.observacoes}
+                  hover={obsNoHover}
+                  onAbrir={() => setObservacoesDe(d)}
+                />
               </span>
               <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
               {(() => {
@@ -1299,6 +1384,10 @@ function DispositivosPage() {
                 <DropdownMenuItem onClick={() => setEditing(d)}>
                   <Pencil className="h-4 w-4 mr-2" />
                   Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setObservacoesDe(d)}>
+                  <StickyNote className="h-4 w-4 mr-2" />
+                  {d.observacoes?.trim() ? "Observações" : "Adicionar observação"}
                 </DropdownMenuItem>
                 {(podeInativar || podeDefinirSenha(d)) && <DropdownMenuSeparator />}
                 {podeDefinirSenha(d) && (
@@ -1538,6 +1627,20 @@ function DispositivosPage() {
               />
               <Label htmlFor="show-inativos" className="text-xs text-muted-foreground">
                 Mostrar inativos
+              </Label>
+            </div>
+            {/* Desligado, o selo da nota continua na linha — o que muda é só
+                por onde o texto aparece: menu de ações em vez de cartão
+                flutuante. A preferência é deste navegador. */}
+            <div className="flex items-center gap-2 px-2">
+              <Switch id="obs-hover" checked={obsNoHover} onCheckedChange={setObsNoHover} />
+              <Label
+                htmlFor="obs-hover"
+                className="text-xs text-muted-foreground flex items-center gap-1"
+                title="Ligado: a observação aparece flutuando ao passar o mouse sobre o selo. Desligado: só abre em Observações, no menu de ações."
+              >
+                <StickyNote className="h-3 w-3" />
+                Observação ao passar o mouse
               </Label>
             </div>
             {/* TEMPORARIO — some daqui quando o contador zerar. Ver o comentario
@@ -1787,6 +1890,11 @@ function DispositivosPage() {
                         {d.privado && (
                           <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Dispositivo privado" />
                         )}
+                        <NotaDoDispositivo
+                          texto={d.observacoes}
+                          hover={obsNoHover}
+                          onAbrir={() => setObservacoesDe(d)}
+                        />
                       </span>
                       <span className="font-mono text-xs text-muted-foreground">{d.rustdesk_id}</span>
                       <span className="text-[11px] text-muted-foreground mt-0.5">
@@ -1888,6 +1996,10 @@ function DispositivosPage() {
                           <DropdownMenuItem onClick={() => setEditing(d)}>
                             <Pencil className="h-4 w-4 mr-2" />
                             Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setObservacoesDe(d)}>
+                            <StickyNote className="h-4 w-4 mr-2" />
+                            {d.observacoes?.trim() ? "Observações" : "Adicionar observação"}
                           </DropdownMenuItem>
                           {(podeInativar || podeDefinirSenha(d)) && <DropdownMenuSeparator />}
                           {podeDefinirSenha(d) && (
@@ -2432,6 +2544,7 @@ function DispositivosPage() {
 
       <DefinirSenhaDialog device={definirSenhaDe} onClose={() => setDefinirSenhaDe(null)} />
       <HistoricoPrivadoDialog device={historicoPrivadoDe} onClose={() => setHistoricoPrivadoDe(null)} />
+      <ObservacoesDialog device={observacoesDe} onClose={() => setObservacoesDe(null)} />
     </div>
   );
 }
@@ -3421,6 +3534,76 @@ function AdicionarDispositivoDialog({
     </Dialog>
   );
 }
+// Editor da nota. Fica montado uma vez e recebe máquinas diferentes pelo
+// `device` — daí o efeito que recarrega o texto: sem ele a caixa abriria com a
+// nota da máquina anterior.
+function ObservacoesDialog({
+  device,
+  onClose,
+}: {
+  device: AddressBookRow | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [texto, setTexto] = useState("");
+
+  useEffect(() => {
+    setTexto(device?.observacoes ?? "");
+  }, [device]);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!device) return;
+      const { error } = await supabase
+        .from("address_book")
+        .update({ observacoes: texto.trim() || null })
+        .eq("id", device.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Observações salvas");
+      queryClient.invalidateQueries({ queryKey: ["address_book"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  return (
+    <Dialog
+      open={device !== null}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Observações</DialogTitle>
+          <DialogDescription>
+            Nota sobre {device?.alias ?? device?.rustdesk_id ?? "esta máquina"}. Quem enxerga a
+            máquina na lista enxerga a nota — não guarde senha aqui.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={6}
+          placeholder="Ex.: caixa do fundo, do lado do servidor. Só mexer depois das 18h."
+        />
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? "Salvando..." : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EditarDispositivoDialog({
   device,
   onClose,
