@@ -55,6 +55,12 @@ verify_jwt = false
 [functions.ad-serve]
 verify_jwt = true
 
+# Gestao de campanhas de anuncio pelo painel (super_admin). Valida o papel por
+# getUser()+profiles antes de qualquer escrita com service_role; o bucket
+# ad-creatives (privado, sem policy) so e alcancado por aqui.
+[functions.ad-admin]
+verify_jwt = true
+
 # Promocao/rebaixamento de papel pelo painel. Quem chama e o admin ou super_admin
 # logado; a funcao valida o perfil dele por getUser() antes de escrever.
 [functions.set-user-role]
