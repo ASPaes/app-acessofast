@@ -284,13 +284,28 @@ Deno.serve(async (req) => {
     // Fail-open: se a busca falhar, a presenca NAO pode quebrar por causa de um
     // aviso. Perder um aviso custa um lembrete; perder presenca custa o status
     // da maquina.
-    let aviso: { titulo: string; mensagem: string } | null = null;
+    let aviso: { titulo: string; mensagem: string; image_url?: string } | null = null;
     try {
       const { data: avisoRows } = await db.rpc("puxar_aviso_agente", {
         p_rustdesk_id: rustdesk_id,
       });
       const a = Array.isArray(avisoRows) ? avisoRows[0] : avisoRows;
-      if (a?.titulo && a?.mensagem) aviso = { titulo: a.titulo, mensagem: a.mensagem };
+      if (a?.titulo && a?.mensagem) {
+        aviso = { titulo: a.titulo, mensagem: a.mensagem };
+        // Anuncio com criativo (tipo=anuncio): o banco trafega so o caminho no
+        // bucket privado ad-creatives; a URL assinada de vida curta nasce AQUI,
+        // igual a ad-serve faz no painel. TTL curto: o agente puxa e o auxiliar
+        // baixa a imagem na hora. Falha ao assinar NAO tira o aviso — sai so
+        // texto, exatamente como era antes desta linha existir.
+        if (a.image_path) {
+          try {
+            const { data: signed } = await db.storage
+              .from("ad-creatives")
+              .createSignedUrl(a.image_path as string, 300);
+            if (signed?.signedUrl) aviso.image_url = signed.signedUrl;
+          } catch { /* aviso segue sem imagem */ }
+        }
+      }
     } catch { /* sem aviso desta vez */ }
 
     // Passo 1: modo de rotacao em cascata device -> tenant -> global. Vai SEMPRE que
