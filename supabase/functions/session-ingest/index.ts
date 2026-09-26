@@ -415,17 +415,19 @@ Deno.serve(async (req) => {
   //    mesma convencao do ramo blocked) em vez de null — antes o null desarmava o
   //    corte e a sessao virava fantasma. hard_cap_at null (credito/plano) = sem corte.
   async function currentHardCap(): Promise<string | null> {
-    const nowIso2 = new Date().toISOString();
-    const { data } = await db
-      .from("atendimentos")
-      .select("hard_cap_at")
-      .eq("rustdesk_id", rustdesk_id)
-      .is("ended_at", null)
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!data || !data.hard_cap_at) return null;           // sem atendimento aberto, ou credito/plano
-    return data.hard_cap_at <= nowIso2 ? nowIso2 : data.hard_cap_at;
+    // Calculado no banco (external_session_hard_cap): junta o cap do atendimento
+    // (2h do free) com a CONCORRENCIA por ranking. No acesso direto a sessao ja
+    // esta aberta quando o agente reporta, entao o teto so se aplica CORTANDO — e
+    // o corte precisa ser reavaliado a cada heartbeat, senao a sessao .exe "extra"
+    // (a mais nova quando ha outra mais antiga) sobrevive porque o cap do
+    // atendimento reusado (futuro) sobrescrevia o corte. Fail-open: falha no
+    // calculo NAO derruba a sessao.
+    const { data, error } = await db.rpc("external_session_hard_cap", { p_rustdesk_id: rustdesk_id });
+    if (error) {
+      console.warn("external_session_hard_cap_falhou", rustdesk_id, error.message);
+      return null;
+    }
+    return typeof data === "string" ? data : null;
   }
 
   // ACESSO DIRETO A MAQUINA DESATUALIZADA -> deixa um aviso para o tecnico.
