@@ -108,22 +108,34 @@ export function AnuncioSlot({
         {anuncio.kind === "third_party" ? "Publicidade" : "Do AcessoFast"}
       </p>
 
-      {anuncio.image_url && (
-        <img
-          src={anuncio.image_url}
-          alt=""
-          className="mb-2 max-h-32 w-full rounded object-cover"
-          loading="lazy"
-        />
+      {anuncio.image_url ? (
+        // A arte ja traz headline, corpo e botao desenhados: mostramos a imagem
+        // INTEIRA (object-contain, nunca corta) e clicavel, sem repetir o texto
+        // embaixo. object-cover antes recortava a peca a uma faixa; max-h segura
+        // a altura numa tela de dialogo sem distorcer.
+        <button
+          type="button"
+          onClick={clicar}
+          className="block w-full overflow-hidden rounded"
+          aria-label={anuncio.cta_label}
+        >
+          <img
+            src={anuncio.image_url}
+            alt={anuncio.headline}
+            className="max-h-80 w-full rounded object-contain"
+            loading="lazy"
+          />
+        </button>
+      ) : (
+        <>
+          <p className="text-sm font-medium">{anuncio.headline}</p>
+          {anuncio.body && <p className="mt-1 text-xs text-muted-foreground">{anuncio.body}</p>}
+          <Button type="button" variant="outline" size="sm" className="mt-2.5" onClick={clicar}>
+            {anuncio.cta_label}
+            {!interno && <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />}
+          </Button>
+        </>
       )}
-
-      <p className="text-sm font-medium">{anuncio.headline}</p>
-      {anuncio.body && <p className="mt-1 text-xs text-muted-foreground">{anuncio.body}</p>}
-
-      <Button type="button" variant="outline" size="sm" className="mt-2.5" onClick={clicar}>
-        {anuncio.cta_label}
-        {!interno && <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />}
-      </Button>
     </div>
   );
 }
