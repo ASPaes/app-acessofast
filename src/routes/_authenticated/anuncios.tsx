@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/stat-card";
 import type { KpiInfo } from "@/components/kpi-info";
 import { Megaphone, MousePointerClick, Eye, Users } from "lucide-react";
+import { GestaoCampanhas } from "@/components/anuncios/gestao-campanhas";
 
 // ---------------------------------------------------------------------------
 // Anuncios — a medicao do inventario do plano gratuito.
@@ -248,6 +249,8 @@ function AnunciosPage() {
           ))}
         </div>
       </div>
+
+      <GestaoCampanhas />
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
