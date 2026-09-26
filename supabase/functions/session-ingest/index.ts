@@ -469,6 +469,22 @@ Deno.serve(async (req) => {
       // quando a sessao ja existe — este e o caminho comum, painel ou acesso direto.
       await registrarControlador(active.id);
       const hard_cap_at = await currentHardCap();
+
+      // ANUNCIO NO CORTE POR 2H. Alem do esgotado (no_credits), o anuncio da
+      // superficie do agente dispara TAMBEM quando o cap de 2h do free venceu — o
+      // momento da mensagem "precisa de mais que 2h? com credito, sem limite". So
+      // no cap por TEMPO (atingiu_cap_2h); corte por concorrencia NAO mostra
+      // (comprar credito nao resolve simultaneidade). Vai para a maquina DO
+      // TECNICO (controller); registrar_anuncio_esgotado ja deduplica. Fail-open.
+      if (controller_rustdesk_id) {
+        try {
+          const { data: capHit } = await db.rpc("atingiu_cap_2h", { p_rustdesk_id: rustdesk_id });
+          if (capHit === true) {
+            await db.rpc("registrar_anuncio_esgotado", { p_destino_rustdesk_id: controller_rustdesk_id });
+          }
+        } catch { /* anuncio nunca derruba a sessao */ }
+      }
+
       return json({ ok: true, session_id: active.id, action: "heartbeat", hard_cap_at });
     }
 
