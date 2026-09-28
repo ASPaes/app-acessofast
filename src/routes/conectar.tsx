@@ -43,6 +43,7 @@ import {
   ListFilter,
   ArrowLeft,
   Send,
+  Clock,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -52,6 +53,8 @@ import {
   normalizarTexto,
 } from "@/lib/clientes";
 import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
+import { useHorarioAcesso } from "@/hooks/use-horario-acesso";
+import { PAPEIS_ISENTOS_DO_HORARIO, textoForaDoHorario } from "@/lib/horario-acesso";
 
 // ---------------------------------------------------------------------------
 // Modo embed do painel, aberto pelo botao "Conectar" do chat do DoctorSaaS:
@@ -287,9 +290,22 @@ function ConectarPage() {
         logado: true,
         tenantId: perfil?.tenant_id ?? null,
         superAdmin: perfil?.role === "super_admin",
+        role: perfil?.role ?? null,
       };
     },
   });
+
+  // Horario de acesso: a mesma trava da tela de Dispositivos. Esta janela so mostra
+  // maquinas da empresa de quem abriu, entao uma situacao so vale para a lista toda.
+  // Quem recusa de verdade e a connect-device; aqui so se poupa o clique perdido.
+  const { data: horarios, refetch: releHorarios } = useHorarioAcesso(sessao.data?.logado === true);
+  const papel = sessao.data?.role ?? null;
+  const tenantDaSessao = sessao.data?.tenantId ?? null;
+  const situacaoDaEmpresa = tenantDaSessao ? horarios?.get(tenantDaSessao) : undefined;
+  const textoBloqueio =
+    papel && !PAPEIS_ISENTOS_DO_HORARIO.includes(papel) && situacaoDaEmpresa?.fora
+      ? textoForaDoHorario(situacaoDaEmpresa)
+      : null;
 
   // --- vinculo conversa -> cliente ----------------------------------------
   // Quem grava o vinculo e o proprio DoctorSaaS, chamando a nossa API com a
@@ -621,6 +637,9 @@ function ConectarPage() {
           );
         } else if (raw.includes("conta_inativa")) {
           toast.error("Empresa inativa. Fale com o suporte para reativar a conta.");
+        } else if (raw.includes("fora_do_horario")) {
+          const { data: atual } = await releHorarios();
+          toast.error(textoForaDoHorario(tenantDaSessao ? atual?.get(tenantDaSessao) : null));
         } else if (raw.includes("free_requires_individual")) {
           toast.error(
             "O acesso gratuito só vale para uma conexão por vez. Use um crédito para conexões simultâneas.",
@@ -775,6 +794,7 @@ function ConectarPage() {
         <p className="text-xs text-muted-foreground">
           Só para este atendimento — nada fica gravado nesta conversa.
         </p>
+        {textoBloqueio && <AvisoHorario texto={textoBloqueio} />}
         <Input
           value={buscaTodas}
           onChange={(e) => setBuscaTodas(e.target.value)}
@@ -798,6 +818,7 @@ function ConectarPage() {
                 desabilitado={connectingId !== null}
                 onConectar={() => void doConnect(d.id)}
                 subtitulo={d.cliente_nome ?? "Sem cliente"}
+                bloqueio={textoBloqueio}
               />
             ))}
             {encontradas.length > TETO && (
@@ -1071,6 +1092,7 @@ function ConectarPage() {
         </Button>
       }
     >
+      {textoBloqueio && <AvisoHorario texto={textoBloqueio} />}
       {/* Selecao valida so para este atendimento: fica visivel o tempo todo,
           senao o tecnico nao sabe que a proxima abertura vai perguntar de novo. */}
       {temporario && (
@@ -1127,6 +1149,7 @@ function ConectarPage() {
                     conectando={connectingId === d.id}
                     desabilitado={connectingId !== null}
                     onConectar={() => void doConnect(d.id)}
+                    bloqueio={textoBloqueio}
                   />
                 ))}
               </div>
@@ -1699,6 +1722,7 @@ function LinhaDispositivo({
   desabilitado,
   onConectar,
   subtitulo,
+  bloqueio,
 }: {
   device: DeviceRow;
   ativo: boolean;
@@ -1706,6 +1730,8 @@ function LinhaDispositivo({
   desabilitado: boolean;
   onConectar: () => void;
   subtitulo?: string;
+  /** Fora do horário de acesso: o texto que explica, e o botão trava. */
+  bloqueio?: string | null;
 }) {
   const [obsHover] = useObservacaoHover();
   // Mesma regra da tela de Dispositivos: numa máquina com o `presence`
@@ -1742,15 +1768,29 @@ function LinhaDispositivo({
           {subtitulo ? ` · ${subtitulo}` : ""}
         </p>
       </div>
-      <Button type="button" size="sm" disabled={desabilitado} onClick={onConectar}>
-        {conectando ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Monitor className="h-4 w-4" aria-hidden />
-        )}
-        <span className="ml-1.5">Conectar</span>
-      </Button>
+      {/* O title fica no span: botão desabilitado não recebe o mouse. */}
+      <span title={bloqueio ?? undefined}>
+        <Button type="button" size="sm" disabled={desabilitado || !!bloqueio} onClick={onConectar}>
+          {conectando ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : bloqueio ? (
+            <Clock className="h-4 w-4" aria-hidden />
+          ) : (
+            <Monitor className="h-4 w-4" aria-hidden />
+          )}
+          <span className="ml-1.5">{bloqueio ? "Fora do horário" : "Conectar"}</span>
+        </Button>
+      </span>
     </div>
+  );
+}
+
+function AvisoHorario({ texto }: { texto: string }) {
+  return (
+    <p className="flex items-center gap-1.5 rounded-md border border-warning/30 bg-warning/10 p-2.5 text-sm text-warning">
+      <Clock className="h-4 w-4 shrink-0" aria-hidden />
+      {texto}
+    </p>
   );
 }
 

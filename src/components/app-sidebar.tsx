@@ -12,6 +12,7 @@ import {
   Wallet,
   Megaphone,
   Plug,
+  Settings,
 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,7 +31,8 @@ type NavItem = {
     | "/financeiro"
     | "/empresas"
     | "/anuncios"
-    | "/integracoes";
+    | "/integracoes"
+    | "/configuracoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -41,10 +43,6 @@ const operacao: NavItem[] = [
   { title: "Auditoria", url: "/auditoria", icon: History },
 ];
 
-// Configurações saiu: a tela só tinha um aviso de "em construção" e um bloco
-// vazio. Um item de menu que abre uma tela sem conteúdo ensina que o menu não é
-// confiável — custa mais do que não ter o item. Volta quando houver o quê pôr.
-//
 // Financeiro saiu da lista do técnico: plano, fatura e crédito são decisão da
 // administração da conta, e ele não toma nenhuma delas.
 const gestao: NavItem[] = [{ title: "Usuários", url: "/usuarios", icon: Users }];
@@ -52,9 +50,15 @@ const gestao: NavItem[] = [{ title: "Usuários", url: "/usuarios", icon: Users }
 // Integracoes fica em gestao, e fora da lista do tecnico pelo mesmo motivo do
 // Financeiro: emitir chave que da acesso de escrita ao cadastro e decisao de
 // administracao da conta, nao ferramenta de atendimento.
+//
+// Configuracoes saiu em 31/07 por so ter um aviso de "em construcao" — item de menu
+// que abre tela vazia ensina que o menu nao e confiavel. Voltou em 28/09 com o
+// horario de acesso, que e regra da empresa: fica com o admin, e o tecnico a
+// encontra onde ela o afeta, no Conectar travado.
 const gestaoAdmin: NavItem[] = [
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
   { title: "Integrações", url: "/integracoes", icon: Plug },
+  { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 
 // Planos saiu: a tela existia para listar empresas e dar acesso ao formulário de

@@ -23,6 +23,7 @@ const routeLabels: Record<string, string> = {
   "/financeiro": "Financeiro",
   "/empresas": "Empresas",
   "/integracoes": "Integrações",
+  "/configuracoes": "Configurações",
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
