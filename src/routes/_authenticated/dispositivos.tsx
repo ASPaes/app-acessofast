@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, Lock, LockOpen, StickyNote } from "lucide-react";
+import { MonitorSmartphone, Search, Monitor, Smartphone, Plus, Copy, Check, Pencil, PowerOff, Power, MoreHorizontal, Star, List, LayoutGrid, KeyRound, FolderTree, ChevronRight, ChevronDown, Tag, X, Coins, Gift, CalendarDays, Activity, Settings2, Trash2, AlertTriangle, MessageCircle, Phone, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, Lock, LockOpen, StickyNote, Clock } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filtrarIgnorandoPontuacao, formatarTelefone } from "@/lib/clientes";
 import { Switch } from "@/components/ui/switch";
@@ -71,6 +71,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
+import { useHorarioAcesso } from "@/hooks/use-horario-acesso";
+import { PAPEIS_ISENTOS_DO_HORARIO, textoForaDoHorario } from "@/lib/horario-acesso";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 
 type ProvisionResult = {
@@ -458,6 +460,11 @@ function DispositivosPage() {
           );
         } else if (raw.includes("conta_inativa")) {
           toast.error("Empresa inativa. Fale com o suporte para reativar a conta.");
+        } else if (raw.includes("fora_do_horario")) {
+          // A tela achava que estava dentro (a virada caiu entre duas leituras). Relê
+          // para o botão travar junto e para a mensagem dizer quando libera.
+          const { data: atual } = await releHorarios();
+          toast.error(textoForaDoHorario(perfil?.tenant_id ? atual?.get(perfil.tenant_id) : null));
         } else if (raw.includes("free_requires_individual")) {
           toast.error(
             "O acesso gratuito só vale para uma conexão por vez. Use um crédito para conexões simultâneas.",
@@ -644,6 +651,18 @@ function DispositivosPage() {
   const podeAdicionar = !!perfil;
   const isSuper = perfil?.role === "super_admin";
   const podeInativar = perfil?.role === "super_admin" || perfil?.role === "admin";
+
+  // Horario de acesso: fora do horario da empresa, o Conectar do tecnico trava. Quem
+  // recusa de verdade e a connect-device; a tela so evita o clique que ja se sabe
+  // perdido. Enquanto o perfil carrega, ninguem trava — melhor que piscar travado.
+  const { data: horarios, refetch: releHorarios } = useHorarioAcesso();
+  const isentoDoHorario = !perfil || PAPEIS_ISENTOS_DO_HORARIO.includes(perfil.role);
+  const foraDoHorario = (tenantId: string | null) => {
+    if (isentoDoHorario || !tenantId) return null;
+    const s = horarios?.get(tenantId);
+    return s?.fora ? s : null;
+  };
+  const empresaForaDoHorario = foraDoHorario(perfil?.tenant_id ?? null);
 
   const { data: tenants } = useQuery({
     queryKey: ["tenants_lista"],
@@ -1156,6 +1175,7 @@ function DispositivosPage() {
   const renderDeviceRow = (d: AddressBookRow, mostrarGrupo: boolean = true) => {
     // Vem pronto do banco. Ver migration 20260918120000.
     const status = d.status_presenca;
+    const bloqueioHorario = foraDoHorario(d.tenant_id);
     const iconColor =
       status === "atendimento"
         ? "text-warning"
@@ -1291,15 +1311,26 @@ function DispositivosPage() {
         )}
         <TableCell className="text-right">
           <div className="flex items-center gap-1 justify-end">
-            <Button
-              size="sm"
-              variant="default"
-              disabled={connectingId === d.id || d.is_active === false}
-              onClick={() => handleConectar(d.id)}
-            >
-              <Monitor className="h-4 w-4 mr-2" />
-              {connectingId === d.id ? "Conectando..." : "Conectar"}
-            </Button>
+            {/* O title fica no span: botao desabilitado nao recebe o mouse. */}
+            <span title={bloqueioHorario ? textoForaDoHorario(bloqueioHorario) : undefined}>
+              <Button
+                size="sm"
+                variant="default"
+                disabled={connectingId === d.id || d.is_active === false || !!bloqueioHorario}
+                onClick={() => handleConectar(d.id)}
+              >
+                {bloqueioHorario ? (
+                  <Clock className="h-4 w-4 mr-2" />
+                ) : (
+                  <Monitor className="h-4 w-4 mr-2" />
+                )}
+                {connectingId === d.id
+                  ? "Conectando..."
+                  : bloqueioHorario
+                    ? "Fora do horário"
+                    : "Conectar"}
+              </Button>
+            </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost" title="Mais ações">
@@ -1428,6 +1459,14 @@ function DispositivosPage() {
           <p className="text-sm text-muted-foreground">
             Endpoints AcessoFast cadastrados no address book do seu tenant.
           </p>
+          {/* Uma frase so, no topo: sem ela o tecnico ve dezenas de botoes travados e
+              nao sabe se e defeito, e a resposta que ele quer e quando volta. */}
+          {empresaForaDoHorario && (
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-warning">
+              <Clock className="h-4 w-4 shrink-0" aria-hidden />
+              {textoForaDoHorario(empresaForaDoHorario)}
+            </p>
+          )}
         </div>
 
         {metered && carteira && (
@@ -1784,6 +1823,7 @@ function DispositivosPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((d) => {
                 const status = d.status_presenca;
+                const bloqueioHorario = foraDoHorario(d.tenant_id);
                 const iconColor =
                   status === "atendimento"
                     ? "text-warning"
@@ -1889,16 +1929,29 @@ function DispositivosPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-1 pt-1">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="flex-1"
-                        disabled={connectingId === d.id || d.is_active === false}
-                        onClick={() => handleConectar(d.id)}
+                      <span
+                        className="flex flex-1"
+                        title={bloqueioHorario ? textoForaDoHorario(bloqueioHorario) : undefined}
                       >
-                        <Monitor className="h-4 w-4 mr-2" />
-                        {connectingId === d.id ? "Conectando..." : "Conectar"}
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="flex-1"
+                          disabled={connectingId === d.id || d.is_active === false || !!bloqueioHorario}
+                          onClick={() => handleConectar(d.id)}
+                        >
+                          {bloqueioHorario ? (
+                            <Clock className="h-4 w-4 mr-2" />
+                          ) : (
+                            <Monitor className="h-4 w-4 mr-2" />
+                          )}
+                          {connectingId === d.id
+                            ? "Conectando..."
+                            : bloqueioHorario
+                              ? "Fora do horário"
+                              : "Conectar"}
+                        </Button>
+                      </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button size="icon" variant="ghost" title="Mais ações">

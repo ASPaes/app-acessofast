@@ -1742,6 +1742,9 @@ export type Database = {
           alert_email: string | null
           created_at: string
           display_name: string | null
+          horario_acesso: Json
+          horario_acesso_ativo: boolean
+          horario_acesso_encerra_sessoes: boolean
           log_retention_days: number
           notify_relay_quota: boolean
           prefs: Json
@@ -1754,6 +1757,9 @@ export type Database = {
           alert_email?: string | null
           created_at?: string
           display_name?: string | null
+          horario_acesso?: Json
+          horario_acesso_ativo?: boolean
+          horario_acesso_encerra_sessoes?: boolean
           log_retention_days?: number
           notify_relay_quota?: boolean
           prefs?: Json
@@ -1766,6 +1772,9 @@ export type Database = {
           alert_email?: string | null
           created_at?: string
           display_name?: string | null
+          horario_acesso?: Json
+          horario_acesso_ativo?: boolean
+          horario_acesso_encerra_sessoes?: boolean
           log_retention_days?: number
           notify_relay_quota?: boolean
           prefs?: Json
@@ -2237,6 +2246,25 @@ export type Database = {
             foreignKeyName: "connection_logs_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_horario_acesso: {
+        Row: {
+          abre_em: string | null
+          ativo: boolean | null
+          fecha_em: string | null
+          fora: boolean | null
+          tenant_id: string | null
+          timezone: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },

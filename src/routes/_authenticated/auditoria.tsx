@@ -64,6 +64,13 @@ export const Route = createFileRoute("/_authenticated/auditoria")({
  */
 const MARCA_EXTERNO = "Acesso externo";
 
+/**
+ * Sufixo que o session-ingest acrescenta à nota quando a sessão foi barrada (acesso
+ * direto fora do horário) ou derrubada (o horário acabou) pelo horário de acesso da
+ * empresa. Fica depois do marcador de externo, que continua sendo o prefixo.
+ */
+const MARCA_FORA_DO_HORARIO = "fora do horario de acesso";
+
 // ---------------------------------------------------------------------------
 // O que cada número quer dizer. Ver a nota em stat-card / kpi-info: a definição
 // mora ao lado da conta que a produz (logo abaixo, nos useMemo), justamente
@@ -146,6 +153,8 @@ type ComEmpresa = { tenant_id: string; tenants: { name: string } | null };
 /** Nome do técnico, com queda para e-mail quando o RLS esconde o perfil. */
 const nomeTecnico = (l: ComTecnico) => l.profiles?.full_name?.trim() || l.technician_email || null;
 const ehExterno = (l: { notes: string | null }) => (l.notes ?? "").startsWith(MARCA_EXTERNO);
+const cortadaPorHorario = (l: { notes: string | null }) =>
+  (l.notes ?? "").includes(MARCA_FORA_DO_HORARIO);
 const nomeMaquina = (l: ComMaquina) => l.address_book?.alias?.trim() || null;
 const nomeCliente = (l: ComMaquina) => l.address_book?.clients?.name ?? null;
 /**
@@ -742,7 +751,10 @@ function AuditoriaPage() {
                           <TableCell className="text-xs">{nomeEmpresa(l) ?? "—"}</TableCell>
                         )}
                         <TableCell>
-                          <OrigemBadge externo={ehExterno(l)} />
+                          <OrigemBadge
+                            externo={ehExterno(l)}
+                            foraDoHorario={cortadaPorHorario(l)}
+                          />
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={l.status} />
@@ -847,7 +859,10 @@ function AuditoriaPage() {
                                             {nomeTecnico(s) ?? "—"}
                                           </TableCell>
                                           <TableCell>
-                                            <OrigemBadge externo={ehExterno(s)} />
+                                            <OrigemBadge
+                                              externo={ehExterno(s)}
+                                              foraDoHorario={cortadaPorHorario(s)}
+                                            />
                                           </TableCell>
                                           <TableCell>
                                             <StatusBadge status={s.status} />
@@ -980,18 +995,30 @@ function CelulaMaquina({ apelido, id }: { apelido: string | null; id: string }) 
   );
 }
 
-function OrigemBadge({ externo }: { externo: boolean }) {
-  if (!externo) {
-    return (
-      <Badge variant="outline" className="text-muted-foreground font-normal">
-        painel
-      </Badge>
-    );
-  }
-  return (
+function OrigemBadge({ externo, foraDoHorario }: { externo: boolean; foraDoHorario: boolean }) {
+  const origem = !externo ? (
+    <Badge variant="outline" className="text-muted-foreground font-normal">
+      painel
+    </Badge>
+  ) : (
     <Badge className="gap-1 bg-warning/15 text-warning border-warning/30 hover:bg-warning/15 font-normal">
       fora do painel
     </Badge>
+  );
+  if (!foraDoHorario) return origem;
+  // Barrada ao entrar ou derrubada quando o horário acabou: a nota diz qual, e é ela
+  // que responde ao admin "quem tentou acessar fora do horário?".
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      {origem}
+      <Badge
+        variant="outline"
+        className="font-normal text-destructive border-destructive/30"
+        title="Cortada pelo horário de acesso da empresa"
+      >
+        fora do horário
+      </Badge>
+    </span>
   );
 }
 

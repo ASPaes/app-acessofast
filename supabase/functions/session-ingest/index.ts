@@ -24,6 +24,14 @@ function json(body: unknown, status = 200): Response {
 // velho nem consulta o pedido — ignoraria o campo e o pedido ficaria esperando a toa.
 const VERSAO_SENHA_PELO_PAINEL = "2026.09.14";
 
+// Nota da sessao aberta por fora do painel. A Auditoria e as views v_external_access e
+// v_sessions_summary reconhecem o acesso externo pelo PREFIXO "Acesso externo" — por
+// isso o motivo de um corte entra sempre como sufixo, nunca no lugar do texto.
+const NOTA_EXTERNO = "Acesso externo (nao iniciado pelo painel)";
+// Horario de acesso (migration 20260928120000): marca a sessao barrada ou derrubada
+// por estar fora do horario da empresa. A Auditoria procura exatamente este trecho.
+const MARCA_FORA_DO_HORARIO = "fora do horario de acesso";
+
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -392,7 +400,7 @@ Deno.serve(async (req) => {
   async function latestActive() {
     const { data } = await db
       .from("connection_logs")
-      .select("id, session_start, notes")
+      .select("id, session_start, notes, last_heartbeat_at")
       .eq("rustdesk_id", rustdesk_id)
       .eq("status", "active")
       .order("session_start", { ascending: false })
@@ -430,6 +438,34 @@ Deno.serve(async (req) => {
     return typeof data === "string" ? data : null;
   }
 
+  // HORARIO DE ACESSO (28/09/2026): a empresa dona da maquina define de que hora ate
+  // que hora ela aceita acesso. Fora disso a resposta leva hard_cap_at no passado e o
+  // agente derruba a conexao no proximo tick (~3s) — o mesmo corte do billing, entao
+  // funciona em todo agente que ja obedece hard_cap_at, sem build novo. Como o 'start'
+  // sai ja no aceite TCP, a conexao cai ainda pedindo senha ou esperando o "Aceitar".
+  //
+  // `connectionLogId` = sessao aberta que este sinal alimenta; null = o sinal vai criar
+  // uma sessao nova, e conexao nova fora do horario e sempre cortada. Quem isenta sessao
+  // aberta pelo painel (admin/super_admin) e o modo "deixar terminar" e o banco.
+  //
+  // Fail-open como o resto: se a decisao falhar, nao se corta ninguem por engano.
+  const tenantDaMaquina: string = device.tenant_id;
+  async function horarioCorte(connectionLogId: string | null): Promise<string | null> {
+    try {
+      const { data, error } = await db.rpc("horario_acesso_corte", {
+        p_tenant_id: tenantDaMaquina,
+        p_connection_log_id: connectionLogId,
+      });
+      if (error) {
+        console.warn("horario_acesso_corte_falhou", rustdesk_id, error.message);
+        return null;
+      }
+      return typeof data === "string" ? data : null;
+    } catch {
+      return null;
+    }
+  }
+
   // ACESSO DIRETO A MAQUINA DESATUALIZADA -> deixa um aviso para o tecnico.
   //
   // O painel ja barra quem clica em Conectar por la. Este ramo cobre quem abre o
@@ -465,10 +501,47 @@ Deno.serve(async (req) => {
         .update({ last_heartbeat_at: nowIso })
         .eq("id", active.id);
       if (error) return json({ error: "db_error", detail: error.message }, 500);
+
+      // Primeiro sinal de uma ficha do Conectar: guarda QUANDO a conexao chegou. So a
+      // ficha do clique nasce com last_heartbeat_at nulo (a sessao direta ja nasce com
+      // ele), e o valor foi lido antes do update acima. A horario_acesso_corte usa isso
+      // em TODO sinal para saber se esta conexao e mesmo a do clique: a que chega mais de
+      // 2 min depois nao herda a isencao de quem clicou (ver a migration do horario).
+      //
+      // Update separado e tolerante de proposito: a coluna vem na mesma migration do
+      // horario, e este arquivo nao pode derrubar o heartbeat se for publicado antes dela.
+      if (!active.last_heartbeat_at) {
+        const { error: sinalErr } = await db
+          .from("connection_logs")
+          .update({ primeiro_sinal_em: nowIso })
+          .eq("id", active.id)
+          .is("primeiro_sinal_em", null);
+        if (sinalErr) console.warn("primeiro_sinal_falhou", rustdesk_id, sinalErr.message);
+      }
+
       // O controlador chega no SEGUNDO 'start' (o agente so o conhece depois do login),
       // quando a sessao ja existe — este e o caminho comum, painel ou acesso direto.
       await registrarControlador(active.id);
-      const hard_cap_at = await currentHardCap();
+      // Horario de acesso vence o cap da cobranca: fora do horario a sessao cai de
+      // qualquer jeito, e o corte dele e sempre imediato. As duas consultas em paralelo
+      // para o heartbeat nao ficar mais lento.
+      const [capCobranca, corteHorario] = await Promise.all([
+        currentHardCap(),
+        horarioCorte(active.id),
+      ]);
+      const hard_cap_at = corteHorario ?? capCobranca;
+      // Registra o motivo UMA vez (o agente ainda manda um ou dois sinais ate cortar), para
+      // a Auditoria explicar por que a sessao caiu. Acessorio: falha aqui nao muda o corte.
+      if (corteHorario && !(active.notes ?? "").includes(MARCA_FORA_DO_HORARIO)) {
+        const nota = active.notes
+          ? `${active.notes} - encerrado: ${MARCA_FORA_DO_HORARIO}`
+          : `Encerrado: ${MARCA_FORA_DO_HORARIO}`;
+        const { error: notaErr } = await db
+          .from("connection_logs")
+          .update({ notes: nota })
+          .eq("id", active.id);
+        if (notaErr) console.warn("nota_fora_do_horario_falhou", rustdesk_id, notaErr.message);
+      }
 
       // ANUNCIO NO CORTE POR 2H. Alem do esgotado (no_credits), o anuncio da
       // superficie do agente dispara TAMBEM quando o cap de 2h do free venceu — o
@@ -485,8 +558,21 @@ Deno.serve(async (req) => {
         } catch { /* anuncio nunca derruba a sessao */ }
       }
 
-      return json({ ok: true, session_id: active.id, action: "heartbeat", hard_cap_at });
+      // `reason` so para o agent.log dizer por que caiu: o agente ignora o campo.
+      return json({
+        ok: true,
+        session_id: active.id,
+        action: "heartbeat",
+        hard_cap_at,
+        ...(corteHorario ? { reason: "fora_do_horario" } : {}),
+      });
     }
+
+    // Horario de acesso: conexao NOVA fora do horario cai sempre — nao ha isencao no
+    // acesso direto, porque aqui nao se sabe quem esta do outro lado. Decide ANTES de
+    // gravar para a sessao ja nascer com o motivo na nota, e antes da medicao para a
+    // tentativa barrada nao gastar gratuito nem credito.
+    const corteHorario = await horarioCorte(null);
 
     const { data: inserted, error } = await db
       .from("connection_logs")
@@ -497,7 +583,7 @@ Deno.serve(async (req) => {
         status: "active",
         session_start: nowIso,
         last_heartbeat_at: nowIso,
-        notes: "Acesso externo (nao iniciado pelo painel)",
+        notes: corteHorario ? `${NOTA_EXTERNO} - barrado: ${MARCA_FORA_DO_HORARIO}` : NOTA_EXTERNO,
       })
       .select("id")
       .single();
@@ -506,6 +592,17 @@ Deno.serve(async (req) => {
     // Passo 3 (shadow): raro, mas o 'start' que CRIA a sessao externa pode ja trazer o
     // controlador (ex.: o prime no boot do agente, com a conexao ja autenticada).
     await registrarControlador(inserted.id);
+
+    if (corteHorario) {
+      console.warn("fora_do_horario_barrado", rustdesk_id);
+      return json({
+        ok: true,
+        session_id: inserted.id,
+        action: "blocked_external",
+        reason: "fora_do_horario",
+        hard_cap_at: corteHorario,
+      });
+    }
 
     // Billing B6: sessao externa (.exe, direta) agora e MEDIDA aqui. Auto free->credito;
     // reconexao unificada nao cobra; sem saldo/conta bloqueada -> blocked (cortamos).

@@ -123,6 +123,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // HORARIO DE ACESSO (28/09/2026): fora do horario que a empresa definiu, o tecnico
+    // nao conecta. Vem antes da elegibilidade de proposito: recusa sem tocar em cobranca,
+    // quota nem grant. Admin da empresa e super_admin ficam fora da regra (decisao do
+    // usuario) — a mesma excecao que a session-ingest aplica a sessao aberta por eles.
+    // A situacao sai da mesma view que o painel le, entao tela e servidor nao discordam.
+    //
+    // Fail-open: se a leitura falhar, a conexao segue como seria antes da regra existir.
+    // Isso tambem deixa a ordem do deploy indiferente (edge antes da migration = sem regra).
+    const PAPEIS_ISENTOS_DO_HORARIO = ["super_admin", "admin"];
+    if (!PAPEIS_ISENTOS_DO_HORARIO.includes(profile.role)) {
+      const { data: horario, error: horarioErr } = await admin
+        .from("v_horario_acesso")
+        .select("fora, abre_em")
+        .eq("tenant_id", device.tenant_id)
+        .maybeSingle();
+      if (horarioErr) {
+        console.error("horario_acesso_falhou", deviceId, horarioErr.message);
+      } else if (horario?.fora === true) {
+        return json({ error: "fora_do_horario", abre_em: horario.abre_em ?? null }, 403);
+      }
+    }
+
     // ETAPA 1 — ELEGIBILIDADE (read-only). Decide se precisa escolher.
     const { data: eligRows, error: eligErr } = await admin.rpc("billing_eligibility", {
       p_device_id: deviceId,
