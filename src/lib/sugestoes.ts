@@ -40,6 +40,9 @@ export const STATUS_CLASSE: Record<string, string> = {
 
 export const TITULO_MAX = 120;
 export const DESCRICAO_MAX = 4000;
+// Barra o "oi": a caixa e para sugestao, nao para recado. O gatilho da tabela exige o
+// mesmo minimo em todo envio novo.
+export const DESCRICAO_MIN = 20;
 
 // Contagem das que ninguem da ASP abriu ainda. Mesma ideia do badge de solicitacoes
 // de acesso: nao ha e-mail avisando, entao o numero precisa aparecer no menu.

@@ -27,6 +27,7 @@ import {
   CATEGORIAS,
   CATEGORIA_CURTA,
   DESCRICAO_MAX,
+  DESCRICAO_MIN,
   STATUS_CLASSE,
   STATUS_ROTULO,
   SUGESTOES_NOVAS_KEY,
@@ -101,7 +102,8 @@ function FormSugestao({ onEnviada }: { onEnviada: () => void }) {
   const [descricao, setDescricao] = useState("");
 
   const tituloOk = titulo.trim().length >= 3;
-  const descricaoOk = descricao.trim().length >= 10;
+  const faltam = DESCRICAO_MIN - descricao.trim().length;
+  const descricaoOk = faltam <= 0;
 
   const enviar = useMutation({
     mutationFn: async () => {
@@ -165,13 +167,26 @@ function FormSugestao({ onEnviada }: { onEnviada: () => void }) {
           id="sugestao-descricao"
           value={descricao}
           maxLength={DESCRICAO_MAX}
+          aria-describedby="sugestao-descricao-minimo"
           rows={6}
           onChange={(e) => setDescricao(e.target.value)}
           placeholder="Como isso ajudaria no seu dia a dia? Se possível, conte a situação em que sentiu falta."
         />
-        <p className="text-right text-xs text-muted-foreground">
-          {descricao.length}/{DESCRICAO_MAX}
-        </p>
+        <div className="flex items-start justify-between gap-3 text-xs">
+          <p
+            id="sugestao-descricao-minimo"
+            className={descricaoOk ? "text-muted-foreground" : "text-warning"}
+          >
+            {descricaoOk
+              ? `Mínimo de ${DESCRICAO_MIN} caracteres atingido.`
+              : `Escreva pelo menos ${DESCRICAO_MIN} caracteres${
+                  descricao.trim() ? ` (faltam ${faltam})` : ""
+                }.`}
+          </p>
+          <p className="shrink-0 text-muted-foreground">
+            {descricao.length}/{DESCRICAO_MAX}
+          </p>
+        </div>
       </div>
       <div className="flex justify-end">
         <Button type="submit" disabled={!tituloOk || !descricaoOk || enviar.isPending}>
