@@ -10,6 +10,7 @@ import { HealthPill } from "@/components/ui-shell/health-pill";
 import { AmbientBackground } from "@/components/ui-shell/ambient-background";
 import { BillingBanner } from "@/components/billing-banner";
 import { CaixaSugestoes } from "@/components/caixa-sugestoes";
+import { Novidades } from "@/components/novidades";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Button } from "@/components/ui/button";
 import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
@@ -163,6 +164,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="sr-only sm:hidden">Baixar agente</span>
                 </a>
               </Button>
+              {/* key: trocar de conta no mesmo navegador rele o "ja visto" da conta nova. */}
+              {me && <Novidades key={me.id} userId={me.id} role={me.role} />}
               {/* A ASP nao manda sugestao para si mesma: ela le as dos clientes em
                   Plataforma > Sugestoes. */}
               {me && !isSuper && <CaixaSugestoes />}
