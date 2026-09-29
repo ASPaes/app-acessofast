@@ -74,6 +74,14 @@ import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
 import { useHorarioAcesso } from "@/hooks/use-horario-acesso";
 import { PAPEIS_ISENTOS_DO_HORARIO, textoForaDoHorario } from "@/lib/horario-acesso";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
+import {
+  MARKER_COLOR_TOKENS,
+  SeletorMarcadores,
+  markerClasses,
+  markerDotClass,
+  pickMarkerColor,
+  type DeviceMarker,
+} from "@/components/marcadores";
 
 type ProvisionResult = {
   device_id?: string;
@@ -160,64 +168,6 @@ type AddressBookRow = {
   status_presenca: StatusDispositivo;
 };
 
-type DeviceMarker = {
-  id: string;
-  label: string;
-  color: string | null;
-};
-
-const MARKER_COLOR_TOKENS = [
-  "slate",
-  "red",
-  "amber",
-  "green",
-  "blue",
-  "violet",
-  "pink",
-  "gray",
-] as const;
-
-const MARKER_COLOR_CLASSES: Record<string, string> = {
-  slate: "bg-slate-500/15 text-slate-500 border-slate-500/30",
-  red: "bg-destructive/15 text-destructive border-destructive/30",
-  amber: "bg-warning/15 text-warning border-warning/30",
-  green: "bg-green-500/15 text-green-500 border-green-500/30",
-  blue: "bg-blue-500/15 text-blue-500 border-blue-500/30",
-  violet: "bg-violet-500/15 text-violet-500 border-violet-500/30",
-  pink: "bg-pink-500/15 text-pink-500 border-pink-500/30",
-  gray: "bg-gray-500/15 text-gray-500 border-gray-500/30",
-};
-
-const MARKER_DOT_CLASSES: Record<string, string> = {
-  slate: "bg-slate-500",
-  red: "bg-destructive",
-  amber: "bg-warning",
-  green: "bg-green-500",
-  blue: "bg-blue-500",
-  violet: "bg-violet-500",
-  pink: "bg-pink-500",
-  gray: "bg-gray-500",
-};
-
-const MARKER_FALLBACK_CLASS =
-  "bg-secondary text-secondary-foreground border-transparent";
-
-function markerClasses(color: string | null | undefined): string {
-  if (!color) return MARKER_FALLBACK_CLASS;
-  return MARKER_COLOR_CLASSES[color] ?? MARKER_FALLBACK_CLASS;
-}
-
-function markerDotClass(color: string | null | undefined): string {
-  if (!color) return "bg-muted-foreground/40";
-  return MARKER_DOT_CLASSES[color] ?? "bg-muted-foreground/40";
-}
-
-function pickMarkerColor(label: string): string {
-  let sum = 0;
-  for (let i = 0; i < label.length; i++) sum += label.charCodeAt(i);
-  return MARKER_COLOR_TOKENS[sum % MARKER_COLOR_TOKENS.length];
-}
-
 function formatarDocumento(
   document: string | null | undefined,
   document_type: string | null | undefined,
@@ -268,6 +218,18 @@ const VERSAO_AGENTE_RE = /^\d{4}\.\d{2}\.\d{2}/;
 function dataDaVersao(v: string | null | undefined): string | null {
   if (!v || !VERSAO_AGENTE_RE.test(v)) return null;
   return v.slice(0, 10);
+}
+
+// Maquina recem-adotada ainda esta se instalando: a linha do address_book nasce
+// na adocao SEM versao (a matricula nao carrega agent_version), a versao so chega
+// no primeiro presence, e e a do agente embutido no instalador — que congela a
+// versao do dia em que foi gerado. So depois o auto-update troca para a alvo e
+// reinicia (~5-8 min de ponta a ponta). Sem esta janela, uma instalacao nova e
+// saudavel aparecia como "desatualizado" e depois desfilava versoes em amarelo.
+const JANELA_INSTALACAO_MS = 15 * 60 * 1000;
+
+function emInstalacao(d: { created_at: string }): boolean {
+  return Date.now() - new Date(d.created_at).getTime() < JANELA_INSTALACAO_MS;
 }
 
 // Balde de comparacao de versao: Windows e Android tem cadencias de build
@@ -574,7 +536,7 @@ function DispositivosPage() {
     // So Windows: o comando do aviso e PowerShell. O celular se atualiza pelo
     // proprio app (Play Store / APK), e um Android sem versao e APK antigo de
     // teste — mostrar um comando de PowerShell para ele so confundiria.
-    if (d && !d.agent_version && plataformaDe(d.os) === "windows") {
+    if (d && !d.agent_version && !emInstalacao(d) && plataformaDe(d.os) === "windows") {
       setAvisoAtualizacao(d);
       return;
     }
@@ -920,7 +882,7 @@ function DispositivosPage() {
   // Conta no escopo do filtro de empresa, como os outros contadores, para o numero
   // do rotulo bater com o que a lista mostra ao ligar o filtro.
   const desconhecidos = useMemo(
-    () => escopoContagem.filter((d) => d.is_active !== false && !d.agent_version).length,
+    () => escopoContagem.filter((d) => d.is_active !== false && !d.agent_version && !emInstalacao(d)).length,
     [escopoContagem],
   );
 
@@ -1078,6 +1040,23 @@ function DispositivosPage() {
   // com sha, fica no title) e pinta de warning quem esta atras da sua plataforma.
   const agenteVersao = (d: AddressBookRow) => {
     const dt = dataDaVersao(d.agent_version);
+    const ref = versoesMaisNovas.get(plataformaDe(d.os));
+    const atrasada = !!dt && ref !== undefined && dt < ref;
+    if ((!dt || atrasada) && emInstalacao(d)) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-muted-foreground"
+          title={
+            dt
+              ? `Recém-cadastrado: ${d.agent_version} veio do instalador e está se atualizando sozinho.`
+              : "Recém-cadastrado: aguardando o primeiro sinal do agente."
+          }
+        >
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          instalando
+        </span>
+      );
+    }
     if (!dt) {
       // Nao e so "nao sei a versao": esta maquina roda binario anterior a
       // 10/08/2026, que nao se atualiza sozinho. Desde 06/09 o servidor descarta
@@ -1098,8 +1077,6 @@ function DispositivosPage() {
         </span>
       );
     }
-    const ref = versoesMaisNovas.get(plataformaDe(d.os));
-    const atrasada = ref !== undefined && dt < ref;
     return (
       <span
         className={`font-mono ${atrasada ? "text-warning" : "text-muted-foreground"}`}
@@ -3944,8 +3921,6 @@ function EditarDispositivoDialog({
 
 function MarcadoresField({ device }: { device: AddressBookRow }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [busca, setBusca] = useState("");
 
   const { data: markersList } = useQuery({
     queryKey: ["device_markers"],
@@ -3971,12 +3946,6 @@ function MarcadoresField({ device }: { device: AddressBookRow }) {
     },
   });
 
-  const invalidarTudo = () => {
-    queryClient.invalidateQueries({ queryKey: ["device_markers"] });
-    queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
-    queryClient.invalidateQueries({ queryKey: ["assignments", device.id] });
-  };
-
   const removerMutation = useMutation({
     mutationFn: async (markerId: string) => {
       const { error } = await supabase
@@ -3986,165 +3955,64 @@ function MarcadoresField({ device }: { device: AddressBookRow }) {
         .eq("marker_id", markerId);
       if (error) throw error;
     },
-    onSuccess: invalidarTudo,
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const atribuirMutation = useMutation({
-    mutationFn: async (markerId: string) => {
-      if (!device.tenant_id) throw new Error("Dispositivo sem tenant vinculado");
-      const { error } = await supabase
-        .from("device_marker_assignments")
-        .insert({
-          tenant_id: device.tenant_id,
-          device_id: device.id,
-          marker_id: markerId,
-        });
-      if (error) throw error;
-    },
-    onSuccess: invalidarTudo,
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const criarMutation = useMutation({
-    mutationFn: async (label: string) => {
-      if (!device.tenant_id) throw new Error("Dispositivo sem tenant vinculado");
-      const trimmed = label.trim();
-      const color = pickMarkerColor(trimmed);
-      const ins = await supabase
-        .from("device_markers")
-        .insert({ tenant_id: device.tenant_id, label: trimmed, color })
-        .select("id")
-        .single();
-      let markerId = ins.data?.id as string | undefined;
-      if (ins.error) {
-        // provavelmente violação de unicidade — busca o existente
-        const { data: existing, error: findErr } = await supabase
-          .from("device_markers")
-          .select("id")
-          .eq("tenant_id", device.tenant_id)
-          .ilike("label", trimmed)
-          .maybeSingle();
-        if (findErr || !existing) throw ins.error;
-        markerId = existing.id as string;
-      }
-      if (!markerId) throw new Error("Falha ao criar marcador");
-      const { error: aErr } = await supabase
-        .from("device_marker_assignments")
-        .insert({
-          tenant_id: device.tenant_id,
-          device_id: device.id,
-          marker_id: markerId,
-        });
-      if (aErr) throw aErr;
-    },
     onSuccess: () => {
-      setBusca("");
-      invalidarTudo();
+      queryClient.invalidateQueries({ queryKey: ["device_marker_assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["assignments", device.id] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
-
-  const buscaTrim = busca.trim();
-  const buscaLower = buscaTrim.toLowerCase();
-  const filtrados = (markersList ?? []).filter((m) =>
-    m.label.toLowerCase().includes(buscaLower),
-  );
-  const jaExiste = (markersList ?? []).some(
-    (m) => m.label.toLowerCase() === buscaLower,
-  );
-  const podeCriar = buscaTrim.length > 0 && !jaExiste;
 
   const atribuidos = (markersList ?? []).filter((m) => assignedIds?.has(m.id));
 
   return (
     <div className="space-y-2">
       <Label>Marcadores</Label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-3 py-1.5 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            {atribuidos.length === 0 ? (
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Tag className="h-3.5 w-3.5" />
-                Adicionar marcadores
-              </span>
-            ) : (
-              atribuidos.map((m) => (
-                <Badge
-                  key={m.id}
-                  variant="outline"
-                  className={`gap-1 text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
-                >
-                  {m.label}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
+      <SeletorMarcadores
+        deviceId={device.id}
+        tenantId={device.tenant_id}
+        atribuidos={assignedIds ?? new Set()}
+        larguraDoGatilho
+      >
+        <button
+          type="button"
+          className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-3 py-1.5 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {atribuidos.length === 0 ? (
+            <span className="text-muted-foreground flex items-center gap-2">
+              <Tag className="h-3.5 w-3.5" />
+              Adicionar marcadores
+            </span>
+          ) : (
+            atribuidos.map((m) => (
+              <Badge
+                key={m.id}
+                variant="outline"
+                className={`gap-1 text-[10px] px-1.5 py-0 ${markerClasses(m.color)}`}
+              >
+                {m.label}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removerMutation.mutate(m.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
                       e.stopPropagation();
                       removerMutation.mutate(m.id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.stopPropagation();
-                        removerMutation.mutate(m.id);
-                      }
-                    }}
-                    className="inline-flex cursor-pointer opacity-70 hover:opacity-100"
-                    aria-label={`Remover ${m.label}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </span>
-                </Badge>
-              ))
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Buscar ou criar marcador…"
-              value={busca}
-              onValueChange={setBusca}
-            />
-            <CommandList>
-              <CommandEmpty>Nenhum marcador.</CommandEmpty>
-              <CommandGroup>
-                {filtrados.map((m) => {
-                  const ativo = assignedIds?.has(m.id) ?? false;
-                  return (
-                    <CommandItem
-                      key={m.id}
-                      value={m.id}
-                      onSelect={() => {
-                        if (ativo) removerMutation.mutate(m.id);
-                        else atribuirMutation.mutate(m.id);
-                      }}
-                      className="flex items-center gap-2"
-                    >
-                      <span className={`h-2.5 w-2.5 rounded-full ${markerDotClass(m.color)}`} />
-                      <span className="flex-1">{m.label}</span>
-                      {ativo && <Check className="h-4 w-4 text-primary" />}
-                    </CommandItem>
-                  );
-                })}
-                {podeCriar && (
-                  <CommandItem
-                    value={`__criar__${buscaTrim}`}
-                    onSelect={() => criarMutation.mutate(buscaTrim)}
-                    className="flex items-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Criar «{buscaTrim}»</span>
-                  </CommandItem>
-                )}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+                    }
+                  }}
+                  className="inline-flex cursor-pointer opacity-70 hover:opacity-100"
+                  aria-label={`Remover ${m.label}`}
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              </Badge>
+            ))
+          )}
+        </button>
+      </SeletorMarcadores>
     </div>
   );
 }

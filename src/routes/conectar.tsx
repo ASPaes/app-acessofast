@@ -44,8 +44,10 @@ import {
   ArrowLeft,
   Send,
   Clock,
+  Tag,
 } from "lucide-react";
 import { useState } from "react";
+import { MarcadorBadge, SeletorMarcadores, type DeviceMarker } from "@/components/marcadores";
 import {
   filtrarIgnorandoPontuacao,
   formatarDocumento,
@@ -122,6 +124,8 @@ type DeviceRow = {
   os: string | null;
   last_online: string | null;
   client_id: string | null;
+  // Os marcadores aplicados daqui gravam no tenant da maquina (FK composta).
+  tenant_id: string | null;
   is_active: boolean;
   agent_version: string | null;
   ignorar_presenca: boolean;
@@ -449,7 +453,7 @@ function ConectarPage() {
       // "nao existe" (secao 11) e precisa render a mensagem certa.
       const { data, error } = await supabase
         .from("v_dispositivo_status")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, observacoes, status_presenca")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, tenant_id, is_active, agent_version, ignorar_presenca, observacoes, status_presenca")
         .in("client_id", idsDoGrupo)
         .order("alias");
       if (error) throw error;
@@ -470,13 +474,60 @@ function ConectarPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("v_dispositivo_status")
-        .select("id, rustdesk_id, alias, os, last_online, client_id, is_active, agent_version, ignorar_presenca, observacoes, status_presenca, cliente_nome")
+        .select("id, rustdesk_id, alias, os, last_online, client_id, tenant_id, is_active, agent_version, ignorar_presenca, observacoes, status_presenca, cliente_nome")
         .eq("is_active", true)
         .order("alias");
       if (error) throw error;
       return (data ?? []) as unknown as (DeviceRow & { cliente_nome: string | null })[];
     },
   });
+
+  // --- marcadores das maquinas na tela ---------------------------------------
+  // "caixa 2", "Servidor"... e o que diz ao tecnico em QUAL das maquinas do
+  // cliente entrar. As chaves ficam sob os mesmos prefixos que o SeletorMarcadores
+  // invalida, entao aplicar um marcador daqui atualiza a lista sem mais nada.
+  const vocabulario = useQuery({
+    enabled: sessao.data?.logado === true,
+    queryKey: ["device_markers", "com_tenant"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_markers")
+        .select("id, label, color, tenant_id")
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as (DeviceMarker & { tenant_id: string })[];
+    },
+  });
+
+  // No modo "todas" a lista pode ter centenas de maquinas: em vez de um .in()
+  // com centenas de ids na URL, traz as ligacoes do tenant inteiro (a RLS recorta).
+  const idsDasMaquinas = modoTodas ? [] : (devices.data ?? []).map((d) => d.id);
+  const atribuicoes = useQuery({
+    enabled: modoTodas || idsDasMaquinas.length > 0,
+    queryKey: ["device_marker_assignments", "conectar", modoTodas ? "todas" : idsDasMaquinas.join(",")],
+    queryFn: async () => {
+      let consulta = supabase.from("device_marker_assignments").select("device_id, marker_id");
+      if (!modoTodas) consulta = consulta.in("device_id", idsDasMaquinas);
+      const { data, error } = await consulta;
+      if (error) throw error;
+      const mapa = new Map<string, Set<string>>();
+      for (const r of data ?? []) {
+        const conjunto = mapa.get(r.device_id) ?? new Set<string>();
+        conjunto.add(r.marker_id);
+        mapa.set(r.device_id, conjunto);
+      }
+      return mapa;
+    },
+  });
+
+  const SEM_MARCADORES: ReadonlySet<string> = new Set();
+  const marcadoresDaMaquina = (deviceId: string) => {
+    const ids = atribuicoes.data?.get(deviceId) ?? SEM_MARCADORES;
+    return {
+      ids,
+      lista: (vocabulario.data ?? []).filter((m) => ids.has(m.id)),
+    };
+  };
 
   // --- clientes para a escolha manual --------------------------------------
   const precisaEscolher =
@@ -761,7 +812,10 @@ function ConectarPage() {
     const encontradas = (todas.data ?? [])
       .filter((d) => {
         if (!termo) return true;
-        const alvo = `${d.alias ?? ""} ${d.rustdesk_id} ${d.cliente_nome ?? ""}`;
+        // O marcador entra na busca: "caixa 2" acha a maquina pelo nome que a
+        // equipe usa para ela, e nao pelo DESKTOP-XXXX que o Windows gerou.
+        const rotulos = marcadoresDaMaquina(d.id).lista.map((m) => m.label).join(" ");
+        const alvo = `${d.alias ?? ""} ${d.rustdesk_id} ${d.cliente_nome ?? ""} ${rotulos}`;
         if (normalizarTexto(alvo).includes(termo)) return true;
         // Tambem pelos DIGITOS: a tela mostra o id agrupado ("307 871 329") e
         // quem copia o que ve digita com espacos, mas rustdesk_id e gravado
@@ -798,7 +852,7 @@ function ConectarPage() {
         <Input
           value={buscaTodas}
           onChange={(e) => setBuscaTodas(e.target.value)}
-          placeholder="Buscar por máquina, ID ou cliente…"
+          placeholder="Buscar por máquina, ID, cliente ou marcador…"
         />
         {todas.isPending ? (
           <div className="space-y-2">
@@ -819,6 +873,7 @@ function ConectarPage() {
                 onConectar={() => void doConnect(d.id)}
                 subtitulo={d.cliente_nome ?? "Sem cliente"}
                 bloqueio={textoBloqueio}
+                marcadores={marcadoresDaMaquina(d.id)}
               />
             ))}
             {encontradas.length > TETO && (
@@ -1079,6 +1134,7 @@ function ConectarPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["conectar_devices"] }),
       queryClient.invalidateQueries({ queryKey: ["conectar_online"] }),
+      queryClient.invalidateQueries({ queryKey: ["device_marker_assignments", "conectar"] }),
     ]);
   }
 
@@ -1150,6 +1206,7 @@ function ConectarPage() {
                     desabilitado={connectingId !== null}
                     onConectar={() => void doConnect(d.id)}
                     bloqueio={textoBloqueio}
+                    marcadores={marcadoresDaMaquina(d.id)}
                   />
                 ))}
               </div>
@@ -1723,6 +1780,7 @@ function LinhaDispositivo({
   onConectar,
   subtitulo,
   bloqueio,
+  marcadores,
 }: {
   device: DeviceRow;
   ativo: boolean;
@@ -1732,6 +1790,7 @@ function LinhaDispositivo({
   subtitulo?: string;
   /** Fora do horário de acesso: o texto que explica, e o botão trava. */
   bloqueio?: string | null;
+  marcadores: { ids: ReadonlySet<string>; lista: DeviceMarker[] };
 }) {
   const [obsHover] = useObservacaoHover();
   // Mesma regra da tela de Dispositivos: numa máquina com o `presence`
@@ -1767,7 +1826,28 @@ function LinhaDispositivo({
           {device.os ? ` · ${device.os}` : ""}
           {subtitulo ? ` · ${subtitulo}` : ""}
         </p>
+        {marcadores.lista.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {marcadores.lista.map((m) => (
+              <MarcadorBadge key={m.id} marcador={m} />
+            ))}
+          </div>
+        )}
       </div>
+      {/* Editar marcador daqui é a exceção à regra "só leitura" desta janela:
+          é no atendimento que o técnico descobre qual máquina é o caixa 2. */}
+      <SeletorMarcadores deviceId={device.id} tenantId={device.tenant_id} atribuidos={marcadores.ids} align="end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 text-muted-foreground"
+          title="Marcadores"
+        >
+          <Tag className="h-4 w-4" aria-hidden />
+          <span className="sr-only">Marcadores</span>
+        </Button>
+      </SeletorMarcadores>
       {/* O title fica no span: botão desabilitado não recebe o mouse. */}
       <span title={bloqueio ?? undefined}>
         <Button type="button" size="sm" disabled={desabilitado || !!bloqueio} onClick={onConectar}>
