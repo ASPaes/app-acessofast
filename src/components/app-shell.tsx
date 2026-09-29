@@ -9,6 +9,7 @@ import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
 import { AmbientBackground } from "@/components/ui-shell/ambient-background";
 import { BillingBanner } from "@/components/billing-banner";
+import { CaixaSugestoes } from "@/components/caixa-sugestoes";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Button } from "@/components/ui/button";
 import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
@@ -24,6 +25,7 @@ const routeLabels: Record<string, string> = {
   "/empresas": "Empresas",
   "/integracoes": "Integrações",
   "/configuracoes": "Configurações",
+  "/sugestoes": "Sugestões",
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -161,6 +163,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="sr-only sm:hidden">Baixar agente</span>
                 </a>
               </Button>
+              {/* A ASP nao manda sugestao para si mesma: ela le as dos clientes em
+                  Plataforma > Sugestoes. */}
+              {me && !isSuper && <CaixaSugestoes />}
               <HealthPill enabled={isSuper} />
               <div data-tour="user-menu" className="flex items-center">
                 <UserMenu />

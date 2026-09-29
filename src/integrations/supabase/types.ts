@@ -1690,6 +1690,73 @@ export type Database = {
           },
         ]
       }
+      sugestoes: {
+        Row: {
+          autor_id: string
+          categoria: string
+          created_at: string
+          descricao: string
+          id: string
+          respondida_em: string | null
+          respondida_por: string | null
+          resposta: string | null
+          status: string
+          tenant_id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          autor_id?: string
+          categoria?: string
+          created_at?: string
+          descricao: string
+          id?: string
+          respondida_em?: string | null
+          respondida_por?: string | null
+          resposta?: string | null
+          status?: string
+          tenant_id?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          autor_id?: string
+          categoria?: string
+          created_at?: string
+          descricao?: string
+          id?: string
+          respondida_em?: string | null
+          respondida_por?: string | null
+          resposta?: string | null
+          status?: string
+          tenant_id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sugestoes_autor_id_fkey"
+            columns: ["autor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sugestoes_respondida_por_fkey"
+            columns: ["respondida_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sugestoes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_features: {
         Row: {
           enabled: boolean

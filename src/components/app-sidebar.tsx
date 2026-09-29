@@ -13,11 +13,13 @@ import {
   Megaphone,
   Plug,
   Settings,
+  Lightbulb,
 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 import { useSolicitacoesAcesso } from "@/hooks/use-solicitacoes-acesso";
+import { useSugestoesNovas } from "@/lib/sugestoes";
 
 type NavItem = {
   title: string;
@@ -32,7 +34,8 @@ type NavItem = {
     | "/empresas"
     | "/anuncios"
     | "/integracoes"
-    | "/configuracoes";
+    | "/configuracoes"
+    | "/sugestoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -79,10 +82,14 @@ const gestaoAdmin: NavItem[] = [
 // Anuncios e da plataforma, nao da conta: mede o inventario do plano gratuito
 // somando TODOS os tenants free, e quem le esse numero e quem negocia com
 // anunciante. O tenant que exibe o anuncio nao tem o que fazer com ele.
+//
+// Sugestoes e a triagem da caixa de sugestoes de TODAS as empresas. O cliente manda
+// pelo botao no topo; aqui so a ASP le e responde.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
   { title: "Anúncios", url: "/anuncios", icon: Megaphone },
+  { title: "Sugestões", url: "/sugestoes", icon: Lightbulb },
 ];
 
 export function AppSidebar() {
@@ -116,6 +123,8 @@ export function AppSidebar() {
   const podeDecidir = me?.role === "super_admin" || me?.role === "admin";
   const { data: solicitacoes } = useSolicitacoesAcesso(!!podeDecidir);
   const badges = solicitacoes?.length ? { "/usuarios": solicitacoes.length } : undefined;
+  const { data: sugestoesNovas } = useSugestoesNovas(isSuper);
+  const badgesPlataforma = sugestoesNovas ? { "/sugestoes": sugestoesNovas } : undefined;
 
   return (
     <Sidebar
@@ -167,6 +176,7 @@ export function AppSidebar() {
               items={plataforma}
               collapsed={collapsed}
               isActive={isActive}
+              badges={badgesPlataforma}
             />
           </>
         )}
@@ -240,7 +250,10 @@ function NavGroup({
                 <TooltipTrigger asChild>{link}</TooltipTrigger>
                 <TooltipContent side="right" className="text-[12px]">
                   {item.title}
-                  {badge != null && ` — ${badge} solicitação(ões)`}
+                  {badge != null &&
+                    (item.url === "/sugestoes"
+                      ? ` — ${badge} nova(s)`
+                      : ` — ${badge} solicitação(ões)`)}
                 </TooltipContent>
               </Tooltip>
             );
