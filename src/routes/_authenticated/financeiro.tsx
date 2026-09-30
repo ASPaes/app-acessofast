@@ -34,6 +34,7 @@ import {
   ExternalLink,
   Clock,
   TicketPercent,
+  Unlink,
   Users,
   Megaphone,
 } from "lucide-react";
@@ -115,13 +116,21 @@ const INFO: Record<string, KpiInfo> = {
   },
   // --- da plataforma ------------------------------------------------------
   receita: {
-    oQue: "Soma mensal dos planos das contas que pagam hoje.",
+    oQue: "Soma mensal dos planos das contas que têm assinatura no Asaas.",
     porQue:
       "É a receita recorrente contratada — a base sobre a qual todo o resto se compara. Não é caixa: é o que está assinado.",
     comoCalculamos:
-      "soma do preço mensal do plano das contas ativas com billing_mode = plan, sem teste e sem isenção",
+      "soma do preço mensal do plano das contas ativas com billing_mode = plan, sem teste, sem isenção vigente e com tenants.asaas_subscription_id preenchido",
     referencia:
-      "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado.",
+      "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado. Plano pago sem assinatura no Asaas não entra — vai para o cartão Sem cobrança.",
+  },
+  semCobranca: {
+    oQue: "Contas em plano pago que não têm assinatura no Asaas.",
+    porQue:
+      "Ninguém está cobrando estas contas. Plano trocado pela coluna Plano em Empresas não cria assinatura — ou a conta vira isenta, ou alguém precisa criar a cobrança no Asaas.",
+    comoCalculamos:
+      "contas ativas com billing_mode = plan, sem teste, sem isenção vigente e com tenants.asaas_subscription_id vazio; o valor é o preço de tabela do plano",
+    referencia: "Plano sob medida (Enterprise) não tem preço de tabela e soma zero, mas conta na quantidade.",
   },
   emAtraso: {
     oQue: "Receita mensal das contas com pagamento pendente.",
@@ -822,6 +831,11 @@ function BillingStatusBadge({
  * recebido. Quem recebe é o Asaas, e o painel não tem esse extrato. Chamar isso
  * de faturamento seria mentira no instante em que alguém deixasse de pagar, e
  * por isso as contas em atraso aparecem separadas em vez de somadas.
+ *
+ * Só entra na receita a conta que tem assinatura no Asaas. Trocar o plano pela
+ * coluna Plano em Empresas (RPC assign_plan) liga billing_mode = plan mas não
+ * cria cobrança nenhuma — contar essas contas fez o painel mostrar R$ 299 de
+ * receita com o Asaas zerado. Elas ficam no cartão Sem cobrança.
  */
 function FinanceiroPlataforma() {
   const { data: empresas, isLoading } = useQuery({
@@ -830,7 +844,7 @@ function FinanceiroPlataforma() {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "id, name, billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_exempt, past_due_since, is_active",
+          "id, name, billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_exempt, billing_exempt_until, asaas_subscription_id, past_due_since, is_active",
         )
         .order("name");
       if (error) throw error;
@@ -878,14 +892,32 @@ function FinanceiroPlataforma() {
   const ativas = (empresas ?? []).filter((t) => t.is_active);
 
   /**
-   * Conta paga: ativa, em plano, fora do teste e sem isenção. Teste e isenção
-   * ficam de fora porque nenhuma das duas gera cobrança — incluí-las inflaria a
-   * receita com dinheiro que ninguém vai receber.
+   * Isenção só vale até billing_exempt_until — mesma regra do cron de
+   * suspensão. Isenção vencida volta a ser conta que deveria pagar.
    */
-  const pagantes = ativas.filter(
-    (t) => t.billing_mode === "plan" && !t.is_trial && !t.billing_exempt,
-  );
+  const agora = Date.now();
+  const isenta = (t: (typeof ativas)[number]) =>
+    t.billing_exempt &&
+    (!t.billing_exempt_until || new Date(t.billing_exempt_until).getTime() > agora);
+
+  /**
+   * Plano pago: ativa, em plano, fora do teste e sem isenção vigente. Teste e
+   * isenção ficam de fora porque nenhuma das duas gera cobrança — incluí-las
+   * inflaria a receita com dinheiro que ninguém vai receber.
+   */
+  const devePagar = (t: (typeof ativas)[number]) =>
+    t.billing_mode === "plan" && !t.is_trial && !isenta(t);
+
+  /** Pagante de verdade: plano pago E assinatura no Asaas. */
+  const pagantes = ativas.filter((t) => devePagar(t) && !!t.asaas_subscription_id);
   const receitaMes = pagantes.reduce((s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0), 0);
+
+  /** Plano pago sem assinatura: ninguém está cobrando. */
+  const semCobranca = ativas.filter((t) => devePagar(t) && !t.asaas_subscription_id);
+  const valorSemCobranca = semCobranca.reduce(
+    (s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0),
+    0,
+  );
 
   const emAtraso = ativas.filter(
     (t) =>
@@ -914,7 +946,7 @@ function FinanceiroPlataforma() {
         </p>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Receita contratada"
           info={INFO.receita}
@@ -930,6 +962,15 @@ function FinanceiroPlataforma() {
           value={emReais(receitaEmRisco)}
           icon={AlertTriangle}
           hint={`${emAtraso.length} conta(s) com pagamento pendente`}
+          loading={isLoading}
+          color="amber"
+        />
+        <StatCard
+          title="Sem cobrança"
+          info={INFO.semCobranca}
+          value={emReais(valorSemCobranca)}
+          icon={Unlink}
+          hint={`${semCobranca.length} conta(s) em plano pago sem assinatura no Asaas`}
           loading={isLoading}
           color="amber"
         />
@@ -999,7 +1040,8 @@ function FinanceiroPlataforma() {
                     {!isLoading &&
                       ativas.map((t) => {
                         const preco = precoPorPlano.get(t.plan_code ?? "");
-                        const cobra = t.billing_mode === "plan" && !t.is_trial && !t.billing_exempt;
+                        const cobra = devePagar(t);
+                        const semAsaas = cobra && !t.asaas_subscription_id;
                         return (
                           <TableRow key={t.id}>
                             <TableCell className="font-medium">{t.name}</TableCell>
@@ -1007,7 +1049,16 @@ function FinanceiroPlataforma() {
                               {nomePorPlano.get(t.plan_code ?? "") ?? t.plan_code ?? "—"}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {MODO_COBRANCA[t.billing_mode] ?? t.billing_mode}
+                              {isenta(t) ? "Isenta" : (MODO_COBRANCA[t.billing_mode] ?? t.billing_mode)}
+                              {semAsaas && (
+                                <Badge
+                                  variant="outline"
+                                  className="ml-2 border-viz-amber/40 text-viz-amber"
+                                  title="Plano pago sem assinatura no Asaas — ninguém está cobrando esta conta"
+                                >
+                                  sem Asaas
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell>
                               <BillingStatusBadge status={t.billing_status} isTrial={t.is_trial} />
