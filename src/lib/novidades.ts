@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-01",
+    tipo: "novo",
+    titulo: "Compra de créditos",
+    descricao:
+      "Os pacotes de créditos do plano gratuito já podem ser comprados, por Pix ou cartão. Em Financeiro, escolha o pacote e clique em Comprar; o saldo é atualizado assim que o pagamento é confirmado.",
+    para: "admin",
+  },
+  {
     data: "2026-09-29",
     tipo: "novo",
     titulo: "Novidades do AcessoFast",

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -163,6 +163,25 @@ function Financeiro() {
   const isAdmin = me?.role === "admin";
   const isTech = me?.role === "tech";
   const tenantId = me?.tenant_id ?? null;
+
+  // Volta do checkout do Asaas. O crédito é lançado pelo webhook, segundos depois
+  // do pagamento (Pix pode levar um pouco mais): recarrega saldo e histórico
+  // algumas vezes em vez de deixar a tela mostrando o número antigo.
+  const qc = useQueryClient();
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("compra") !== "ok") return;
+    url.searchParams.delete("compra");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    toast.success("Pagamento enviado. Os créditos entram no saldo assim que o pagamento for confirmado.");
+    const timers = [4000, 12000, 30000, 60000].map((ms) =>
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["financeiro-saldo"] });
+        qc.invalidateQueries({ queryKey: ["financeiro-historico"] });
+      }, ms),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [qc]);
 
   const { data: tenant } = useQuery({
     queryKey: ["financeiro-tenant", tenantId],

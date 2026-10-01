@@ -65,3 +65,9 @@ verify_jwt = true
 # logado; a funcao valida o perfil dele por getUser() antes de escrever.
 [functions.set-user-role]
 verify_jwt = true
+
+[functions.create-credit-checkout]
+verify_jwt = true
+
+[functions.asaas-webhook-prod]
+verify_jwt = false
