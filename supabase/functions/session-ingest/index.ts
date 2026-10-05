@@ -50,7 +50,7 @@ async function sha256Hex(input: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string; rotacao_modo?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string; rotacao_modo?: string; client_version?: string };
   try {
     body = await req.json();
   } catch {
@@ -70,6 +70,10 @@ Deno.serve(async (req) => {
   // manda, e nesse caso NAO sobrescrevemos a coluna (ver abaixo). Truncado em 40
   // chars — e um rotulo de build, nao um campo livre.
   const agent_version = (body.agent_version ?? "").trim().slice(0, 40) || null;
+  // Versao do APP AcessoFast instalado (acessofast-versao.txt na pasta do app; 'legado' =
+  // AcessoFast antigo, sem versao propria). Opcional: so o agente que sabe atualizar o app
+  // manda. Ausente = nao grava e nao oferece atualizacao do app.
+  const client_version = (body.client_version ?? "").trim().slice(0, 40) || null;
   // Passo 1 (Aposentar a senha rotativa): o modo de rotacao que o AGENTE diz estar
   // aplicando. So aceita os quatro valores — qualquer outra coisa vira null e nao e
   // gravada, para o painel nunca exibir um modo que o agente nao conhece.
@@ -152,6 +156,25 @@ Deno.serve(async (req) => {
   // Mesma coisa, para maquina que ainda NAO esta no address_book. O alvo aqui e
   // so o global (sem device nao ha override por dispositivo nem por tenant), e a
   // plataforma sai do claim da matricula.
+  // Atualizacao do APP (cliente AcessoFast.exe), aplicada pelo agente. Mesma cascata e o
+  // mesmo fail-open do update do agente; so roda para agente que reportou client_version
+  // (quem nao reporta tambem nao saberia instalar).
+  async function resolveClientUpdate(deviceId: string): Promise<Record<string, string> | null> {
+    if (!client_version) return null;
+    try {
+      const { data, error } = await db.rpc("resolve_client_update", {
+        p_device_id: deviceId,
+        p_current_version: client_version,
+      });
+      if (error) return null;
+      const r = Array.isArray(data) ? data[0] : data;
+      if (!r?.version || !r?.url || !r?.sha256 || !r?.signature) return null;
+      return { version: r.version, url: r.url, sha256: r.sha256, signature: r.signature };
+    } catch {
+      return null;
+    }
+  }
+
   async function resolveUpdateGlobal(rid: string): Promise<Record<string, string> | null> {
     try {
       const { data, error } = await db.rpc("resolve_agent_update_global", {
@@ -260,8 +283,10 @@ Deno.serve(async (req) => {
   // agent_version, entao a visibilidade de frota sai de graca (zero requisicao a
   // mais). So escreve quando o agente informou — um agente antigo, que nao manda o
   // campo, nao deve apagar a versao ja conhecida do dispositivo.
-  const patch: { last_online: string; agent_version?: string; rotacao_modo_efetivo?: string } = { last_online: nowIso };
+  const patch: { last_online: string; agent_version?: string; rotacao_modo_efetivo?: string; client_version?: string } = { last_online: nowIso };
   if (agent_version) patch.agent_version = agent_version;
+  // Mesma carona para a versao do app: vai no mesmo update, sem escrita a mais.
+  if (client_version) patch.client_version = client_version;
   // Passo 1: grava o modo efetivo SO quando mudou. A coluna tem gatilho de guarda
   // (UPDATE OF rotacao_modo_efetivo), e reescrever o mesmo valor a cada sinal da
   // frota acordaria esse gatilho dezenas de milhares de vezes por dia para nada.
@@ -283,6 +308,7 @@ Deno.serve(async (req) => {
   if (event === "presence") {
     if (presErr) return json({ error: "db_error", detail: presErr.message }, 500);
     const update = await resolveUpdate(device.id);
+    const client_update = await resolveClientUpdate(device.id);
 
     // Aviso pendente para ESTA maquina (ela e a do tecnico). Vem de um acesso
     // direto que ele fez a uma maquina desatualizada — ver o 'start' abaixo. O
@@ -374,6 +400,7 @@ Deno.serve(async (req) => {
 
     const corpo: Record<string, unknown> = { ok: true, action: "presence" };
     if (update) corpo.update = update;
+    if (client_update) corpo.client_update = client_update;
     if (aviso) corpo.aviso = aviso;
     if (rotacao) corpo.rotacao = rotacao;
     if (senha) corpo.senha = senha;
