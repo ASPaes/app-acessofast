@@ -46,3 +46,12 @@ update public.tenants t
   from public.plans p
  where p.code = t.plan_code
    and t.plan_code in ('team', 'business', 'scale');
+
+-- Os valores acima JA SAO o preco final (liquido), com os descontos embutidos.
+-- Decisao do dono (18/10/2026): nenhum desconto automatico por cima deles. A oferta de
+-- lancamento (30% por 12 meses, aplicada pelo site e pela create-checkout-prod via
+-- launch_offer_status) e desligada aqui, junto com a troca de preco — senao a vitrine
+-- mostraria R$ 139,90 riscado por R$ 97,93 e o Asaas cobraria o menor.
+-- Quem ja contratou com o desconto de lancamento mantem o que foi combinado (as janelas
+-- de desconto ja criadas nao sao tocadas). Cupom manual do comercial continua valendo.
+update public.launch_offer set is_active = false;
