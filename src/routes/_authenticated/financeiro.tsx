@@ -465,7 +465,7 @@ function Financeiro() {
               </span>
               <span className="tabular-nums">
                 {tenant?.max_concurrent_per_tech ?? plano?.max_concurrent_per_tech ?? "sem limite"}
-                <span className="text-muted-foreground"> na empresa</span>
+                <span className="text-muted-foreground"> por técnico</span>
               </span>
             </div>
             {tenant?.billing_invoice_url && (

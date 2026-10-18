@@ -33,7 +33,7 @@ export const NOVIDADES: Novidade[] = [
     tipo: "melhoria",
     titulo: "Novos valores e limites dos planos",
     descricao:
-      "Os planos ganharam preços novos: Team (5 usuários, 3 acessos simultâneos) a R$ 139,90/mês, Business (10 usuários, 5 acessos) a R$ 209,30/mês e Scale (20 usuários, 10 acessos) a R$ 377,30/mês, com desconto no pagamento anual. Acessos simultâneos contam para a empresa toda. Veja o seu em Financeiro.",
+      "Os planos ganharam preços novos: Team (5 usuários, 3 acessos simultâneos por técnico) a R$ 139,90/mês, Business (10 usuários, 5 acessos por técnico) a R$ 209,30/mês e Scale (20 usuários, 10 acessos por técnico) a R$ 377,30/mês, com desconto no pagamento anual. Agora cada técnico tem os seus acessos simultâneos, sem dividir com o resto da equipe. Veja o seu em Financeiro.",
     para: "admin",
   },
   {

@@ -6,9 +6,8 @@
 --   Scale        20          10           R$ 377,30   R$ 3.771,60    R$ 314,30
 --   Enterprise  21+       sob consulta    sob consulta
 --
--- "Acessos" = sessoes simultaneas da EMPRESA inteira, que e como o gate ja conta
--- (max_concurrent_per_tech, por device distinto no tenant). O nome da coluna ficou do
--- desenho antigo, "por tecnico"; a regra nao muda aqui, so os numeros.
+-- "Acessos" = sessoes simultaneas POR TECNICO (max_concurrent_per_tech). A contagem por
+-- tecnico entra na migration seguinte (20261018120100_simultaneo_por_tecnico).
 --
 -- Precos: o painel, o site e os checkouts do Asaas (create-checkout-prod,
 -- create-renewal-prod) leem public.plans na hora de cobrar, entao este update e o

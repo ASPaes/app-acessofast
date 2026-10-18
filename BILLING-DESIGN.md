@@ -73,13 +73,15 @@ ao "Conectar" (connect-device), para device D do técnico T:
 
 ## 3. Planos — "ilimitado dentro da concorrência"
 
-Tarifa fixa. **Sem** metering por conexão (não gasta free nem crédito). Únicos limites: **acessos simultâneos da empresa** + **seats (usuários)**.
+Tarifa fixa. **Sem** metering por conexão (não gasta free nem crédito). Únicos limites: **acessos simultâneos por técnico** + **seats (usuários)**.
 
 > **Tabela atualizada em 18/10/2026** (migration `20261018120000_planos_novos_valores_e_limites`). Os
 > limites novos valem também para as empresas que já estavam nos planos. "Acessos" = sessões
-> simultâneas da **empresa inteira** (é como o gate conta desde jul/2026), não por técnico.
+> simultâneas **por técnico** (migration `20261018120100_simultaneo_por_tecnico`): sessão aberta pelo
+> painel ou pelo app logado conta para o técnico; acesso direto sem técnico conta só no teto total da
+> empresa = acessos × usuários (Team: 3 × 5 = 15).
 
-| Plano | Usuários | Acessos simult. | Mensal | Anual (total) | Anual (por mês) | Trial | Ativação |
+| Plano | Usuários | Acessos simult./técnico | Mensal | Anual (total) | Anual (por mês) | Trial | Ativação |
 |-------|----------|-----------------|--------|---------------|-----------------|-------|----------|
 | **Team** | 5 | 3 | R$ 139,90 | R$ 1.343,04 | R$ 111,92 | **7d** | imediata |
 | **Business** | 10 | 5 | R$ 209,30 | R$ 2.091,60 | R$ 174,30 | **7d** | imediata |

@@ -285,10 +285,10 @@ export function PlanPickerDialog({
                   <p className="flex items-center gap-1 text-sm text-muted-foreground">
                     <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     {plano.max_concurrent_per_tech === null
-                      ? "acessos simultâneos ilimitados"
+                      ? "acessos simultâneos ilimitados por técnico"
                       : plano.max_concurrent_per_tech === 1
-                        ? "1 acesso por vez"
-                        : `até ${plano.max_concurrent_per_tech} acessos simultâneos`}
+                        ? "1 acesso por vez por técnico"
+                        : `até ${plano.max_concurrent_per_tech} acessos simultâneos por técnico`}
                   </p>
 
                   {excedeUsuarios && (
