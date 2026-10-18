@@ -31,6 +31,7 @@ type Plano = {
   price_month_cents: number | null;
   price_year_cents: number | null;
   max_users: number | null;
+  max_concurrent_per_tech: number | null;
 };
 
 type CheckoutResult = {
@@ -103,7 +104,7 @@ export function PlanPickerDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("plans")
-        .select("code, name, price_month_cents, price_year_cents, max_users")
+        .select("code, name, price_month_cents, price_year_cents, max_users, max_concurrent_per_tech")
         .in("code", PLANOS_COMPRAVEIS)
         .eq("is_active", true)
         .order("price_month_cents");
@@ -279,6 +280,15 @@ export function PlanPickerDialog({
                     {plano.max_users === null
                       ? "usuários ilimitados"
                       : `até ${plano.max_users} usuários`}
+                  </p>
+
+                  <p className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {plano.max_concurrent_per_tech === null
+                      ? "acessos simultâneos ilimitados"
+                      : plano.max_concurrent_per_tech === 1
+                        ? "1 acesso por vez"
+                        : `até ${plano.max_concurrent_per_tech} acessos simultâneos`}
                   </p>
 
                   {excedeUsuarios && (

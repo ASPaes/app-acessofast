@@ -73,16 +73,20 @@ ao "Conectar" (connect-device), para device D do técnico T:
 
 ## 3. Planos — "ilimitado dentro da concorrência"
 
-Tarifa fixa. **Sem** metering por conexão (não gasta free nem crédito). Únicos limites: **concorrência por técnico** + **seats (usuários)**.
+Tarifa fixa. **Sem** metering por conexão (não gasta free nem crédito). Únicos limites: **acessos simultâneos da empresa** + **seats (usuários)**.
 
-| Plano | Usuários | Simult./técnico | Mensal | Anual | Trial | Ativação |
-|-------|----------|-----------------|--------|-------|-------|----------|
-| **Team** | 10 | 5 | R$ 249 | R$ 2.988 | **7d** | imediata |
-| **Business** | 20 | 10 | R$ 449 | R$ 5.388 | **7d** | imediata |
-| **Scale** | 50 | **∞** | R$ 899 | R$ 10.788 | **não** | **pay-first** |
-| **Enterprise** | custom | custom | sob consulta | — | — | comercial |
+> **Tabela atualizada em 18/10/2026** (migration `20261018120000_planos_novos_valores_e_limites`). Os
+> limites novos valem também para as empresas que já estavam nos planos. "Acessos" = sessões
+> simultâneas da **empresa inteira** (é como o gate conta desde jul/2026), não por técnico.
 
-- **Anual = mesmo total** (12×), **sem desconto** por ora (regra futura — §11).
+| Plano | Usuários | Acessos simult. | Mensal | Anual (total) | Anual (por mês) | Trial | Ativação |
+|-------|----------|-----------------|--------|---------------|-----------------|-------|----------|
+| **Team** | 5 | 3 | R$ 139,90 | R$ 1.343,04 | R$ 111,92 | **7d** | imediata |
+| **Business** | 10 | 5 | R$ 209,30 | R$ 2.091,60 | R$ 174,30 | **7d** | imediata |
+| **Scale** | 20 | 10 | R$ 377,30 | R$ 3.771,60 | R$ 314,30 | **não** | **pay-first** |
+| **Enterprise** | 21+ | sob consulta | sob consulta | — | — | — | comercial |
+
+- **Anual** é cobrado à vista (total do ano), parcelável em até 3x no cartão. Desconto: 20% no Team, ~16,7% no Business e no Scale.
 - Mapeamento no schema existente: **`plans.max_concurrent_per_tech`** (o gate da Fase 1) + **`plans.max_users`** / seats (`tenant_seat_usage`, `assign_member`). Preços em `price_month_cents`/`price_year_cents` + `billing_cycle`.
 
 ---

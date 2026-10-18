@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-18",
+    tipo: "melhoria",
+    titulo: "Novos valores e limites dos planos",
+    descricao:
+      "Os planos ganharam preços novos: Team (5 usuários, 3 acessos simultâneos) a R$ 139,90/mês, Business (10 usuários, 5 acessos) a R$ 209,30/mês e Scale (20 usuários, 10 acessos) a R$ 377,30/mês, com desconto no pagamento anual. Acessos simultâneos contam para a empresa toda. Veja o seu em Financeiro.",
+    para: "admin",
+  },
+  {
     data: "2026-10-01",
     tipo: "novo",
     titulo: "Compra de créditos",

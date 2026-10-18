@@ -461,11 +461,11 @@ function Financeiro() {
             )}
             <div className="flex flex-col">
               <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                Sessões simultâneas
+                Acessos simultâneos
               </span>
               <span className="tabular-nums">
                 {tenant?.max_concurrent_per_tech ?? plano?.max_concurrent_per_tech ?? "sem limite"}
-                <span className="text-muted-foreground"> por técnico</span>
+                <span className="text-muted-foreground"> na empresa</span>
               </span>
             </div>
             {tenant?.billing_invoice_url && (

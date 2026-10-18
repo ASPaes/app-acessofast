@@ -158,7 +158,7 @@ export function PlanoEmpresaDialog({
     }
     const campos: [string, string][] = [
       ["Técnicos", assentos],
-      ["Simultâneas por técnico", simultaneas],
+      ["Acessos simultâneos", simultaneas],
     ];
     for (const [rotulo, bruto] of campos) {
       if (bruto.trim() === "") continue;
@@ -242,7 +242,7 @@ export function PlanoEmpresaDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="plano-simultaneas">Sessões simultâneas por técnico</Label>
+            <Label htmlFor="plano-simultaneas">Acessos simultâneos da empresa</Label>
             <Input
               id="plano-simultaneas"
               type="number"
