@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { toast } from "sonner";
-import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
+import { Otto } from "@/components/otto/otto";
 import { passosParaPapel, type TourRole } from "@/components/onboarding/tour-steps";
 
 type Props = {
@@ -237,15 +237,12 @@ export function OnboardingTour({ userId, role }: Props) {
           onInteractOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <img
-              src={acessofastLogo.url}
-              alt="AcessoFast"
-              className="mb-2 h-10 w-10 object-contain"
-            />
+            <Otto estado="ola" className="mb-1 w-20" />
             <DialogTitle>Bem-vindo ao AcessoFast</DialogTitle>
             <DialogDescription>
-              Vamos dar uma volta de 1 minuto pelo painel? São {passos.length} paradas rápidas e no
-              fim você sabe para que serve cada tela. Isto aparece só neste primeiro acesso.
+              Oi! Eu sou o Otto. Vamos dar uma volta de 1 minuto pelo painel? São {passos.length}{" "}
+              paradas rápidas e no fim você sabe para que serve cada tela. Isto aparece só neste
+              primeiro acesso.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end">
@@ -299,9 +296,12 @@ export function OnboardingTour({ userId, role }: Props) {
         }
         style={!interativo && balao ? { top: balao.top, left: balao.left } : undefined}
       >
-        <p className="text-[11px] uppercase tracking-[0.14em] text-text-dim">
-          Passo {etapa + 1} de {passos.length}
-        </p>
+        <div className="flex items-center gap-2">
+          <Otto estado={ultimo ? "concluido" : "parado"} className="w-9" />
+          <p className="text-[11px] uppercase tracking-[0.14em] text-text-dim">
+            Passo {etapa + 1} de {passos.length}
+          </p>
+        </div>
         <p className="mt-1 font-medium">{passo.title}</p>
         <p className="mt-1 text-[13px] text-muted-foreground">{passo.body}</p>
 

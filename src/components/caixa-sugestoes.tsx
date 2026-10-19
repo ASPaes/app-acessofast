@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -217,15 +218,13 @@ function MinhasSugestoes({ ativa }: { ativa: boolean }) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Carregando...</p>;
   if (isError)
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Não foi possível carregar suas sugestões. Tente de novo em instantes.
-      </p>
+      <OttoVazio pequeno estado="erro" titulo="Não foi possível carregar suas sugestões.">
+        Tente de novo em instantes.
+      </OttoVazio>
     );
   if (!data.length)
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Você ainda não mandou nenhuma sugestão.
-      </p>
+      <OttoVazio pequeno estado="ola" titulo="Você ainda não mandou nenhuma sugestão." />
     );
 
   return (

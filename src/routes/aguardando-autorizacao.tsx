@@ -6,10 +6,11 @@ import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Hourglass, ShieldX, RefreshCw, LogOut } from "lucide-react";
+import { Loader2, RefreshCw, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 import { ParticleBackground } from "@/components/ParticleBackground";
+import { Otto } from "@/components/otto/otto";
 
 // Sala de espera de quem se cadastrou com o documento de uma empresa que já
 // existe. Fica fora de `_authenticated` de propósito: aquele layout monta a
@@ -138,9 +139,7 @@ function AguardandoPage() {
 
             {!isLoading && solicitacao && !recusada && (
               <div className="space-y-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <Hourglass className="h-5 w-5 text-primary" />
-                </div>
+                <Otto estado="aguardando" className="w-20" />
                 <h1 className="text-2xl font-semibold">Aguardando autorização</h1>
                 <p className="text-sm text-muted-foreground">
                   Seu cadastro foi enviado para o administrador de <strong>{empresa}</strong>.
@@ -160,9 +159,7 @@ function AguardandoPage() {
 
             {!isLoading && recusada && (
               <div className="space-y-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-                  <ShieldX className="h-5 w-5 text-destructive" />
-                </div>
+                <Otto estado="erro" className="w-20" />
                 <h1 className="text-2xl font-semibold">Solicitação recusada</h1>
                 <Alert variant="destructive">
                   <AlertDescription>

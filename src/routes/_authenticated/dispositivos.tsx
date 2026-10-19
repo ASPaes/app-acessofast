@@ -74,6 +74,7 @@ import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
 import { useHorarioAcesso } from "@/hooks/use-horario-acesso";
 import { PAPEIS_ISENTOS_DO_HORARIO, textoForaDoHorario } from "@/lib/horario-acesso";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
+import { OttoVazio } from "@/components/otto/otto";
 import {
   MARKER_COLOR_TOKENS,
   SeletorMarcadores,
@@ -1775,8 +1776,8 @@ function DispositivosPage() {
                   ))}
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={colCount} className="text-center text-muted-foreground py-10">
-                      Nenhum dispositivo encontrado.
+                    <TableCell colSpan={colCount}>
+                      <DispositivosVazio cadastrados={data?.length ?? 0} podeAdicionar={podeAdicionar} />
                     </TableCell>
                   </TableRow>
                 )}
@@ -1793,9 +1794,7 @@ function DispositivosPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-10 text-center">
-              Nenhum dispositivo encontrado.
-            </p>
+            <DispositivosVazio cadastrados={data?.length ?? 0} podeAdicionar={podeAdicionar} />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((d) => {
@@ -2019,9 +2018,7 @@ function DispositivosPage() {
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-10 text-center">
-                Nenhum dispositivo encontrado.
-              </p>
+              <DispositivosVazio cadastrados={data?.length ?? 0} podeAdicionar={podeAdicionar} />
             ) : (
               <div className="space-y-3">
                 {grupos.map((g) => {
@@ -2915,6 +2912,30 @@ function HistoricoPrivadoDialog({ device, onClose }: { device: AddressBookRow | 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Lista vazia. Sem nenhum cadastro, o Otto acena e diz por onde começar; com
+// cadastro, quem esvaziou a lista foi a busca ou algum filtro.
+function DispositivosVazio({
+  cadastrados,
+  podeAdicionar,
+}: {
+  cadastrados: number;
+  podeAdicionar: boolean;
+}) {
+  if (cadastrados === 0)
+    return (
+      <OttoVazio estado="ola" titulo="Nenhum dispositivo cadastrado ainda.">
+        {podeAdicionar
+          ? "Instale o AcessoFast no computador e use “Adicionar dispositivo” com o ID que aparece nele."
+          : "Quando um computador for cadastrado, ele aparece aqui."}
+      </OttoVazio>
+    );
+  return (
+    <OttoVazio estado="aguardando" titulo="Nenhum dispositivo encontrado.">
+      Confira a busca e os filtros.
+    </OttoVazio>
   );
 }
 

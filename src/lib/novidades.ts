@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-19",
+    tipo: "novo",
+    titulo: "Conheça o Otto",
+    descricao:
+      "O AcessoFast agora tem mascote: o Otto, um monitorzinho que muda de cara conforme o que está acontecendo. Ele aparece no tour de boas-vindas, nas listas vazias e quando uma busca não encontra nada, sempre dizendo o que fazer em seguida.",
+    para: "todos",
+  },
+  {
     data: "2026-10-18",
     tipo: "melhoria",
     titulo: "Novos valores e limites dos planos",

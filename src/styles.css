@@ -420,3 +420,40 @@
     inset 0 1px 0 rgb(255 255 255 / 12%),
     0 16px 40px -12px rgb(2 6 16 / 80%);
 }
+
+/* Otto, o mascote (src/components/otto/otto.tsx). A sombra fica no chão e
+   encolhe quando ele sobe; o resto só se mexe para quem não pediu movimento
+   reduzido. */
+.otto::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 84%;
+  width: 50%;
+  height: 7%;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 55%), transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .otto-vivo .otto-corpo { animation: otto-flutua 3.8s ease-in-out infinite; }
+  .otto-vivo::after { animation: otto-sombra 3.8s ease-in-out infinite; }
+  .otto-vivo .otto-pisca { animation: otto-pisca 4.4s infinite; transform-box: fill-box; transform-origin: center; }
+  .otto-vivo .otto-aceno { animation: otto-aceno 1s ease-in-out infinite; }
+  .otto-vivo .otto-d1,
+  .otto-vivo .otto-d2,
+  .otto-vivo .otto-d3 { animation: otto-ponto 1.2s ease-in-out infinite; }
+  .otto-vivo .otto-d2 { animation-delay: 0.18s; }
+  .otto-vivo .otto-d3 { animation-delay: 0.36s; }
+  .otto-vivo .otto-brilho { animation: otto-brilho 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  .otto-vivo .otto-b2 { animation-delay: 0.4s; }
+  .otto-vivo .otto-b3 { animation-delay: 0.8s; }
+  .otto-vivo .otto-zz { animation: otto-zz 2.6s ease-in-out infinite; }
+}
+@keyframes otto-flutua { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.6%); } }
+@keyframes otto-sombra { 0%, 100% { scale: 1; opacity: 1; } 50% { scale: 0.88; opacity: 0.72; } }
+@keyframes otto-pisca { 0%, 91%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.08); } }
+@keyframes otto-aceno { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes otto-ponto { 0%, 100% { opacity: 0.35; } 40% { opacity: 1; } }
+@keyframes otto-brilho { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.55); opacity: 0.5; } }
+@keyframes otto-zz { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(-5px); opacity: 0.5; } }

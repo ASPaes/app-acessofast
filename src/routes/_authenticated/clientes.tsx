@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -541,13 +542,15 @@ function ClientesPage() {
                   ))}
                 {effectiveTenant && !isLoading && visiveis.length === 0 && (
                   <TableRow>
-                    <TableCell
-                      colSpan={totalColunas}
-                      className="text-center text-muted-foreground py-10"
-                    >
-                      {busca.trim()
-                        ? `Nenhum cliente encontrado para “${busca.trim()}”.`
-                        : "Nenhum cliente cadastrado ainda."}
+                    <TableCell colSpan={totalColunas}>
+                      {busca.trim() ? (
+                        <OttoVazio
+                          estado="aguardando"
+                          titulo={`Nenhum cliente encontrado para “${busca.trim()}”.`}
+                        />
+                      ) : (
+                        <OttoVazio estado="ola" titulo="Nenhum cliente cadastrado ainda." />
+                      )}
                     </TableCell>
                   </TableRow>
                 )}

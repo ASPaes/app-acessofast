@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -730,7 +731,7 @@ function AuditoriaPage() {
                     <TableRow>
                       <TableCell
                         colSpan={COLUNAS_FLAT}
-                        className="text-center text-muted-foreground py-10"
+                        className="py-0"
                       >
                         <VazioComFiltro temFiltro={chips.length > 0} limpar={limparTudo} />
                       </TableCell>
@@ -797,7 +798,7 @@ function AuditoriaPage() {
                     <TableRow>
                       <TableCell
                         colSpan={COLUNAS_MAQUINA}
-                        className="text-center text-muted-foreground py-10"
+                        className="py-0"
                       >
                         <VazioComFiltro temFiltro={chips.length > 0} limpar={limparTudo} />
                       </TableCell>
@@ -912,7 +913,7 @@ function AuditoriaPage() {
                     ))}
                   {!isLoading && porEmpresa.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                      <TableCell colSpan={7} className="py-0">
                         <VazioComFiltro temFiltro={chips.length > 0} limpar={limparTudo} />
                       </TableCell>
                     </TableRow>
@@ -1023,14 +1024,18 @@ function OrigemBadge({ externo, foraDoHorario }: { externo: boolean; foraDoHorar
 }
 
 function VazioComFiltro({ temFiltro, limpar }: { temFiltro: boolean; limpar: () => void }) {
-  if (!temFiltro) return <>Nenhuma sessão registrada ainda.</>;
+  // Sem sessão nenhuma o Otto dorme: ainda não aconteceu nada para registrar.
+  if (!temFiltro) return <OttoVazio estado="offline" titulo="Nenhuma sessão registrada ainda." />;
   return (
-    <span className="inline-flex flex-col items-center gap-2">
-      <span>Nenhum registro com esses filtros.</span>
-      <Button size="sm" variant="outline" onClick={limpar}>
-        Limpar filtros
-      </Button>
-    </span>
+    <OttoVazio
+      estado="aguardando"
+      titulo="Nenhum registro com esses filtros."
+      acao={
+        <Button size="sm" variant="outline" onClick={limpar}>
+          Limpar filtros
+        </Button>
+      }
+    />
   );
 }
 

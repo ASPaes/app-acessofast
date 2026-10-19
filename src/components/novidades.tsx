@@ -9,6 +9,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
 import {
   NOVIDADES,
   lerVisto,
@@ -102,7 +103,7 @@ export function Novidades({ userId, role }: { userId: string; role: string | nul
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-6 pt-4">
           {porDia.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma novidade por enquanto.</p>
+            <OttoVazio titulo="Nenhuma novidade por enquanto." />
           ) : (
             <ol className="space-y-6">
               {porDia.map((g) => (
