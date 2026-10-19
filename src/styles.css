@@ -435,6 +435,11 @@
   border-radius: 50%;
   background: radial-gradient(closest-side, rgb(0 0 0 / 55%), transparent);
 }
+/* Para onde ele olha: ver "o olhar" em otto.tsx. */
+.otto-olhar {
+  transform: translate(var(--otto-ox, 0px), var(--otto-oy, 0px));
+  transition: transform 0.25s ease-out;
+}
 @media (prefers-reduced-motion: no-preference) {
   .otto-vivo .otto-corpo { animation: otto-flutua 3.8s ease-in-out infinite; }
   .otto-vivo::after { animation: otto-sombra 3.8s ease-in-out infinite; }

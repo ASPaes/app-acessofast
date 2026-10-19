@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -219,6 +219,75 @@ function Estrela({
   );
 }
 
+// ---- o olhar ----
+// O rosto (olhos e bochechas) se desloca dentro da tela pelas variáveis
+// --otto-ox/--otto-oy, lidas pela classe `otto-olhar` em styles.css. Quem segue o
+// mouse entra num ouvinte único da página: a cada quadro, cada Otto olha para o
+// campo de formulário em foco, se houver, ou para o ponteiro. Escreve direto no
+// estilo do elemento, sem renderizar o React a cada movimento.
+
+const OLHAR_X = 9; // deslocamento máximo do rosto, em unidades do desenho
+const OLHAR_Y = 6;
+const seguidores = new Set<HTMLElement>();
+let ponteiro: { x: number; y: number } | null = null;
+let quadroPendente = false;
+
+function alvoDoOlhar() {
+  const foco = document.activeElement;
+  if (foco instanceof HTMLElement && foco.matches("input, textarea, select")) {
+    const r = foco.getBoundingClientRect();
+    return { x: r.left + Math.min(r.width / 2, 120), y: r.top + r.height / 2 };
+  }
+  return ponteiro;
+}
+
+function mirarTodos() {
+  quadroPendente = false;
+  const alvo = alvoDoOlhar();
+  if (!alvo) return;
+  for (const el of seguidores) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) continue;
+    const alcance = Math.max(r.width * 2.5, 200);
+    const nx = Math.max(-1, Math.min(1, (alvo.x - (r.left + r.width / 2)) / alcance));
+    const ny = Math.max(-1, Math.min(1, (alvo.y - (r.top + r.height * 0.45)) / alcance));
+    el.style.setProperty("--otto-ox", `${(nx * OLHAR_X).toFixed(2)}px`);
+    el.style.setProperty("--otto-oy", `${(ny * OLHAR_Y).toFixed(2)}px`);
+  }
+}
+
+function pedirQuadro() {
+  if (quadroPendente) return;
+  quadroPendente = true;
+  requestAnimationFrame(mirarTodos);
+}
+
+function aoMoverPonteiro(e: PointerEvent) {
+  ponteiro = { x: e.clientX, y: e.clientY };
+  pedirQuadro();
+}
+
+function seguirOlhar(el: HTMLElement) {
+  if (seguidores.size === 0) {
+    window.addEventListener("pointermove", aoMoverPonteiro, { passive: true });
+    window.addEventListener("pointerdown", aoMoverPonteiro, { passive: true });
+    window.addEventListener("scroll", pedirQuadro, { passive: true });
+    document.addEventListener("focusin", pedirQuadro);
+    document.addEventListener("focusout", pedirQuadro);
+  }
+  seguidores.add(el);
+  pedirQuadro();
+  return () => {
+    seguidores.delete(el);
+    if (seguidores.size > 0) return;
+    window.removeEventListener("pointermove", aoMoverPonteiro);
+    window.removeEventListener("pointerdown", aoMoverPonteiro);
+    window.removeEventListener("scroll", pedirQuadro);
+    document.removeEventListener("focusin", pedirQuadro);
+    document.removeEventListener("focusout", pedirQuadro);
+  };
+}
+
 // ---- o Otto ----
 
 export type OttoProps = {
@@ -232,9 +301,32 @@ export type OttoProps = {
    * caso comum: o texto ao lado já diz o que ele está "dizendo".
    */
   rotulo?: string;
+  /** Olha para o mouse (ou para o campo de formulário em foco) enquanto estiver na tela. */
+  seguirMouse?: boolean;
+  /** Olhar fixo, de -1 a 1 em cada eixo: [1, 0] é para a direita. Não combine com seguirMouse. */
+  olhar?: [number, number];
 };
 
-export function Otto({ estado = "parado", className, animado = true, rotulo }: OttoProps) {
+export function Otto({
+  estado = "parado",
+  className,
+  animado = true,
+  rotulo,
+  seguirMouse = false,
+  olhar,
+}: OttoProps) {
+  const raiz = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = raiz.current;
+    if (!seguirMouse || !el) return;
+    return seguirOlhar(el);
+  }, [seguirMouse]);
+  const estiloOlhar = olhar
+    ? ({
+        "--otto-ox": `${olhar[0] * OLHAR_X}px`,
+        "--otto-oy": `${olhar[1] * OLHAR_Y}px`,
+      } as CSSProperties)
+    : undefined;
   const id = "otto" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const st = ESTADOS[estado];
   const luz = st.cor ?? "#2c67fa";
@@ -251,6 +343,8 @@ export function Otto({ estado = "parado", className, animado = true, rotulo }: O
         animado && "otto-vivo",
         className,
       )}
+      ref={raiz}
+      style={estiloOlhar}
       role={rotulo ? "img" : undefined}
       aria-label={rotulo}
       aria-hidden={rotulo ? undefined : true}
@@ -381,11 +475,29 @@ export function Otto({ estado = "parado", className, animado = true, rotulo }: O
           <circle cx={120} cy={163} r={6} fill={luz} opacity={0.4} filter={u("b3")} />
           <circle cx={120} cy={163} r={2.7} fill={luz} />
 
-          <ellipse cx={80} cy={122} rx={10} ry={6} fill="#ff6f91" opacity={0.5} filter={u("b3")} />
-          <ellipse cx={160} cy={122} rx={10} ry={6} fill="#ff6f91" opacity={0.5} filter={u("b3")} />
-
-          <g className={pisca ? "otto-pisca" : undefined} filter={u("eg")}>
-            <OlhosDoOtto tipo={st.olhos} />
+          {/* rosto: bochechas e olhos andam juntos quando ele olha para os lados */}
+          <g className="otto-olhar">
+            <ellipse
+              cx={80}
+              cy={122}
+              rx={10}
+              ry={6}
+              fill="#ff6f91"
+              opacity={0.5}
+              filter={u("b3")}
+            />
+            <ellipse
+              cx={160}
+              cy={122}
+              rx={10}
+              ry={6}
+              fill="#ff6f91"
+              opacity={0.5}
+              filter={u("b3")}
+            />
+            <g className={pisca ? "otto-pisca" : undefined} filter={u("eg")}>
+              <OlhosDoOtto tipo={st.olhos} />
+            </g>
           </g>
 
           {st.balao && st.cor && (
