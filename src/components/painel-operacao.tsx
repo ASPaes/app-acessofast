@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -490,5 +491,5 @@ export function PainelOperacao({ isSuper }: { isSuper: boolean }) {
 }
 
 function Vazio({ texto }: { texto: string }) {
-  return <p className="py-6 text-center text-sm text-muted-foreground">{texto}</p>;
+  return <OttoVazio pequeno estado="offline" titulo={texto} />;
 }

@@ -420,3 +420,73 @@
     inset 0 1px 0 rgb(255 255 255 / 12%),
     0 16px 40px -12px rgb(2 6 16 / 80%);
 }
+
+/* Otto, o mascote (src/components/otto/otto.tsx). A sombra fica no chão e
+   encolhe quando ele sobe; o resto só se mexe para quem não pediu movimento
+   reduzido. */
+.otto::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 84%;
+  width: 50%;
+  height: 7%;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 55%), transparent);
+}
+/* Desempenho: o corpo que flutua vira uma camada própria (a flutuação não
+   repinta a página), e Otto fora da tela (data-otto-fora, posto por otto.tsx)
+   pausa tudo. Tudo o que anima é uma camada inteira do desenho (olhos, mão,
+   pontinhos, brilhos, zz): mover a camada a placa de vídeo faz sozinha, e
+   animar pedaços de dentro do SVG ocupava o processador a cada quadro. Os
+   enfeites ainda param depois de algumas voltas (mão 4, brilhos e zz 3,
+   pontinhos 5); a piscada é eterna. */
+.otto-vivo .otto-corpo { will-change: transform; }
+.otto[data-otto-fora]::after,
+.otto[data-otto-fora] * { animation-play-state: paused !important; }
+/* Otto dentro de botão: o Button do painel força todo svg filho a 16 px
+   ([&_svg]:size-4), e cada camada do desenho é um svg. Fora de camada, este
+   bloco ganha de qualquer utilitário, então as camadas voltam ao tamanho dele. */
+.otto svg { width: 100%; height: 100%; }
+/* Otto como ícone dos avisos (components/ui/sonner.tsx): a vaga do ícone do
+   sonner tem 16 px, pequena demais para a cara dele, e o sonner ainda empurra
+   todo svg do ícone 1 px de lado. Seletor mais forte que o do próprio sonner. */
+[data-sonner-toast][data-styled] [data-icon]:has(> .otto) {
+  width: 2rem;
+  height: 2rem;
+  margin-right: 0.375rem;
+}
+[data-sonner-toast][data-styled] [data-icon] .otto svg { margin: 0; }
+
+/* Para onde ele olha: ver "o olhar" em otto.tsx. */
+.otto-olhar {
+  /* --otto-ox/--otto-oy em unidades do desenho; a camada tem 224 delas de largura */
+  transform: translate(calc(var(--otto-ox, 0) * 1% / 2.24), calc(var(--otto-oy, 0) * 1% / 2.24));
+  transition: transform 0.25s ease-out;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .otto-vivo .otto-corpo { animation: otto-flutua 3.8s ease-in-out infinite; }
+  .otto-vivo::after { animation: otto-sombra 3.8s ease-in-out infinite; }
+  /* a piscada é da camada dos olhos inteira; o centro dos olhos fica a 42,4% da altura */
+  .otto-vivo .otto-pisca { animation: otto-pisca 4.4s infinite; transform-origin: 50% 42.4%; }
+  .otto-vivo .otto-aceno { animation: otto-aceno 1s ease-in-out 4; }
+  .otto-vivo .otto-d1,
+  .otto-vivo .otto-d2,
+  .otto-vivo .otto-d3 { animation: otto-ponto 1.2s ease-in-out 5; }
+  .otto-vivo .otto-d2 { animation-delay: 0.18s; }
+  .otto-vivo .otto-d3 { animation-delay: 0.36s; }
+  .otto-vivo .otto-brilho { animation: otto-brilho 1.6s ease-in-out 3; } /* o centro vem do otto.tsx */
+  .otto-vivo .otto-b2 { animation-delay: 0.4s; }
+  .otto-vivo .otto-b3 { animation-delay: 0.8s; }
+  .otto-vivo .otto-zz { animation: otto-zz 2.6s ease-in-out 3; }
+}
+@keyframes otto-flutua { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.6%); } }
+@keyframes otto-sombra { 0%, 100% { scale: 1; opacity: 1; } 50% { scale: 0.88; opacity: 0.72; } }
+@keyframes otto-pisca { 0%, 91%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.08); } }
+/* aceno e zz movem a camada inteira (224 unidades de altura): 10 un. = 4,46% */
+@keyframes otto-aceno { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4.46%); } }
+@keyframes otto-ponto { 0%, 100% { opacity: 0.35; } 40% { opacity: 1; } }
+@keyframes otto-brilho { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.55); opacity: 0.5; } }
+@keyframes otto-zz { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(-2.23%); opacity: 0.5; } }

@@ -74,6 +74,8 @@ import { tituloSemStatus, type StatusDispositivo } from "@/lib/presenca";
 import { useHorarioAcesso } from "@/hooks/use-horario-acesso";
 import { PAPEIS_ISENTOS_DO_HORARIO, textoForaDoHorario } from "@/lib/horario-acesso";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
+import { Otto, OttoVazio } from "@/components/otto/otto";
+import { useAtenderPedido } from "@/lib/otto-pedidos";
 import {
   MARKER_COLOR_TOKENS,
   SeletorMarcadores,
@@ -338,6 +340,8 @@ function DispositivosPage() {
     source: "free" | "credit" | "plan" | null;
   } | null>(null);
   const [copiadoConn, setCopiadoConn] = useState(false);
+  // Clicou em "Abrir conexão": o Otto da janela passa de "pronto" para "atendendo".
+  const [abrindoConexao, setAbrindoConexao] = useState(false);
   // Saldo esgotado (402 no_credits). Ate aqui isso era so um toast, que e o
   // formato errado pro momento de maior intencao de compra do fluxo inteiro.
   const [semSaldo, setSemSaldo] = useState(false);
@@ -462,6 +466,7 @@ function DispositivosPage() {
         source: data.source ?? null,
       });
       setCopiadoConn(false);
+      setAbrindoConexao(false);
     } finally {
       setConnectingId(null);
     }
@@ -1298,6 +1303,8 @@ function DispositivosPage() {
               >
                 {bloqueioHorario ? (
                   <Clock className="h-4 w-4 mr-2" />
+                ) : connectingId === d.id ? (
+                  <Otto estado="conectando" className="mr-1.5 w-5" />
                 ) : (
                   <Monitor className="h-4 w-4 mr-2" />
                 )}
@@ -1775,8 +1782,8 @@ function DispositivosPage() {
                   ))}
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={colCount} className="text-center text-muted-foreground py-10">
-                      Nenhum dispositivo encontrado.
+                    <TableCell colSpan={colCount}>
+                      <DispositivosVazio cadastrados={data?.length ?? 0} podeAdicionar={podeAdicionar} />
                     </TableCell>
                   </TableRow>
                 )}
@@ -1793,9 +1800,7 @@ function DispositivosPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-10 text-center">
-              Nenhum dispositivo encontrado.
-            </p>
+            <DispositivosVazio cadastrados={data?.length ?? 0} podeAdicionar={podeAdicionar} />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((d) => {
@@ -1919,6 +1924,8 @@ function DispositivosPage() {
                         >
                           {bloqueioHorario ? (
                             <Clock className="h-4 w-4 mr-2" />
+                          ) : connectingId === d.id ? (
+                            <Otto estado="conectando" className="mr-1.5 w-5" />
                           ) : (
                             <Monitor className="h-4 w-4 mr-2" />
                           )}
@@ -2019,9 +2026,7 @@ function DispositivosPage() {
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-10 text-center">
-                Nenhum dispositivo encontrado.
-              </p>
+              <DispositivosVazio cadastrados={data?.length ?? 0} podeAdicionar={podeAdicionar} />
             ) : (
               <div className="space-y-3">
                 {grupos.map((g) => {
@@ -2132,12 +2137,19 @@ function DispositivosPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Conectar</DialogTitle>
-            <DialogDescription>
-              {connectData?.password === null
-                ? "Ao abrir a conexão, quem está no computador precisa aceitar."
-                : "Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar."}
-            </DialogDescription>
+            <div className="flex items-center gap-3">
+              <Otto estado={abrindoConexao ? "atendendo" : "concluido"} className="w-14 shrink-0" />
+              <div className="space-y-1.5 text-left">
+                <DialogTitle>
+                  {abrindoConexao ? "Abrindo o AcessoFast..." : "Pronto para conectar"}
+                </DialogTitle>
+                <DialogDescription>
+                  {connectData?.password === null
+                    ? "Ao abrir a conexão, quem está no computador precisa aceitar."
+                    : "Ao abrir a conexão, o AcessoFast vai pedir a senha acima. Cole-a para conectar."}
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           {connectData && (
             <div className="space-y-3">
@@ -2202,7 +2214,9 @@ function DispositivosPage() {
             <Button
               type="button"
               onClick={() => {
-                if (connectData) window.location.href = connectData.deep_link;
+                if (!connectData) return;
+                setAbrindoConexao(true);
+                window.location.href = connectData.deep_link;
               }}
             >
               <Monitor className="h-4 w-4 mr-2" />
@@ -2231,12 +2245,10 @@ function DispositivosPage() {
                 : "O computador está enviando a senha dele ao painel. Na primeira vez isso leva alguns segundos — a janela de conexão abre sozinha quando a senha chegar."}
             </DialogDescription>
           </DialogHeader>
-          {!aguardoExpirou && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-              Aguardando o computador...
-            </div>
-          )}
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <Otto estado={aguardoExpirou ? "aguardando" : "conectando"} className="w-12 shrink-0" />
+            {!aguardoExpirou && "Aguardando o computador..."}
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={fecharAguardo}>
               {aguardoExpirou ? "Fechar" : "Cancelar"}
@@ -2918,6 +2930,30 @@ function HistoricoPrivadoDialog({ device, onClose }: { device: AddressBookRow | 
   );
 }
 
+// Lista vazia. Sem nenhum cadastro, o Otto acena e diz por onde começar; com
+// cadastro, quem esvaziou a lista foi a busca ou algum filtro.
+function DispositivosVazio({
+  cadastrados,
+  podeAdicionar,
+}: {
+  cadastrados: number;
+  podeAdicionar: boolean;
+}) {
+  if (cadastrados === 0)
+    return (
+      <OttoVazio estado="ola" titulo="Nenhum dispositivo cadastrado ainda.">
+        {podeAdicionar
+          ? "Instale o AcessoFast no computador e use “Adicionar dispositivo” com o ID que aparece nele."
+          : "Quando um computador for cadastrado, ele aparece aqui."}
+      </OttoVazio>
+    );
+  return (
+    <OttoVazio estado="aguardando" titulo="Nenhum dispositivo encontrado.">
+      Confira a busca e os filtros.
+    </OttoVazio>
+  );
+}
+
 function AdicionarDispositivoDialog({
   role,
   tenantId,
@@ -2927,6 +2963,8 @@ function AdicionarDispositivoDialog({
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  // "Adicionar um computador", no ajudante do Otto (topo), abre esta janela.
+  useAtenderPedido("adicionar-dispositivo", () => setOpen(true));
   const [rustdeskId, setRustdeskId] = useState("");
   const [alias, setAlias] = useState("");
   const [observacoes, setObservacoes] = useState("");

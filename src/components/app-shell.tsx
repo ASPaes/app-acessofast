@@ -12,6 +12,7 @@ import { BillingBanner } from "@/components/billing-banner";
 import { CaixaSugestoes } from "@/components/caixa-sugestoes";
 import { Novidades } from "@/components/novidades";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
+import { OttoAjudante } from "@/components/otto/otto-ajudante";
 import { Button } from "@/components/ui/button";
 import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
 
@@ -141,6 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="font-medium text-foreground truncate">{current}</span>
             </nav>
             <div className="ml-auto flex items-center gap-3">
+              {me && <OttoAjudante isSuper={isSuper} />}
               {/* Atalho para a página de download do agente. Abre em aba nova
                   de propósito: quem clica está no meio de um atendimento e não
                   pode perder o painel de vista — a instalação acontece do lado

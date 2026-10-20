@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAtenderPedido } from "@/lib/otto-pedidos";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Lightbulb } from "lucide-react";
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,6 +51,11 @@ const MINHAS_KEY = ["sugestoes-minhas"] as const;
 export function CaixaSugestoes() {
   const [aberta, setAberta] = useState(false);
   const [aba, setAba] = useState("nova");
+  // O ajudante do Otto (topo) também abre a caixa, já na aba de mandar.
+  useAtenderPedido("abrir-sugestoes", () => {
+    setAba("nova");
+    setAberta(true);
+  });
 
   return (
     <Dialog
@@ -217,16 +224,12 @@ function MinhasSugestoes({ ativa }: { ativa: boolean }) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Carregando...</p>;
   if (isError)
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Não foi possível carregar suas sugestões. Tente de novo em instantes.
-      </p>
+      <OttoVazio pequeno estado="erro" titulo="Não foi possível carregar suas sugestões.">
+        Tente de novo em instantes.
+      </OttoVazio>
     );
   if (!data.length)
-    return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Você ainda não mandou nenhuma sugestão.
-      </p>
-    );
+    return <OttoVazio pequeno estado="ola" titulo="Você ainda não mandou nenhuma sugestão." />;
 
   return (
     <ul className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">

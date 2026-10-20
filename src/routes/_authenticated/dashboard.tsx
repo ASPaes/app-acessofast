@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { OttoVazio } from "@/components/otto/otto";
 import { StatCard } from "@/components/stat-card";
+import { SaudacaoDoOtto } from "@/components/otto/saudacao-do-otto";
 import { PainelOperacao } from "@/components/painel-operacao";
 import { FaixaAgora, type ItemAgora } from "@/components/faixa-agora";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -401,10 +403,17 @@ function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">{subtitulo}</p>
-      </div>
+      <SaudacaoDoOtto
+        isSuper={isSuper}
+        subtitulo={subtitulo}
+        resumo={
+          stats.data && {
+            dispositivos: stats.data.devices,
+            online: stats.data.devicesOnline,
+            sessoesAtivas: stats.data.activeSessions,
+          }
+        }
+      />
 
       <FaixaAgora itens={agora} loading={stats.isLoading} />
 
@@ -479,9 +488,9 @@ function Dashboard() {
                   <Skeleton className="h-8 w-full" />
                 </div>
               ) : !recentDevices.data || recentDevices.data.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">
-                  Nenhum dispositivo cadastrado.
-                </p>
+                <OttoVazio estado="ola" titulo="Nenhum dispositivo cadastrado.">
+                  Quando um computador for cadastrado em Dispositivos, ele aparece aqui.
+                </OttoVazio>
               ) : (
                 <Table>
                   <TableHeader>

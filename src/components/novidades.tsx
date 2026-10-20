@@ -9,6 +9,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { OttoVazio } from "@/components/otto/otto";
+import { useAtenderPedido } from "@/lib/otto-pedidos";
 import {
   NOVIDADES,
   lerVisto,
@@ -53,6 +55,16 @@ export function Novidades({ userId, role }: { userId: string; role: string | nul
   const [visto, setVisto] = useState(() => lerVisto(userId));
   const temNova = !!topo && visto !== topo;
 
+  const abrir = () => {
+    setAberto(true);
+    if (topo) {
+      marcarVisto(userId, topo);
+      setVisto(topo);
+    }
+  };
+  // O ajudante do Otto (topo) também abre as novidades.
+  useAtenderPedido("abrir-novidades", abrir);
+
   const porDia = useMemo(() => {
     const grupos: { data: string; itens: Novidade[] }[] = [];
     for (const n of visiveis) {
@@ -64,16 +76,7 @@ export function Novidades({ userId, role }: { userId: string; role: string | nul
   }, [visiveis]);
 
   return (
-    <Sheet
-      open={aberto}
-      onOpenChange={(v) => {
-        setAberto(v);
-        if (v && topo) {
-          marcarVisto(userId, topo);
-          setVisto(topo);
-        }
-      }}
-    >
+    <Sheet open={aberto} onOpenChange={(v) => (v ? abrir() : setAberto(false))}>
       <SheetTrigger asChild>
         <Button
           size="sm"
@@ -102,7 +105,7 @@ export function Novidades({ userId, role }: { userId: string; role: string | nul
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-6 pt-4">
           {porDia.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma novidade por enquanto.</p>
+            <OttoVazio titulo="Nenhuma novidade por enquanto." />
           ) : (
             <ol className="space-y-6">
               {porDia.map((g) => (
