@@ -75,6 +75,7 @@ import { useHorarioAcesso } from "@/hooks/use-horario-acesso";
 import { PAPEIS_ISENTOS_DO_HORARIO, textoForaDoHorario } from "@/lib/horario-acesso";
 import { COMANDO_ATUALIZAR_AGENTE } from "@/lib/download-agente";
 import { Otto, OttoVazio } from "@/components/otto/otto";
+import { OttoMini } from "@/components/otto/otto-mini";
 import { useAtenderPedido } from "@/lib/otto-pedidos";
 import {
   MARKER_COLOR_TOKENS,
@@ -1258,12 +1259,12 @@ function DispositivosPage() {
             <Badge variant="secondary">Inativo</Badge>
           ) : status === "atendimento" ? (
             <Badge className="gap-1.5 bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">
-              <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+              <OttoMini estado="atendimento" className="-my-1 -ml-1 h-[18px] w-[18px]" />
               Em atendimento
             </Badge>
           ) : status === "online" ? (
             <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              <OttoMini estado="online" className="-my-1 -ml-1 h-[18px] w-[18px]" />
               Online
             </Badge>
           ) : status === "sem_status" ? (
@@ -1276,12 +1277,12 @@ function DispositivosPage() {
               className="gap-1.5 text-warning border-warning/30"
               title={tituloSemStatus(d)}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-warning/60" />
+              <OttoMini estado="sem_status" className="-my-1 -ml-1 h-[18px] w-[18px]" />
               Sem status
             </Badge>
           ) : (
             <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+              <OttoMini estado="offline" className="-my-1 -ml-1 h-[18px] w-[18px]" />
               {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
             </Badge>
           )}
@@ -1850,12 +1851,12 @@ function DispositivosPage() {
                         <Badge variant="secondary">Inativo</Badge>
                       ) : status === "atendimento" ? (
                         <Badge className="gap-1.5 bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">
-                          <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+                          <OttoMini estado="atendimento" className="-my-1 -ml-1 h-[18px] w-[18px]" />
                           Em atendimento
                         </Badge>
                       ) : status === "online" ? (
                         <Badge className="gap-1.5 bg-success/15 text-success border-success/30 hover:bg-success/15">
-                          <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                          <OttoMini estado="online" className="-my-1 -ml-1 h-[18px] w-[18px]" />
                           Online
                         </Badge>
                       ) : status === "sem_status" ? (
@@ -1864,12 +1865,12 @@ function DispositivosPage() {
                           className="gap-1.5 text-warning border-warning/30"
                           title={tituloSemStatus(d)}
                         >
-                          <span className="h-1.5 w-1.5 rounded-full bg-warning/60" />
+                          <OttoMini estado="sem_status" className="-my-1 -ml-1 h-[18px] w-[18px]" />
                           Sem status
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                          <OttoMini estado="offline" className="-my-1 -ml-1 h-[18px] w-[18px]" />
                           {d.last_online ? `Offline · ${tempoRelativo(d.last_online)}` : "Offline"}
                         </Badge>
                       )}

@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-20",
+    tipo: "melhoria",
+    titulo: "O Otto mostra o status de cada computador",
+    descricao:
+      "Em Dispositivos, o selo de status agora vem com o Otto: feliz quando o computador está online, ocupado durante um atendimento, em dúvida quando está sem status e dormindo quando está offline. Quando o status muda, ele dá um pulinho para você perceber.",
+    para: "todos",
+  },
+  {
+    data: "2026-10-20",
     tipo: "novo",
     titulo: "Conheça o Otto",
     descricao:
