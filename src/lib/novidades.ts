@@ -29,7 +29,7 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
-    data: "2026-10-19",
+    data: "2026-10-20",
     tipo: "novo",
     titulo: "Conheça o Otto",
     descricao:
