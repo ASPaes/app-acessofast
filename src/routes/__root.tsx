@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -128,6 +129,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  // A tela de login fica como sempre foi: sem o Otto nos avisos dela.
+  const naTelaDeLogin = useRouterState({
+    select: (r) => ["/auth", "/definir-senha"].includes(r.location.pathname),
+  });
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -147,7 +152,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="top-right" semOtto={naTelaDeLogin} />
     </QueryClientProvider>
   );
 }

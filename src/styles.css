@@ -445,6 +445,19 @@
 .otto-vivo .otto-corpo { will-change: transform; }
 .otto[data-otto-fora]::after,
 .otto[data-otto-fora] * { animation-play-state: paused !important; }
+/* Otto dentro de botão: o Button do painel força todo svg filho a 16 px
+   ([&_svg]:size-4), e cada camada do desenho é um svg. Fora de camada, este
+   bloco ganha de qualquer utilitário, então as camadas voltam ao tamanho dele. */
+.otto svg { width: 100%; height: 100%; }
+/* Otto como ícone dos avisos (components/ui/sonner.tsx): a vaga do ícone do
+   sonner tem 16 px, pequena demais para a cara dele, e o sonner ainda empurra
+   todo svg do ícone 1 px de lado. Seletor mais forte que o do próprio sonner. */
+[data-sonner-toast][data-styled] [data-icon]:has(> .otto) {
+  width: 2rem;
+  height: 2rem;
+  margin-right: 0.375rem;
+}
+[data-sonner-toast][data-styled] [data-icon] .otto svg { margin: 0; }
 
 /* Para onde ele olha: ver "o olhar" em otto.tsx. */
 .otto-olhar {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAtenderPedido } from "@/lib/otto-pedidos";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Lightbulb } from "lucide-react";
@@ -50,6 +51,11 @@ const MINHAS_KEY = ["sugestoes-minhas"] as const;
 export function CaixaSugestoes() {
   const [aberta, setAberta] = useState(false);
   const [aba, setAba] = useState("nova");
+  // O ajudante do Otto (topo) também abre a caixa, já na aba de mandar.
+  useAtenderPedido("abrir-sugestoes", () => {
+    setAba("nova");
+    setAberta(true);
+  });
 
   return (
     <Dialog
@@ -223,9 +229,7 @@ function MinhasSugestoes({ ativa }: { ativa: boolean }) {
       </OttoVazio>
     );
   if (!data.length)
-    return (
-      <OttoVazio pequeno estado="ola" titulo="Você ainda não mandou nenhuma sugestão." />
-    );
+    return <OttoVazio pequeno estado="ola" titulo="Você ainda não mandou nenhuma sugestão." />;
 
   return (
     <ul className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">

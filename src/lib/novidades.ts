@@ -33,7 +33,7 @@ export const NOVIDADES: Novidade[] = [
     tipo: "novo",
     titulo: "Conheça o Otto",
     descricao:
-      "O AcessoFast agora tem mascote: o Otto, um monitorzinho que muda de cara conforme o que está acontecendo. Ele aparece no tour de boas-vindas, nas listas vazias e quando uma busca não encontra nada, sempre dizendo o que fazer em seguida.",
+      "O AcessoFast agora tem mascote: o Otto, um monitorzinho que muda de cara conforme o que está acontecendo. Ele te cumprimenta no Dashboard com o resumo do momento, mora no canto do topo com atalhos (é só clicar nele), acompanha o Conectar e aparece nos avisos, feliz quando dá certo e triste quando algo falha. Também está no tour de boas-vindas e nas listas vazias.",
     para: "todos",
   },
   {

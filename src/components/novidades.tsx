@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { OttoVazio } from "@/components/otto/otto";
+import { useAtenderPedido } from "@/lib/otto-pedidos";
 import {
   NOVIDADES,
   lerVisto,
@@ -54,6 +55,16 @@ export function Novidades({ userId, role }: { userId: string; role: string | nul
   const [visto, setVisto] = useState(() => lerVisto(userId));
   const temNova = !!topo && visto !== topo;
 
+  const abrir = () => {
+    setAberto(true);
+    if (topo) {
+      marcarVisto(userId, topo);
+      setVisto(topo);
+    }
+  };
+  // O ajudante do Otto (topo) também abre as novidades.
+  useAtenderPedido("abrir-novidades", abrir);
+
   const porDia = useMemo(() => {
     const grupos: { data: string; itens: Novidade[] }[] = [];
     for (const n of visiveis) {
@@ -65,16 +76,7 @@ export function Novidades({ userId, role }: { userId: string; role: string | nul
   }, [visiveis]);
 
   return (
-    <Sheet
-      open={aberto}
-      onOpenChange={(v) => {
-        setAberto(v);
-        if (v && topo) {
-          marcarVisto(userId, topo);
-          setVisto(topo);
-        }
-      }}
-    >
+    <Sheet open={aberto} onOpenChange={(v) => (v ? abrir() : setAberto(false))}>
       <SheetTrigger asChild>
         <Button
           size="sm"
