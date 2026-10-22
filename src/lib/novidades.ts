@@ -29,6 +29,22 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-22",
+    tipo: "novo",
+    titulo: "Atualizações: liberar versão nova para os computadores",
+    descricao:
+      "Na tela Atualizações você vê em que versão do agente e do app está cada computador, testa uma versão nova em um computador escolhido e, quando estiver tudo certo, libera para todas as máquinas com um clique. Escolher uma versão anterior volta todas para ela. Cada liberação fica registrada com quem fez e quando.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-10-22",
+    tipo: "correcao",
+    titulo: "O acesso volta sozinho depois de reiniciar o computador",
+    descricao:
+      "Reiniciou o computador que estava acessando, pelo Reiniciar do AcessoFast ou pelo menu Iniciar do Windows? O AcessoFast agora fica tentando e volta sozinho para a tela dele assim que ele liga de novo, sem pedir senha. Chega a todos os computadores com a atualização automática do app.",
+    para: "todos",
+  },
+  {
     data: "2026-10-20",
     tipo: "melhoria",
     titulo: "O Otto mostra o status de cada computador",
