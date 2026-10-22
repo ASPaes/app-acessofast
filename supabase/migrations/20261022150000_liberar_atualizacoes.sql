@@ -33,7 +33,6 @@ comment on table public.liberacoes_versao is
 
 alter table public.liberacoes_versao enable row level security;
 grant select on public.liberacoes_versao to authenticated;
-drop policy if exists liberacoes_versao_select_super on public.liberacoes_versao;
 create policy liberacoes_versao_select_super on public.liberacoes_versao
   for select to authenticated using (private.is_super_admin());
 
