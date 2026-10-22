@@ -14,6 +14,7 @@ import {
   Plug,
   Settings,
   Lightbulb,
+  RefreshCw,
 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -35,7 +36,8 @@ type NavItem = {
     | "/anuncios"
     | "/integracoes"
     | "/configuracoes"
-    | "/sugestoes";
+    | "/sugestoes"
+    | "/atualizacoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -85,11 +87,15 @@ const gestaoAdmin: NavItem[] = [
 //
 // Sugestoes e a triagem da caixa de sugestoes de TODAS as empresas. O cliente manda
 // pelo botao no topo; aqui so a ASP le e responde.
+//
+// Atualizacoes libera versao nova do agente e do app para a frota inteira: e codigo rodando
+// em computador de cliente, decisao so da equipe AcessoFast.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
   { title: "Anúncios", url: "/anuncios", icon: Megaphone },
   { title: "Sugestões", url: "/sugestoes", icon: Lightbulb },
+  { title: "Atualizações", url: "/atualizacoes", icon: RefreshCw },
 ];
 
 export function AppSidebar() {

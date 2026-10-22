@@ -29,6 +29,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
+import { Route as AuthenticatedAtualizacoesRouteImport } from './routes/_authenticated/atualizacoes'
 import { Route as AuthenticatedAnunciosRouteImport } from './routes/_authenticated/anuncios'
 
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
@@ -134,6 +135,12 @@ const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
   path: '/auditoria',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAtualizacoesRoute =
+  AuthenticatedAtualizacoesRouteImport.update({
+    id: '/atualizacoes',
+    path: '/atualizacoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAnunciosRoute = AuthenticatedAnunciosRouteImport.update({
   id: '/anuncios',
   path: '/anuncios',
@@ -150,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/exclusao-de-dados': typeof ExclusaoDeDadosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/anuncios': typeof AuthenticatedAnunciosRoute
+  '/atualizacoes': typeof AuthenticatedAtualizacoesRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -172,6 +180,7 @@ export interface FileRoutesByTo {
   '/exclusao-de-dados': typeof ExclusaoDeDadosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/anuncios': typeof AuthenticatedAnunciosRoute
+  '/atualizacoes': typeof AuthenticatedAtualizacoesRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -196,6 +205,7 @@ export interface FileRoutesById {
   '/exclusao-de-dados': typeof ExclusaoDeDadosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/_authenticated/anuncios': typeof AuthenticatedAnunciosRoute
+  '/_authenticated/atualizacoes': typeof AuthenticatedAtualizacoesRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/exclusao-de-dados'
     | '/privacidade'
     | '/anuncios'
+    | '/atualizacoes'
     | '/auditoria'
     | '/clientes'
     | '/configuracoes'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/exclusao-de-dados'
     | '/privacidade'
     | '/anuncios'
+    | '/atualizacoes'
     | '/auditoria'
     | '/clientes'
     | '/configuracoes'
@@ -265,6 +277,7 @@ export interface FileRouteTypes {
     | '/exclusao-de-dados'
     | '/privacidade'
     | '/_authenticated/anuncios'
+    | '/_authenticated/atualizacoes'
     | '/_authenticated/auditoria'
     | '/_authenticated/clientes'
     | '/_authenticated/configuracoes'
@@ -432,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/atualizacoes': {
+      id: '/_authenticated/atualizacoes'
+      path: '/atualizacoes'
+      fullPath: '/atualizacoes'
+      preLoaderRoute: typeof AuthenticatedAtualizacoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/anuncios': {
       id: '/_authenticated/anuncios'
       path: '/anuncios'
@@ -444,6 +464,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnunciosRoute: typeof AuthenticatedAnunciosRoute
+  AuthenticatedAtualizacoesRoute: typeof AuthenticatedAtualizacoesRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
@@ -459,6 +480,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnunciosRoute: AuthenticatedAnunciosRoute,
+  AuthenticatedAtualizacoesRoute: AuthenticatedAtualizacoesRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
