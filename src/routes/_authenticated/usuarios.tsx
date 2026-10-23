@@ -223,9 +223,15 @@ function UsuariosPage() {
     onSuccess: (_data, vars) => {
       toast.success(vars.ativar ? "Usuário reativado" : "Usuário desativado");
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["active-users-count"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message);
+      // trg_enforce_seat_limit: reativar sem vaga no plano.
+      toast.error(
+        err.message.includes("seat_limit_exceeded")
+          ? "Sem vaga no plano para reativar este usuário. Bloqueie outro usuário ou troque para um plano maior no Financeiro."
+          : err.message,
+      );
     },
   });
 

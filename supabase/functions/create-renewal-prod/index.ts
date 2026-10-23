@@ -1,6 +1,8 @@
-// AcessoFast — create-renewal-prod (v3)
+// AcessoFast — create-renewal-prod (v4)
 // PRODUCAO. Tenant que JA EXISTE: trial->pagante, renovacao, troca de plano.
 // verify_jwt = TRUE: quem chama e o admin logado. Tenant vem do JWT, nunca do body.
+//
+// v4 (23/10/2026) — aceita plano com menos vagas que os usuarios ativos (ver passo 3).
 //
 // v3 (31/07/2026) — consome o cupom aplicado no painel:
 //   A apply_promo_code_to_tenant deixa o desconto RESERVADO num
@@ -93,15 +95,11 @@ Deno.serve(async (req) => {
     .select("code, name, price_month_cents, price_year_cents, max_users, is_active").eq("code", plan_code).maybeSingle();
   if (!plan || !plan.is_active) return j({ error: "unknown_plan" }, 400);
 
-  // 3) REGRA A — bloqueio de downgrade. Mesma contagem da assign_plan.
-  const { count: activeUsers } = await db.from("profiles")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId).eq("is_active", true).neq("role", "super_admin");
-  if (plan.max_users != null && (activeUsers ?? 0) > plan.max_users) {
-    return j({ error: "downgrade_blocked",
-               detail: `Seu tenant tem ${activeUsers} usuarios ativos; o plano ${plan.name} permite ${plan.max_users}. Desative usuarios antes de trocar.`,
-               active_users: activeUsers, plan_limit: plan.max_users }, 409);
-  }
+  // 3) PLANO MENOR QUE OS USUARIOS ATIVOS e permitido (23/10/2026, decisao do Ryan:
+  //    nao se recusa a venda). A antiga REGRA A devolvia downgrade_blocked aqui. Agora,
+  //    contratado o plano, a assign_plan grava o seat_limit menor e, enquanto sobrar
+  //    usuario, ninguem da empresa conecta (private.usuarios_acima_do_plano) e o admin
+  //    escolhe no painel quem fica bloqueado. Nada e apagado.
 
   const full_cents = billing_cycle === "annual" ? plan.price_year_cents : plan.price_month_cents;
   if (!full_cents || full_cents < 1) return j({ error: "plan_has_no_price" }, 400);

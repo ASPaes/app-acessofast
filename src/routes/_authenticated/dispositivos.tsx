@@ -425,6 +425,10 @@ function DispositivosPage() {
           toast.error(
             "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
           );
+        } else if (raw.includes("usuarios_acima_do_plano")) {
+          toast.error(
+            "Acessos pausados: a empresa tem mais usuários ativos do que o plano permite. O administrador precisa escolher no painel quem continua.",
+          );
         } else if (raw.includes("conta_inativa")) {
           toast.error("Empresa inativa. Fale com o suporte para reativar a conta.");
         } else if (raw.includes("fora_do_horario")) {

@@ -220,8 +220,10 @@ export function PlanPickerDialog({
             {(planos ?? []).map((plano) => {
               const preco = cycle === "annual" ? plano.price_year_cents : plano.price_month_cents;
               const semPreco = preco === null;
+              // Plano menor que a equipe pode ser contratado: depois do pagamento o
+              // painel pede ao administrador para escolher quem fica bloqueado.
               const excedeUsuarios = plano.max_users !== null && plano.max_users < activeUsers;
-              const desabilitado = semPreco || excedeUsuarios || emCheckout;
+              const desabilitado = semPreco || emCheckout;
               const atual = plano.code === currentPlanCode;
 
               return (
@@ -229,7 +231,7 @@ export function PlanPickerDialog({
                   key={plano.code}
                   className={
                     "flex flex-col gap-2 rounded-md border border-border/60 p-4 " +
-                    (excedeUsuarios || semPreco ? "opacity-60" : "")
+                    (semPreco ? "opacity-60" : "")
                   }
                 >
                   <div className="flex items-center gap-2">
@@ -293,7 +295,7 @@ export function PlanPickerDialog({
 
                   {excedeUsuarios && (
                     <p className="text-xs text-warning">
-                      {`Seu tenant tem ${activeUsers} usuários ativos; este plano permite ${plano.max_users}.`}
+                      {`Sua empresa tem ${activeUsers} usuários ativos e este plano permite ${plano.max_users}. Depois de contratar, você escolhe quais ${activeUsers - plano.max_users!} bloquear. Ninguém é apagado, e os acessos ficam pausados até essa escolha.`}
                     </p>
                   )}
 

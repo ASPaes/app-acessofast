@@ -163,6 +163,9 @@ Deno.serve(async (req) => {
       if (elig.blocked_reason === "device_not_found") return json({ error: "forbidden_or_not_found" }, 403);
       if (elig.blocked_reason === "conta_inativa") return json({ error: "conta_inativa" }, 403);
       if (elig.blocked_reason === "billing_blocked") return json({ error: "billing_blocked" }, 403);
+      // Plano contratado com menos vagas que os usuarios ativos (23/10/2026): ninguem
+      // conecta ate o admin escolher no painel quem fica bloqueado.
+      if (elig.blocked_reason === "usuarios_acima_do_plano") return json({ error: "usuarios_acima_do_plano" }, 403);
       if (elig.blocked_reason === "quota_exceeded") return json({ error: "quota_exceeded" }, 429);
       if (elig.blocked_reason === "no_credits") return json({ error: "no_credits" }, 402);
       return json({ error: "blocked" }, 402);
@@ -204,6 +207,7 @@ Deno.serve(async (req) => {
       if (msg.includes("quota_exceeded")) return json({ error: "quota_exceeded" }, 429);
       if (msg.includes("conta_inativa")) return json({ error: "conta_inativa" }, 403);
       if (msg.includes("billing_blocked")) return json({ error: "billing_blocked" }, 403);
+      if (msg.includes("usuarios_acima_do_plano")) return json({ error: "usuarios_acima_do_plano" }, 403);
       if (msg.includes("free_exhausted") || msg.includes("no_credits")) return json({ error: "no_credits" }, 402);
       if (msg.includes("free_requires_individual")) return json({ error: "free_requires_individual" }, 409);
       if (msg.includes("device_inativo")) return json({ error: "device_inativo" }, 403);
