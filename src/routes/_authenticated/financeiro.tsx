@@ -118,20 +118,20 @@ const INFO: Record<string, KpiInfo> = {
   },
   // --- da plataforma ------------------------------------------------------
   receita: {
-    oQue: "Soma mensal dos planos das contas que têm assinatura no Asaas.",
+    oQue: "Soma mensal do que as contas pagantes pagam hoje.",
     porQue:
       "É a receita recorrente contratada — a base sobre a qual todo o resto se compara. Não é caixa: é o que está assinado.",
     comoCalculamos:
-      "soma do preço mensal do plano das contas ativas com billing_mode = plan, sem teste, sem isenção vigente e com tenants.asaas_subscription_id preenchido",
+      "valor da última contratação paga de cada conta (com a oferta de lançamento ou o cupom que entrou nela): mensal pela mensalidade atual, anual pelo total do ano ÷ 12. Entram as contas ativas em plano, sem teste, sem isenção vigente, com assinatura no Asaas (mensal) ou com o ano pago ainda valendo (anual)",
     referencia:
-      "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado. Plano pago sem assinatura no Asaas não entra — vai para o cartão Sem cobrança.",
+      "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado. Plano pago que ninguém está cobrando não entra — vai para o cartão Sem cobrança.",
   },
   semCobranca: {
-    oQue: "Contas em plano pago que não têm assinatura no Asaas.",
+    oQue: "Contas em plano pago que ninguém está cobrando.",
     porQue:
-      "Ninguém está cobrando estas contas. Plano trocado pela coluna Plano em Empresas não cria assinatura — ou a conta vira isenta, ou alguém precisa criar a cobrança no Asaas.",
+      "Plano trocado pela coluna Plano em Empresas não cria cobrança, e conta que perdeu a isenção fica aqui até contratar. Ou a conta contrata, ou vira isenta, ou alguém cria a cobrança no Asaas.",
     comoCalculamos:
-      "contas ativas com billing_mode = plan, sem teste, sem isenção vigente e com tenants.asaas_subscription_id vazio; o valor é o preço de tabela do plano",
+      "contas ativas em plano, sem teste e sem isenção vigente, sem assinatura no Asaas e sem plano anual pago valendo; o valor é o preço de hoje do plano, com a oferta de lançamento, igual ao site",
     referencia: "Plano sob medida (Enterprise) não tem preço de tabela e soma zero, mas conta na quantidade.",
   },
   emAtraso: {
@@ -139,7 +139,7 @@ const INFO: Record<string, KpiInfo> = {
     porQue:
       "É o pedaço da receita contratada que pode não entrar. Estas contas caminham para bloqueio, e bloqueio para o trabalho dos técnicos delas.",
     comoCalculamos:
-      "soma do preço mensal das contas em cobrança, bloqueadas por cobrança ou com past_due_since preenchido",
+      "soma do valor mensal das contas com cobrança vencida (billing_status = past_due ou past_due_since preenchido)",
   },
   emTeste: {
     oQue: "Contas usando o período de teste grátis agora.",
@@ -893,6 +893,11 @@ function BillingStatusBadge({
  * coluna Plano em Empresas (RPC assign_plan) liga billing_mode = plan mas não
  * cria cobrança nenhuma — contar essas contas fez o painel mostrar R$ 299 de
  * receita com o Asaas zerado. Elas ficam no cartão Sem cobrança.
+ *
+ * Exceção (23/10/2026): o plano ANUAL é cobrança única no Asaas e não cria
+ * assinatura. Ele conta como pagante enquanto o ano pago vale (plan_expires_at).
+ * E o valor de cada pagante é o que ele paga de verdade (valores_contratados_
+ * plataforma: oferta de lançamento, cupom, anual ÷ 12), não o preço de tabela.
  */
 function FinanceiroPlataforma() {
   const { data: empresas, isLoading } = useQuery({
@@ -942,9 +947,32 @@ function FinanceiroPlataforma() {
     },
   });
 
-  const precoPorPlano = new Map((planos ?? []).map((p) => [p.code, p.price_month_cents ?? 0]));
+  /** O que cada conta contratou e paga hoje (última contratação paga). */
+  const { data: contratados } = useQuery({
+    queryKey: ["financeiro-plataforma-contratados"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("valores_contratados_plataforma");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: oferta } = useOfertaLancamento();
+
+  // Preço de hoje para quem ainda não paga: tabela com a oferta de lançamento,
+  // o mesmo que o site mostra e que a conta pagaria se contratasse agora.
+  const pctOferta = percentualDaOferta(oferta);
+  const precoPorPlano = new Map(
+    (planos ?? []).map((p) => {
+      const tabela = p.price_month_cents ?? 0;
+      return [
+        p.code,
+        pctOferta !== null && tabela > 0 ? aplicarDesconto(tabela, pctOferta) : tabela,
+      ];
+    }),
+  );
   const nomePorPlano = new Map((planos ?? []).map((p) => [p.code, p.name]));
   const precoPorPacote = new Map((pacotes ?? []).map((p) => [p.code, p.price_cents]));
+  const contratadoPorConta = new Map((contratados ?? []).map((c) => [c.tenant_id, c]));
 
   const ativas = (empresas ?? []).filter((t) => t.is_active);
 
@@ -965,27 +993,39 @@ function FinanceiroPlataforma() {
   const devePagar = (t: (typeof ativas)[number]) =>
     t.billing_mode === "plan" && !t.is_trial && !isenta(t);
 
-  /** Pagante de verdade: plano pago E assinatura no Asaas. */
-  const pagantes = ativas.filter((t) => devePagar(t) && !!t.asaas_subscription_id);
-  const receitaMes = pagantes.reduce((s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0), 0);
+  /**
+   * Pagante de verdade: plano pago E alguém cobrando. Mensal = assinatura no
+   * Asaas. Anual = o ano pago ainda vale, porque o anual não cria assinatura.
+   */
+  const pagante = (t: (typeof ativas)[number]) => {
+    if (!devePagar(t)) return false;
+    const c = contratadoPorConta.get(t.id);
+    if (c?.billing_cycle === "annual") {
+      return !!t.plan_expires_at && new Date(t.plan_expires_at).getTime() > agora;
+    }
+    return !!t.asaas_subscription_id;
+  };
 
-  /** Plano pago sem assinatura: ninguém está cobrando. */
-  const semCobranca = ativas.filter((t) => devePagar(t) && !t.asaas_subscription_id);
-  const valorSemCobranca = semCobranca.reduce(
-    (s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0),
-    0,
-  );
+  /**
+   * Valor por mês de uma conta: o que ela paga de verdade, se já contratou (anual
+   * dividido por 12); senão, o preço de hoje do plano.
+   */
+  const valorMes = (t: (typeof ativas)[number]) => {
+    const c = contratadoPorConta.get(t.id);
+    if (c) return c.billing_cycle === "annual" ? c.valor_cents / 12 : c.valor_cents;
+    return precoPorPlano.get(t.plan_code ?? "") ?? 0;
+  };
 
-  const emAtraso = ativas.filter(
-    (t) =>
-      t.billing_status === "dunning" ||
-      t.billing_status === "blocked_billing" ||
-      !!t.past_due_since,
-  );
-  const receitaEmRisco = emAtraso.reduce(
-    (s, t) => s + (precoPorPlano.get(t.plan_code ?? "") ?? 0),
-    0,
-  );
+  const pagantes = ativas.filter(pagante);
+  const receitaMes = pagantes.reduce((s, t) => s + valorMes(t), 0);
+
+  /** Plano pago que ninguém está cobrando. */
+  const semCobranca = ativas.filter((t) => devePagar(t) && !pagante(t));
+  const valorSemCobranca = semCobranca.reduce((s, t) => s + valorMes(t), 0);
+
+  // billing_status é texto: active | past_due | suspended (ver suspend_overdue_tenants).
+  const emAtraso = ativas.filter((t) => t.billing_status === "past_due" || !!t.past_due_since);
+  const receitaEmRisco = emAtraso.reduce((s, t) => s + valorMes(t), 0);
 
   const emTeste = ativas.filter((t) => t.is_trial).length;
 
@@ -1027,7 +1067,7 @@ function FinanceiroPlataforma() {
           info={INFO.semCobranca}
           value={emReais(valorSemCobranca)}
           icon={Unlink}
-          hint={`${semCobranca.length} conta(s) em plano pago sem assinatura no Asaas`}
+          hint={`${semCobranca.length} conta(s) em plano pago sem cobrança ativa`}
           loading={isLoading}
           color="amber"
         />
@@ -1096,9 +1136,9 @@ function FinanceiroPlataforma() {
                     )}
                     {!isLoading &&
                       ativas.map((t) => {
-                        const preco = precoPorPlano.get(t.plan_code ?? "");
+                        const preco = valorMes(t);
                         const cobra = devePagar(t);
-                        const semAsaas = cobra && !t.asaas_subscription_id;
+                        const semAsaas = cobra && !pagante(t);
                         return (
                           <TableRow key={t.id}>
                             <TableCell className="font-medium">{t.name}</TableCell>
@@ -1111,9 +1151,9 @@ function FinanceiroPlataforma() {
                                 <Badge
                                   variant="outline"
                                   className="ml-2 border-viz-amber/40 text-viz-amber"
-                                  title="Plano pago sem assinatura no Asaas — ninguém está cobrando esta conta"
+                                  title="Plano pago sem cobrança ativa no Asaas — ninguém está cobrando esta conta"
                                 >
-                                  sem Asaas
+                                  sem cobrança
                                 </Badge>
                               )}
                             </TableCell>

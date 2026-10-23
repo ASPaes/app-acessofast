@@ -31,6 +31,14 @@ export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-23",
     tipo: "correcao",
+    titulo: "Receita contratada pelo valor que cada conta paga",
+    descricao:
+      "No Financeiro da plataforma, a receita soma o que cada conta paga de verdade, com a oferta de lançamento ou o cupom que ela usou, e não mais o preço de tabela. Quem paga o plano anual agora conta como pagante pelo ano inteiro, em vez de aparecer em Sem cobrança. O cartão Em atraso também volta a somar as contas com cobrança vencida.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-10-23",
+    tipo: "correcao",
     titulo: "Preço de lançamento também na contratação pelo painel",
     descricao:
       "Ao contratar ou trocar de plano pelo painel, você paga o mesmo preço de lançamento anunciado no site, com o preço de tabela riscado ao lado e por quanto tempo o desconto vale. No Financeiro, o quadro Plano mostra quanto a sua empresa paga hoje.",
