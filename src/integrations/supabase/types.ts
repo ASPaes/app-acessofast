@@ -2961,6 +2961,15 @@ export type Database = {
           valor_cents: number
         }[]
       }
+      valores_contratados_plataforma: {
+        Args: never
+        Returns: {
+          billing_cycle: string
+          cobrancas_com_desconto: number | null
+          tenant_id: string
+          valor_cents: number
+        }[]
+      }
       vps_metrics_series: {
         Args: { p_bucket?: string; p_since?: string }
         Returns: {
