@@ -95,7 +95,7 @@ const INFO: Record<string, KpiInfo> = {
     referencia: "Conta isenta aparece sem preço — cobrança desligada em tenants.billing_exempt.",
   },
   vencimento: {
-    oQue: "Quantos dias faltam para o teste acabar ou para a próxima renovação.",
+    oQue: "Quantos dias faltam para o teste acabar, para a próxima renovação ou, se a conta ainda não contratou um plano, para o bloqueio.",
     porQue:
       "Passado o prazo sem pagamento a conta entra em cobrança e depois é bloqueada — os técnicos param de conectar. É o cartão que dá tempo de agir antes disso.",
     comoCalculamos: "tenants.plan_expires_at − hoje",
@@ -190,7 +190,7 @@ function Financeiro() {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_invoice_url, billing_exempt, past_due_since, seat_limit, max_concurrent_per_tech",
+          "billing_mode, billing_status, plan_code, plan_expires_at, is_trial, billing_invoice_url, billing_exempt, past_due_since, seat_limit, max_concurrent_per_tech, asaas_customer_id",
         )
         .eq("id", tenantId as string)
         .single();
@@ -335,7 +335,18 @@ function Financeiro() {
   const isIndividual = mode === "free" || mode === "credits";
   const isTrial = !!tenant?.is_trial;
   const dias = tenant?.plan_expires_at ? diasAte(tenant.plan_expires_at) : null;
-  const reason: "assinar" | "renovar" = isPlan && !isTrial ? "renovar" : "assinar";
+  // Conta que usava o AcessoFast sem cobrança e ganhou prazo para contratar:
+  // tem data de fim, mas nunca pagou pelo Asaas. A data é a do bloqueio, não
+  // a de uma renovação (mesma regra da faixa do topo, em billing-banner).
+  const prazoContratar =
+    isPlan &&
+    !isTrial &&
+    !tenant?.billing_exempt &&
+    !!tenant?.plan_expires_at &&
+    !tenant?.asaas_customer_id;
+  const reason: "assinar" | "renovar" =
+    isPlan && !isTrial && !prazoContratar ? "renovar" : "assinar";
+  const rotuloPrazo = isTrial ? "Teste termina" : prazoContratar ? "Bloqueio em" : null;
 
   /**
    * Ocupação de assentos. O override do tenant (`seat_limit`) manda sobre o
@@ -346,7 +357,7 @@ function Financeiro() {
   const usados = activeUsers ?? 0;
   const pctAssentos = assentos && assentos > 0 ? Math.round((usados / assentos) * 100) : null;
   const assentosApertados = pctAssentos !== null && pctAssentos >= 90;
-  const vencendo = dias !== null && dias <= 5;
+  const vencendo = dias !== null && (dias <= 5 || prazoContratar);
 
   return (
     <div className="p-6 space-y-6">
@@ -380,7 +391,7 @@ function Financeiro() {
             color="blue"
           />
           <StatCard
-            title={isTrial ? "Teste termina" : "Renova em"}
+            title={rotuloPrazo ?? "Renova em"}
             info={INFO.vencimento}
             value={dias === null ? "—" : dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `${dias} dias`}
             icon={Clock}
@@ -427,12 +438,14 @@ function Financeiro() {
               <CardDescription>
                 {tenant?.billing_exempt
                   ? "Conta isenta de cobrança."
-                  : `Plano ${planName ?? tenant?.plan_code}${isTrial ? " · em teste grátis" : ""}`}
+                  : prazoContratar
+                    ? `Plano ${planName ?? tenant?.plan_code} · ainda não contratado`
+                    : `Plano ${planName ?? tenant?.plan_code}${isTrial ? " · em teste grátis" : ""}`}
               </CardDescription>
             </div>
             {isAdmin && !tenant?.billing_exempt && (
               <Button size="sm" onClick={() => setPickerOpen(true)}>
-                Trocar plano
+                {prazoContratar ? "Contratar plano" : "Trocar plano"}
               </Button>
             )}
           </CardHeader>
@@ -446,7 +459,7 @@ function Financeiro() {
             {tenant?.plan_expires_at && (
               <div className="flex flex-col">
                 <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                  {isTrial ? "Teste termina" : "Vence"}
+                  {rotuloPrazo ?? "Vence"}
                 </span>
                 <span className="flex items-center gap-1.5 tabular-nums">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />

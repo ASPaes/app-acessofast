@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-23",
+    tipo: "novo",
+    titulo: "Prazo para contratar o plano no topo do painel",
+    descricao:
+      "Se a sua empresa ainda não contratou um plano, o topo do painel mostra quantos dias faltam para contratar e a data em que o acesso remoto será bloqueado sem a contratação. A contagem atualiza todo dia. O botão Contratar plano abre a escolha do plano ali mesmo, e o Financeiro mostra a mesma data em Bloqueio em.",
+    para: "admin",
+  },
+  {
     data: "2026-10-22",
     tipo: "novo",
     titulo: "Atualizações: liberar versão nova para os computadores",
