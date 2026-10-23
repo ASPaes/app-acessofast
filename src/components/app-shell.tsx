@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode",
+          "name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode, asaas_customer_id",
         )
         .eq("id", me!.tenant_id as string)
         .single();
@@ -192,6 +192,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 currentPlanCode={tenant?.plan_code}
                 activeUsers={activeUsers}
                 contaGratuita={contaGratuita}
+                nuncaContratou={!!tenant && !tenant.asaas_customer_id}
               />
             )}
             {children}
