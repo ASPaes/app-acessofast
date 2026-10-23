@@ -1,6 +1,16 @@
-// AcessoFast — create-renewal-prod (v4)
+// AcessoFast — create-renewal-prod (v5)
 // PRODUCAO. Tenant que JA EXISTE: trial->pagante, renovacao, troca de plano.
 // verify_jwt = TRUE: quem chama e o admin logado. Tenant vem do JWT, nunca do body.
+//
+// v5 (23/10/2026) — OFERTA DE LANCAMENTO, igual a create-checkout-prod v6 do site:
+//   o painel cobrava o preco de tabela enquanto o site vendia com desconto. Agora
+//   launch_offer_status manda nos dois: desconto sobre o preco de tabela enquanto
+//   houver vaga, por discount_months cobrancas no mensal (janela com redemption_id
+//   NULL, que a asaas-webhook-prod ja sabe fechar) e uma vez no anual. Se a
+//   consulta falhar, ABORTA: cobrar acima do anunciado e pior do que nao vender.
+//   Nao soma com o cupom reservado: vale o maior, empate para o lancamento. O cupom
+//   que perde NAO e consumido — continua reservado na conta (ver v3).
+//   Como no site, vale tambem para quem ja contratou antes e volta a contratar.
 //
 // v4 (23/10/2026) — aceita plano com menos vagas que os usuarios ativos (ver passo 3).
 //
@@ -149,11 +159,43 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 4b) (v5) OFERTA DE LANCAMENTO — a mesma RPC que o site le para a vitrine e que a
+  //     create-checkout-prod usa para cobrar. is_active ja vem combinado com "ainda
+  //     ha vaga". Sem resposta, o valor certo e desconhecido: aborta.
+  const { data: lo, error: loErr } = await db.rpc("launch_offer_status");
+  if (loErr) {
+    console.error("launch_offer_status failed:", loErr.message);
+    return j({ error: "db_error", detail: loErr.message }, 500);
+  }
+  const oferta = Array.isArray(lo) ? lo[0] : lo;
+  const launch_percent = oferta?.is_active ? (oferta.discount_percent ?? null) : null;
+  // null = sem prazo (o preco de lancamento valeria enquanto a assinatura durasse).
+  const launch_months = launch_percent === null ? null : (oferta.discount_months ?? null);
+
+  const usa_lancamento =
+    launch_percent !== null && launch_percent >= (promo?.applied_discount_percent ?? 0);
+  if (usa_lancamento) {
+    if (promo) {
+      // Perdeu para o lancamento: nao e amarrado a esta cobranca, entao segue
+      // reservado na conta para uma proxima.
+      promo_skipped = "launch_offer_better";
+      promo = null;
+    }
+    amount_cents = Math.round((full_cents * (100 - launch_percent)) / 100);
+    if (amount_cents < MIN_CHARGE_CENTS) {
+      console.error("desconto de lancamento abaixo do minimo do Asaas:", plan_code, amount_cents);
+      return j({ error: "amount_below_minimum" }, 400);
+    }
+  }
+  const discount_source = usa_lancamento ? "launch" : promo ? "promo" : null;
+  const applied_percent = usa_lancamento ? launch_percent : (promo?.applied_discount_percent ?? null);
+  const applied_months = usa_lancamento ? launch_months : (promo?.applied_discount_months ?? null);
+
   // A janela so faz sentido no mensal com prazo. No anual a cobranca e unica; no
   // mensal sem prazo o desconto vale enquanto a assinatura durar, que e o que o
   // value reduzido ja faz.
   const precisaJanela =
-    !!promo && promo.applied_discount_months !== null && billing_cycle === "monthly";
+    discount_source !== null && applied_months !== null && billing_cycle === "monthly";
 
   // 5) Intencao JA COM tenant_id: e esse campo que faz o webhook chamar apply_paid_plan.
   const { data: intent, error: intentErr } = await db.from("signup_intents").insert({
@@ -192,12 +234,13 @@ Deno.serve(async (req) => {
   }
 
   if (precisaJanela) {
+    // (v5) Lancamento abre a janela com redemption_id NULL, como no site.
     const { data: wid, error: wErr } = await db.rpc("promo_window_open", {
-      p_redemption_id: promo.id,
+      p_redemption_id: discount_source === "promo" ? promo.id : null,
       p_signup_intent_id: intent.id,
       p_full_value_cents: full_cents,
       p_discounted_value_cents: amount_cents,
-      p_discount_months: promo.applied_discount_months,
+      p_discount_months: applied_months,
       p_environment: ENV,
     });
     if (wErr) {
@@ -211,7 +254,12 @@ Deno.serve(async (req) => {
 
   // 6) Checkout no Asaas. Anual = DETACHED+INSTALLMENT (ate 3x); mensal = assinatura recorrente.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-  const sufixoDesconto = promo ? ` — ${promo.applied_discount_percent}% OFF (${promo.code})` : "";
+  const sufixoDesconto =
+    discount_source === "launch"
+      ? ` — Preco de lancamento ${applied_percent}% OFF`
+      : discount_source === "promo"
+        ? ` — ${applied_percent}% OFF (${promo.code})`
+        : "";
   const payload = {
     billingTypes: ["CREDIT_CARD"],
     minutesToExpire: 60,
@@ -261,5 +309,11 @@ Deno.serve(async (req) => {
     discount_percent: promo?.applied_discount_percent ?? null,
     discount_months: promo?.applied_discount_months ?? null,
     promo_skipped,
+    // (v5) O que de fato entrou no preco, nos mesmos nomes da create-checkout-prod.
+    applied_discount_percent: applied_percent,
+    applied_discount_months: applied_months,
+    discount_source,
+    launch_discount_percent: launch_percent,
+    launch_discount_months: launch_months,
   });
 });

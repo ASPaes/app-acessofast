@@ -23,6 +23,7 @@ import { SecaoCupons } from "@/components/secao-cupons";
 import { StatCard } from "@/components/stat-card";
 import type { KpiInfo } from "@/components/kpi-info";
 import { useMe } from "@/hooks/use-me";
+import { aplicarDesconto, percentualDaOferta, useOfertaLancamento } from "@/lib/oferta-lancamento";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -91,7 +92,8 @@ const INFO: Record<string, KpiInfo> = {
     oQue: "O plano contratado pela empresa e o preço mensal dele.",
     porQue:
       "É o que define assentos, simultaneidade e se o atendimento tem ou não o corte de 2 horas. Toda recusa no Conectar sai de um limite deste plano.",
-    comoCalculamos: "tenants.plan_code, com o preço vindo de plans",
+    comoCalculamos:
+      "tenants.plan_code; o preço é o que a empresa paga hoje (valor_contratado) ou, se ainda não contratou, o de plans com a oferta de lançamento, igual ao site",
     referencia: "Conta isenta aparece sem preço — cobrança desligada em tenants.billing_exempt.",
   },
   vencimento: {
@@ -213,6 +215,19 @@ function Financeiro() {
     },
   });
   const planName = plano?.name ?? null;
+
+  // Quanto a empresa paga de verdade. O preço de tabela de `plans` não serve: quem
+  // contratou com a oferta de lançamento ou com cupom paga menos, por um tempo.
+  const { data: contratado } = useQuery({
+    queryKey: ["valor-contratado", tenantId],
+    enabled: !!tenantId && isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("valor_contratado");
+      if (error) throw error;
+      return (Array.isArray(data) ? data[0] : data) ?? null;
+    },
+  });
+  const { data: oferta } = useOfertaLancamento(isAdmin);
 
   /**
    * Atendimentos dos últimos 30 dias — deliberadamente NÃO "do ciclo".
@@ -383,9 +398,19 @@ function Financeiro() {
             hint={
               tenant?.billing_exempt
                 ? "Conta isenta de cobrança"
-                : plano?.price_month_cents
-                  ? `${emReais(plano.price_month_cents)} por mês`
-                  : "Sob medida"
+                : contratado
+                  ? contratado.billing_cycle === "annual"
+                    ? `${emReais(contratado.valor_cents / 12)} por mês no plano anual`
+                    : `${emReais(contratado.valor_cents)} por mês${
+                        contratado.cobrancas_com_desconto
+                          ? ` · com desconto por mais ${contratado.cobrancas_com_desconto} ${contratado.cobrancas_com_desconto === 1 ? "cobrança" : "cobranças"}`
+                          : ""
+                      }`
+                  : plano?.price_month_cents
+                    ? percentualDaOferta(oferta) !== null
+                      ? `${emReais(aplicarDesconto(plano.price_month_cents, percentualDaOferta(oferta)!))} por mês · preço de lançamento`
+                      : `${emReais(plano.price_month_cents)} por mês`
+                    : "Sob medida"
             }
             loading={!tenant}
             color="blue"

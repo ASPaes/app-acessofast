@@ -12,6 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  aplicarDesconto,
+  percentualDaOferta,
+  rotuloDaOferta,
+  useOfertaLancamento,
+} from "@/lib/oferta-lancamento";
 
 type Props = {
   open: boolean;
@@ -133,6 +139,20 @@ export function PlanPickerDialog({
   const cupomVale = (planCode: string) =>
     !!cupom && (cupom.plan_codes === null || cupom.plan_codes.includes(planCode));
 
+  // Oferta de lançamento: o mesmo preço do site comercial. Não soma com o cupom:
+  // vale o maior dos dois, e o empate fica com o lançamento (regra da
+  // create-checkout-prod e da create-renewal-prod). Quem cobra é o servidor.
+  const { data: oferta } = useOfertaLancamento(open);
+  const pctOferta = percentualDaOferta(oferta);
+  function descontoDo(planCode: string): { percent: number; fonte: "lancamento" | "cupom" } | null {
+    const pctCupom = cupomVale(planCode) ? (cupom!.discount_percent ?? null) : null;
+    if (pctOferta !== null && pctOferta >= (pctCupom ?? 0)) {
+      return { percent: pctOferta, fonte: "lancamento" };
+    }
+    return pctCupom !== null ? { percent: pctCupom, fonte: "cupom" } : null;
+  }
+  const cupomPerdeParaOferta = !!cupom && pctOferta !== null && pctOferta >= cupom.discount_percent;
+
   const emCheckout = pendente !== null;
 
   const economiaAnual = (planos ?? []).some(
@@ -247,29 +267,40 @@ export function PlanPickerDialog({
                     <p className="text-sm text-muted-foreground">Preço indisponível</p>
                   ) : (
                     (() => {
-                      const comCupom = cupomVale(plano.code) && cupom!.discount_percent !== null;
-                      const cobrado = comCupom
-                        ? Math.round((preco * (100 - cupom!.discount_percent)) / 100)
-                        : preco;
+                      // Como no site: o desconto sai do TOTAL do ciclo e só depois
+                      // divide por 12, senão o centavo do card e o da cobrança divergem.
+                      const desconto = descontoDo(plano.code);
+                      const cobrado = desconto ? aplicarDesconto(preco, desconto.percent) : preco;
+                      const meses = cycle === "annual" ? 12 : 1;
                       return (
                         <div>
-                          <p className="text-xl font-semibold">
-                            {emReais(cycle === "annual" ? cobrado / 12 : cobrado)}
-                            <span className="text-sm font-normal text-muted-foreground">/mês</span>
-                          </p>
-                          {comCupom && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="line-through">
-                                {emReais(cycle === "annual" ? preco / 12 : preco)}
-                              </span>{" "}
-                              <span className="text-primary">
-                                cupom {cupom!.code} · {cupom!.discount_percent}% OFF
+                          {desconto && (
+                            <p className="flex items-center gap-2 text-xs">
+                              <span className="text-muted-foreground line-through">
+                                {emReais(preco / meses)}
+                              </span>
+                              <span className="rounded-sm bg-success/15 px-1.5 py-0.5 font-semibold text-success">
+                                -{desconto.percent}%
                               </span>
                             </p>
                           )}
+                          <p className="text-xl font-semibold">
+                            {emReais(cobrado / meses)}
+                            <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                          </p>
                           {cycle === "annual" && (
                             <p className="text-xs text-muted-foreground">
                               cobrado {emReais(cobrado)}/ano
+                            </p>
+                          )}
+                          {desconto?.fonte === "lancamento" && (
+                            <p className="text-xs font-medium text-primary">
+                              {rotuloDaOferta(oferta!)}
+                            </p>
+                          )}
+                          {desconto?.fonte === "cupom" && (
+                            <p className="text-xs text-primary">
+                              cupom {cupom!.code} · {desconto.percent}% OFF
                             </p>
                           )}
                         </div>
@@ -317,15 +348,33 @@ export function PlanPickerDialog({
           </div>
         )}
 
-        {cupom && (
-          <p className="text-xs text-muted-foreground">
-            Cupom <span className="font-mono">{cupom.code}</span>:{" "}
-            {cupom.discount_months === null || cycle === "annual"
-              ? // No anual a cobrança é única — o prazo em meses não tem onde valer.
-                `${cupom.discount_percent}% de desconto nesta cobrança.`
-              : `${cupom.discount_percent}% de desconto nas primeiras ${cupom.discount_months} cobranças; depois o valor volta ao normal.`}
-          </p>
-        )}
+        {oferta &&
+          pctOferta !== null &&
+          (planos ?? []).some((p) => descontoDo(p.code)?.fonte === "lancamento") && (
+            <p className="text-xs text-muted-foreground">
+              Preço de lançamento:{" "}
+              {oferta.discount_months === null || cycle === "annual"
+                ? `${pctOferta}% de desconto nesta cobrança.`
+                : `${pctOferta}% de desconto nas primeiras ${oferta.discount_months} cobranças; depois o valor volta ao de tabela.`}
+            </p>
+          )}
+
+        {cupom &&
+          (cupomPerdeParaOferta ? (
+            <p className="text-xs text-muted-foreground">
+              Cupom <span className="font-mono">{cupom.code}</span>: o preço de lançamento já dá um
+              desconto igual ou maior, então ele vale no lugar do cupom. Os descontos não se somam,
+              e o cupom continua guardado na conta.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Cupom <span className="font-mono">{cupom.code}</span>:{" "}
+              {cupom.discount_months === null || cycle === "annual"
+                ? // No anual a cobrança é única — o prazo em meses não tem onde valer.
+                  `${cupom.discount_percent}% de desconto nesta cobrança.`
+                : `${cupom.discount_percent}% de desconto nas primeiras ${cupom.discount_months} cobranças; depois o valor volta ao normal.`}
+            </p>
+          ))}
 
         <p className="text-xs text-muted-foreground">
           Precisa de mais?{" "}
