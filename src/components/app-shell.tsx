@@ -9,6 +9,7 @@ import { UserMenu } from "@/components/user-menu";
 import { HealthPill } from "@/components/ui-shell/health-pill";
 import { AmbientBackground } from "@/components/ui-shell/ambient-background";
 import { BillingBanner } from "@/components/billing-banner";
+import { AjusteDeUsuarios } from "@/components/ajuste-de-usuarios";
 import { CaixaSugestoes } from "@/components/caixa-sugestoes";
 import { Novidades } from "@/components/novidades";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
@@ -63,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode, asaas_customer_id",
+          "name, billing_status, billing_invoice_url, past_due_since, is_trial, plan_expires_at, billing_exempt, plan_code, billing_mode, asaas_customer_id, seat_limit",
         )
         .eq("id", me!.tenant_id as string)
         .single();
@@ -107,6 +108,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       return count ?? 0;
     },
   });
+
+  // Plano com menos vagas que a equipe (contratou plano menor): o administrador só
+  // volta ao painel depois de escolher quem fica bloqueado. A contagem só vale para
+  // ele, porque o técnico não enxerga os colegas; o técnico descobre ao conectar.
+  const ajustarUsuarios =
+    me?.role === "admin" &&
+    !!me.tenant_id &&
+    tenant?.seat_limit != null &&
+    activeUsers != null &&
+    activeUsers > tenant.seat_limit;
 
   const scopeLabel = isSuper ? "Plataforma" : (tenant?.name ?? "");
 
@@ -195,7 +206,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 nuncaContratou={!!tenant && !tenant.asaas_customer_id}
               />
             )}
-            {children}
+            {ajustarUsuarios ? (
+              <AjusteDeUsuarios
+                tenantId={me.tenant_id as string}
+                meId={me.id}
+                vagas={tenant.seat_limit as number}
+              />
+            ) : (
+              children
+            )}
           </main>
         </div>
       </div>

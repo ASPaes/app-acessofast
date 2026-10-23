@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-23",
+    tipo: "melhoria",
+    titulo: "Plano com menos vagas do que a sua equipe",
+    descricao:
+      "Agora dá para contratar um plano com menos usuários do que a empresa tem ativos. Depois do pagamento, o painel pede ao administrador para escolher quem continua. Os demais ficam bloqueados, sem nada apagado, e podem ser reativados em Usuários quando houver vaga. Até essa escolha, os acessos remotos da empresa ficam pausados.",
+    para: "admin",
+  },
+  {
+    data: "2026-10-23",
     tipo: "novo",
     titulo: "Prazo para contratar o plano no topo do painel",
     descricao:
