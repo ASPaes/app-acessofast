@@ -422,8 +422,9 @@ function DispositivosPage() {
           // e padrao de adware, e queima justamente este momento.
           setSemSaldo(true);
         } else if (raw.includes("billing_blocked")) {
+          // Pagamento pendente, teste encerrado ou prazo para contratar encerrado.
           toast.error(
-            "Conta bloqueada por pendência de pagamento/trial. Regularize na aba Financeiro para voltar a conectar.",
+            "Conta bloqueada: a empresa está sem plano ativo. Regularize na aba Financeiro para voltar a conectar.",
           );
         } else if (raw.includes("usuarios_acima_do_plano")) {
           toast.error(

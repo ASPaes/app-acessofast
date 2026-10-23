@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-23",
+    tipo: "correcao",
+    titulo: "Preço de lançamento também na contratação pelo painel",
+    descricao:
+      "Ao contratar ou trocar de plano pelo painel, você paga o mesmo preço de lançamento anunciado no site, com o preço de tabela riscado ao lado e por quanto tempo o desconto vale. No Financeiro, o quadro Plano mostra quanto a sua empresa paga hoje.",
+    para: "admin",
+  },
+  {
+    data: "2026-10-23",
     tipo: "melhoria",
     titulo: "Plano com menos vagas do que a sua equipe",
     descricao:

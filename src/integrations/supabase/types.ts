@@ -2617,6 +2617,7 @@ export type Database = {
       launch_offer_status: {
         Args: never
         Returns: {
+          discount_months: number | null
           discount_percent: number
           is_active: boolean
           slots_left: number
@@ -2951,6 +2952,14 @@ export type Database = {
           p_tenant: string
         }
         Returns: undefined
+      }
+      valor_contratado: {
+        Args: never
+        Returns: {
+          billing_cycle: string
+          cobrancas_com_desconto: number | null
+          valor_cents: number
+        }[]
       }
       vps_metrics_series: {
         Args: { p_bucket?: string; p_since?: string }
