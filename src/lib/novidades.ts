@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-26",
+    tipo: "melhoria",
+    titulo: "Avisos mais claros no app do celular",
+    descricao:
+      "No app AcessoFast para Android, ao conectar pela lista da empresa, o técnico vê por que o acesso foi recusado: conta sem plano ativo ou mais usuários ativos do que o plano permite, e o que o administrador precisa fazer no painel. O celular acessado também passa a seguir as mesmas regras do computador, como o horário de acesso da empresa e o limite de 2 horas do plano gratuito.",
+    para: "todos",
+  },
+  {
     data: "2026-10-23",
     tipo: "correcao",
     titulo: "Receita contratada pelo valor que cada conta paga",
