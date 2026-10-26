@@ -124,6 +124,11 @@ create table if not exists public.indicacoes (
   comissao_paga_em   timestamptz,
   comissao_paga_por  uuid references public.profiles(id),
 
+  -- "Tirar empresa deste revendedor" marca aqui em vez de apagar: fica o rastro de
+  -- que a atribuicao existiu, e os vinculos com empresa e intencao saem para a
+  -- empresa poder ir para outro revendedor. Todas as contas ignoram retirada.
+  removida_em        timestamptz,
+
   constraint ck_indicacoes_venda check (
     (venda_em is null) = (competencia is null)
     and (venda_em is null) = (comissao_cents is null)
@@ -693,18 +698,22 @@ as $fn$
              and (p_fim is null or c.dia < p_fim)),
          (select count(*) from public.indicacoes i
            where i.revendedor_id = r.id
+             and i.removida_em is null
              and (i.tenant_id is not null or i.venda_em is not null)
              and (p_inicio is null or (i.created_at at time zone 'America/Sao_Paulo')::date >= p_inicio)
              and (p_fim is null or (i.created_at at time zone 'America/Sao_Paulo')::date < p_fim)),
          (select count(*) from public.indicacoes i
            where i.revendedor_id = r.id
+             and i.removida_em is null
              and i.venda_em is not null
              and (p_inicio is null or i.competencia >= p_inicio)
              and (p_fim is null or i.competencia < p_fim)),
          (select coalesce(sum(i.comissao_cents), 0) from public.indicacoes i
-           where i.revendedor_id = r.id and i.venda_em is not null and i.comissao_paga_em is null),
+           where i.revendedor_id = r.id and i.removida_em is null
+             and i.venda_em is not null and i.comissao_paga_em is null),
          (select coalesce(sum(i.comissao_cents), 0) from public.indicacoes i
-           where i.revendedor_id = r.id and i.comissao_paga_em is not null)
+           where i.revendedor_id = r.id and i.removida_em is null
+             and i.comissao_paga_em is not null)
     from public.revendedores r
    where private.is_super_admin()
    -- Quem espera aprovacao primeiro: e o que pede acao.
@@ -749,6 +758,7 @@ as $fn$
     left join public.tenants t on t.id = i.tenant_id
     left join public.signup_intents si on si.id = i.signup_intent_id
    where i.revendedor_id = p_revendedor_id
+     and i.removida_em is null
      and private.is_super_admin()
    order by i.created_at desc
 $fn$;
@@ -780,6 +790,7 @@ begin
    where i.revendedor_id = p_revendedor_id
      and i.competencia = p_competencia
      and i.venda_em is not null
+     and i.removida_em is null
      and (i.comissao_paga_em is null) = p_paga;
   get diagnostics v_n = row_count;
   return v_n;
@@ -847,9 +858,13 @@ begin
     raise exception 'forbidden' using errcode = '42501';
   end if;
 
-  delete from public.indicacoes i
+  update public.indicacoes i
+     set removida_em      = now(),
+         tenant_id        = null,
+         signup_intent_id = null
    where i.id = p_indicacao_id
-     and i.comissao_paga_em is null;
+     and i.comissao_paga_em is null
+     and i.removida_em is null;
   if not found then
     raise exception 'comissao_ja_paga' using errcode = 'P0001';
   end if;
@@ -886,9 +901,10 @@ as $fn$
          private.revendedor_situacao(r.ativo, r.aprovado_em, r.recusado_em),
          r.telefone, r.pix,
          (select count(*) from public.indicacoes i
-           where i.revendedor_id = r.id and i.venda_em is not null),
+           where i.revendedor_id = r.id and i.removida_em is null and i.venda_em is not null),
          (select count(*) from public.indicacoes i
            where i.revendedor_id = r.id
+             and i.removida_em is null
              and i.venda_em is not null
              and i.competencia = date_trunc('month', now() at time zone 'America/Sao_Paulo')::date),
          coalesce((
@@ -896,7 +912,7 @@ as $fn$
                             order by m.competencia desc)
              from (select i.competencia, count(*) as n
                      from public.indicacoes i
-                    where i.revendedor_id = r.id and i.venda_em is not null
+                    where i.revendedor_id = r.id and i.removida_em is null and i.venda_em is not null
                     group by i.competencia
                     order by i.competencia desc
                     limit 12) m
