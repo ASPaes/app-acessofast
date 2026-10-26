@@ -18,10 +18,12 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AguardandoAutorizacaoRouteImport } from './routes/aguardando-autorizacao'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RevendedorChaveRouteImport } from './routes/revendedor.$chave'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 import { Route as AuthenticatedSugestoesRouteImport } from './routes/_authenticated/sugestoes'
 import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
 import { Route as AuthenticatedIntegracoesRouteImport } from './routes/_authenticated/integracoes'
+import { Route as AuthenticatedIndicacoesRouteImport } from './routes/_authenticated/indicacoes'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
 import { Route as AuthenticatedEmpresasRouteImport } from './routes/_authenticated/empresas'
 import { Route as AuthenticatedDispositivosRouteImport } from './routes/_authenticated/dispositivos'
@@ -76,6 +78,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RevendedorChaveRoute = RevendedorChaveRouteImport.update({
+  id: '/revendedor/$chave',
+  path: '/revendedor/$chave',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
@@ -98,6 +105,11 @@ const AuthenticatedIntegracoesRoute =
     path: '/integracoes',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedIndicacoesRoute = AuthenticatedIndicacoesRouteImport.update({
+  id: '/indicacoes',
+  path: '/indicacoes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
@@ -165,10 +177,12 @@ export interface FileRoutesByFullPath {
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/indicacoes': typeof AuthenticatedIndicacoesRoute
   '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/sugestoes': typeof AuthenticatedSugestoesRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
+  '/revendedor/$chave': typeof RevendedorChaveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -188,10 +202,12 @@ export interface FileRoutesByTo {
   '/dispositivos': typeof AuthenticatedDispositivosRoute
   '/empresas': typeof AuthenticatedEmpresasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/indicacoes': typeof AuthenticatedIndicacoesRoute
   '/integracoes': typeof AuthenticatedIntegracoesRoute
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/sugestoes': typeof AuthenticatedSugestoesRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
+  '/revendedor/$chave': typeof RevendedorChaveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -213,10 +229,12 @@ export interface FileRoutesById {
   '/_authenticated/dispositivos': typeof AuthenticatedDispositivosRoute
   '/_authenticated/empresas': typeof AuthenticatedEmpresasRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/_authenticated/indicacoes': typeof AuthenticatedIndicacoesRoute
   '/_authenticated/integracoes': typeof AuthenticatedIntegracoesRoute
   '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/_authenticated/sugestoes': typeof AuthenticatedSugestoesRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
+  '/revendedor/$chave': typeof RevendedorChaveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -238,10 +256,12 @@ export interface FileRouteTypes {
     | '/dispositivos'
     | '/empresas'
     | '/financeiro'
+    | '/indicacoes'
     | '/integracoes'
     | '/monitoramento'
     | '/sugestoes'
     | '/usuarios'
+    | '/revendedor/$chave'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -261,10 +281,12 @@ export interface FileRouteTypes {
     | '/dispositivos'
     | '/empresas'
     | '/financeiro'
+    | '/indicacoes'
     | '/integracoes'
     | '/monitoramento'
     | '/sugestoes'
     | '/usuarios'
+    | '/revendedor/$chave'
   id:
     | '__root__'
     | '/'
@@ -285,10 +307,12 @@ export interface FileRouteTypes {
     | '/_authenticated/dispositivos'
     | '/_authenticated/empresas'
     | '/_authenticated/financeiro'
+    | '/_authenticated/indicacoes'
     | '/_authenticated/integracoes'
     | '/_authenticated/monitoramento'
     | '/_authenticated/sugestoes'
     | '/_authenticated/usuarios'
+    | '/revendedor/$chave'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -301,6 +325,7 @@ export interface RootRouteChildren {
   DefinirSenhaRoute: typeof DefinirSenhaRoute
   ExclusaoDeDadosRoute: typeof ExclusaoDeDadosRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
+  RevendedorChaveRoute: typeof RevendedorChaveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -368,6 +393,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/revendedor/$chave': {
+      id: '/revendedor/$chave'
+      path: '/revendedor/$chave'
+      fullPath: '/revendedor/$chave'
+      preLoaderRoute: typeof RevendedorChaveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/usuarios': {
       id: '/_authenticated/usuarios'
       path: '/usuarios'
@@ -394,6 +426,13 @@ declare module '@tanstack/react-router' {
       path: '/integracoes'
       fullPath: '/integracoes'
       preLoaderRoute: typeof AuthenticatedIntegracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/indicacoes': {
+      id: '/_authenticated/indicacoes'
+      path: '/indicacoes'
+      fullPath: '/indicacoes'
+      preLoaderRoute: typeof AuthenticatedIndicacoesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/financeiro': {
@@ -472,6 +511,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDispositivosRoute: typeof AuthenticatedDispositivosRoute
   AuthenticatedEmpresasRoute: typeof AuthenticatedEmpresasRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
+  AuthenticatedIndicacoesRoute: typeof AuthenticatedIndicacoesRoute
   AuthenticatedIntegracoesRoute: typeof AuthenticatedIntegracoesRoute
   AuthenticatedMonitoramentoRoute: typeof AuthenticatedMonitoramentoRoute
   AuthenticatedSugestoesRoute: typeof AuthenticatedSugestoesRoute
@@ -488,6 +528,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDispositivosRoute: AuthenticatedDispositivosRoute,
   AuthenticatedEmpresasRoute: AuthenticatedEmpresasRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
+  AuthenticatedIndicacoesRoute: AuthenticatedIndicacoesRoute,
   AuthenticatedIntegracoesRoute: AuthenticatedIntegracoesRoute,
   AuthenticatedMonitoramentoRoute: AuthenticatedMonitoramentoRoute,
   AuthenticatedSugestoesRoute: AuthenticatedSugestoesRoute,
@@ -507,6 +548,7 @@ const rootRouteChildren: RootRouteChildren = {
   DefinirSenhaRoute: DefinirSenhaRoute,
   ExclusaoDeDadosRoute: ExclusaoDeDadosRoute,
   PrivacidadeRoute: PrivacidadeRoute,
+  RevendedorChaveRoute: RevendedorChaveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

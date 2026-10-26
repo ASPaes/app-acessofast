@@ -15,6 +15,7 @@ import {
   Settings,
   Lightbulb,
   RefreshCw,
+  Handshake,
 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,7 +38,8 @@ type NavItem = {
     | "/integracoes"
     | "/configuracoes"
     | "/sugestoes"
-    | "/atualizacoes";
+    | "/atualizacoes"
+    | "/indicacoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -90,10 +92,14 @@ const gestaoAdmin: NavItem[] = [
 //
 // Atualizacoes libera versao nova do agente e do app para a frota inteira: e codigo rodando
 // em computador de cliente, decisao so da equipe AcessoFast.
+//
+// Indicacoes e o programa de revendedores: link proprio, cliques, vendas e comissao. Quem
+// cadastra revendedor e paga comissao e a ASP.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
   { title: "Anúncios", url: "/anuncios", icon: Megaphone },
+  { title: "Indicações", url: "/indicacoes", icon: Handshake },
   { title: "Sugestões", url: "/sugestoes", icon: Lightbulb },
   { title: "Atualizações", url: "/atualizacoes", icon: RefreshCw },
 ];

@@ -46,6 +46,11 @@ verify_jwt = false
 [functions.start-trial-prod]
 verify_jwt = false
 
+# Checkout pago do site. Trazido para o repo em 26/10/2026 (v7, indicacao de
+# revendedor); estava deployada com verify_jwt=false.
+[functions.create-checkout-prod]
+verify_jwt = false
+
 # Slot de anuncio do plano gratuito (Fase 1). Quem chama e o painel logado, com o
 # JWT do tecnico — e o proprio user_id que vira o espectador da impressao e o
 # sujeito do teto diario. Sem gateway exigindo JWT, uma chamada anonima entraria

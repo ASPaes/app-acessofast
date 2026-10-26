@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-26",
+    tipo: "novo",
+    titulo: "Indicações: link próprio para revendedores",
+    descricao:
+      "Nova tela Indicações, no grupo Plataforma. Cadastre um revendedor e ele ganha um link próprio para divulgar o AcessoFast. A tela mostra quantas pessoas abriram o link de cada um, quantas se cadastraram e quantas fecharam. Cada empresa que paga o primeiro plano rende R$ 50 de comissão, somada por mês para pagar até o dia 30; é ali que você marca a comissão como paga. O revendedor recebe uma página só dele, sem senha, onde vê apenas quantas vendas fez.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-10-26",
     tipo: "melhoria",
     titulo: "Avisos mais claros no app do celular",
     descricao:

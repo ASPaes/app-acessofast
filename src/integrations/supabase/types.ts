@@ -2596,6 +2596,10 @@ export type Database = {
         Args: { p_confirm_name: string; p_tenant: string }
         Returns: undefined
       }
+      desvincular_indicacao: {
+        Args: { p_indicacao_id: string }
+        Returns: undefined
+      }
       find_tenant_by_document: {
         Args: { p_cnpj?: string; p_doc_hash: string }
         Returns: {
@@ -2614,6 +2618,41 @@ export type Database = {
           key_version: number
         }[]
       }
+      indicacoes_do_revendedor: {
+        Args: { p_revendedor_id: string }
+        Returns: {
+          aguardando_pagamento: boolean
+          comissao_cents: number | null
+          comissao_paga_em: string | null
+          competencia: string | null
+          created_at: string
+          em_teste: boolean
+          empresa: string
+          gratis: boolean
+          id: string
+          origem: string
+          tenant_id: string | null
+          venda_em: string | null
+        }[]
+      }
+      indicacoes_resumo: {
+        Args: { p_fim?: string; p_inicio?: string }
+        Returns: {
+          a_pagar_cents: number
+          ativo: boolean
+          cadastros: number
+          chave_painel: string
+          cliques: number
+          codigo: string
+          contato: string | null
+          created_at: string
+          id: string
+          nome: string
+          pago_cents: number
+          pix: string | null
+          vendas: number
+        }[]
+      }
       launch_offer_status: {
         Args: never
         Returns: {
@@ -2624,6 +2663,10 @@ export type Database = {
           slots_taken: number
           slots_total: number
         }[]
+      }
+      marcar_comissao_paga: {
+        Args: { p_competencia: string; p_paga?: boolean; p_revendedor_id: string }
+        Returns: number
       }
       meter_external_session: {
         Args: {
@@ -2837,6 +2880,18 @@ export type Database = {
           redemption_id: string
         }[]
       }
+      registrar_clique_revendedor: {
+        Args: { p_codigo: string; p_visitante: string }
+        Returns: boolean
+      }
+      registrar_indicacao: {
+        Args: { p_codigo: string; p_signup_intent_id: string; p_tenant_id?: string }
+        Returns: boolean
+      }
+      registrar_venda_indicada: {
+        Args: { p_payment_id: string; p_signup_intent_id: string; p_tenant_id: string }
+        Returns: boolean
+      }
       reject_device: { Args: { p_device_id: string }; Returns: undefined }
       reject_join_request: {
         Args: { p_actor: string; p_request_id: string }
@@ -2857,6 +2912,16 @@ export type Database = {
           version: string
         }[]
       }
+      revendedor_painel: {
+        Args: { p_chave: string }
+        Returns: {
+          codigo: string
+          meses: Json
+          nome: string
+          vendas_mes: number
+          vendas_total: number
+        }[]
+      }
       revoke_access_grant: { Args: { p_grant_id: string }; Returns: undefined }
       revoke_enrollment_secret: {
         Args: { p_secret_id: string }
@@ -2865,6 +2930,17 @@ export type Database = {
       rl_hit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: boolean
+      }
+      salvar_revendedor: {
+        Args: {
+          p_ativo?: boolean
+          p_codigo?: string
+          p_contato?: string
+          p_id?: string
+          p_nome: string
+          p_pix?: string
+        }
+        Returns: string
       }
       set_device_active: {
         Args: { p_active: boolean; p_device_id: string }
@@ -2969,6 +3045,10 @@ export type Database = {
           tenant_id: string
           valor_cents: number
         }[]
+      }
+      vincular_indicacao: {
+        Args: { p_ja_pagou?: boolean; p_revendedor_id: string; p_tenant_id: string }
+        Returns: string
       }
       vps_metrics_series: {
         Args: { p_bucket?: string; p_since?: string }
