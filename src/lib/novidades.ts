@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-26",
+    tipo: "novo",
+    titulo: "Indicações: link próprio para revendedores",
+    descricao:
+      "Nova tela Indicações, no grupo Plataforma. O revendedor se cadastra sozinho em acessofast.com.br/revendedor, com WhatsApp, chave Pix e senha, e espera a aprovação de vocês: o site promete resposta em até 1 dia útil, e o número de cadastros pendentes aparece no menu, ao lado de Indicações. Aprovado, ele ganha um link próprio para divulgar o AcessoFast; também dá para cadastrar pela tela. Ela mostra quantas pessoas abriram o link de cada um, quantas se cadastraram e quantas fecharam. Cada empresa que paga o primeiro plano rende R$ 50 de comissão, somada por mês para pagar até o dia 30; é ali que você marca a comissão como paga. O revendedor entra na área dele com WhatsApp e senha e vê apenas quantas vendas fez.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-10-26",
     tipo: "melhoria",
     titulo: "Avisos mais claros no app do celular",
     descricao:

@@ -15,12 +15,14 @@ import {
   Settings,
   Lightbulb,
   RefreshCw,
+  Handshake,
 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 import { useSolicitacoesAcesso } from "@/hooks/use-solicitacoes-acesso";
 import { useSugestoesNovas } from "@/lib/sugestoes";
+import { useRevendedoresPendentes } from "@/lib/indicacoes";
 
 type NavItem = {
   title: string;
@@ -37,7 +39,8 @@ type NavItem = {
     | "/integracoes"
     | "/configuracoes"
     | "/sugestoes"
-    | "/atualizacoes";
+    | "/atualizacoes"
+    | "/indicacoes";
   icon: typeof LayoutDashboard;
 };
 
@@ -90,10 +93,14 @@ const gestaoAdmin: NavItem[] = [
 //
 // Atualizacoes libera versao nova do agente e do app para a frota inteira: e codigo rodando
 // em computador de cliente, decisao so da equipe AcessoFast.
+//
+// Indicacoes e o programa de revendedores: link proprio, cliques, vendas e comissao. Quem
+// cadastra revendedor e paga comissao e a ASP.
 const plataforma: NavItem[] = [
   { title: "Empresas", url: "/empresas", icon: Building2 },
   { title: "Monitoramento", url: "/monitoramento", icon: Activity },
   { title: "Anúncios", url: "/anuncios", icon: Megaphone },
+  { title: "Indicações", url: "/indicacoes", icon: Handshake },
   { title: "Sugestões", url: "/sugestoes", icon: Lightbulb },
   { title: "Atualizações", url: "/atualizacoes", icon: RefreshCw },
 ];
@@ -130,7 +137,14 @@ export function AppSidebar() {
   const { data: solicitacoes } = useSolicitacoesAcesso(!!podeDecidir);
   const badges = solicitacoes?.length ? { "/usuarios": solicitacoes.length } : undefined;
   const { data: sugestoesNovas } = useSugestoesNovas(isSuper);
-  const badgesPlataforma = sugestoesNovas ? { "/sugestoes": sugestoesNovas } : undefined;
+  const { data: revendedoresPendentes } = useRevendedoresPendentes(isSuper);
+  const badgesPlataforma =
+    sugestoesNovas || revendedoresPendentes
+      ? {
+          ...(sugestoesNovas ? { "/sugestoes": sugestoesNovas } : {}),
+          ...(revendedoresPendentes ? { "/indicacoes": revendedoresPendentes } : {}),
+        }
+      : undefined;
 
   return (
     <Sidebar

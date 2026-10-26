@@ -1,4 +1,4 @@
-// AcessoFast — start-free-prod (v2) [PRODUCAO]
+// AcessoFast — start-free-prod (v3) [PRODUCAO]
 // Cria conta no plano INDIVIDUAL GRATIS PERMANENTE. SEM pagamento, SEM cartao,
 // SEM Asaas, SEM expiracao. verify_jwt = FALSE (site comercial, visitante anonimo).
 //
@@ -16,6 +16,12 @@
 //   conseguia abrir conta com aquele documento. Dois CPFs ficaram presos assim.
 //   Agora o usuario e criado primeiro, e qualquer falha depois do claim devolve
 //   a reserva com release_trial_document(). Mesma correcao da signup-publico.
+//
+// v3 (26/10/2026) — indicacao de revendedor:
+//   `indicacao` opcional no body: o codigo do link do revendedor que o site
+//   guardou no navegador. A empresa fica ligada a ele; a venda so conta se um
+//   dia ela pagar um plano (asaas-webhook-prod). Nao-fatal: codigo errado ou
+//   falha aqui nunca impede o cadastro.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ENV = "production";
@@ -93,6 +99,7 @@ Deno.serve(async (req) => {
   const plan_code = String(b.plan_code ?? "").trim().toLowerCase();
   const consent = b.consent === true;
   const doc = String(b.document ?? "").replace(/\D/g, "");
+  const indicacao = String(b.indicacao ?? "").trim().toLowerCase().slice(0, 32);
 
   if (!company_name) return j({ error: "company_name_required" }, 400);
   if (!EMAIL_RE.test(admin_email)) return j({ error: "invalid_email" }, 400);
@@ -165,6 +172,14 @@ Deno.serve(async (req) => {
     p_doc_hash: doc_hash, p_tenant_id: tenantId,
   });
   if (attachErr) console.error("attach_trial_tenant failed:", attachErr.message);
+
+  // (v3) Veio pelo link de um revendedor.
+  if (indicacao) {
+    const { error: indErr } = await db.rpc("registrar_indicacao", {
+      p_codigo: indicacao, p_signup_intent_id: intent.id, p_tenant_id: tenantId,
+    });
+    if (indErr) console.error("registrar_indicacao failed:", indErr.message);
+  }
 
   try {
     await db.auth.admin.updateUserById(userId, { app_metadata: { tenant_id: tenantId, role: "admin" } });

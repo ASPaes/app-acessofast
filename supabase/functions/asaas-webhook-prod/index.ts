@@ -1,8 +1,14 @@
-// AcessoFast — asaas-webhook-prod (v3)
+// AcessoFast — asaas-webhook-prod (v4)
 // PRODUCAO. verify_jwt = FALSE: quem chama e o Asaas (sem JWT); auth via header
 // asaas-access-token.
 // REGRA DE OURO: sempre responder 200 (exceto token invalido). 15 nao-2xx
 // seguidas fazem o Asaas PAUSAR a fila inteira.
+//
+// v4 (26/10/2026) — venda de revendedor:
+//   Quando um pagamento de plano e aplicado (conta nova ou trial/gratis que
+//   passou a pagar), registrar_venda_indicada marca a venda na indicacao da
+//   empresa, se ela veio pelo link de um revendedor. So o 1o pagamento conta; os
+//   seguintes nao mudam nada. Compra de creditos nao e venda. Nao-fatal.
 //
 // v3 (30/09/2026) — compra de creditos:
 //   A create-credit-checkout grava credit_purchases e abre checkout avulso com
@@ -111,6 +117,20 @@ async function processarJanelaVoucher(db, intentId, subscriptionId, paymentId) {
     }
   } catch (e) {
     console.error("janela de voucher falhou (nao-fatal):", String(e));
+  }
+}
+
+// (v4) Nao-fatal por construcao: indicacao nunca atrapalha a provisao.
+async function registrarVendaIndicada(db, tenantId, intentId, paymentId) {
+  try {
+    const { error } = await db.rpc("registrar_venda_indicada", {
+      p_tenant_id: tenantId,
+      p_signup_intent_id: intentId,
+      p_payment_id: paymentId,
+    });
+    if (error) console.error("registrar_venda_indicada failed:", error.message);
+  } catch (e) {
+    console.error("venda de revendedor falhou (nao-fatal):", String(e));
   }
 }
 
@@ -285,6 +305,7 @@ Deno.serve(async (req) => {
         .eq("id", intent.id);
       return await finish("apply_paid_plan_failed", { detail: applyErr.message });
     }
+    await registrarVendaIndicada(db, tid ?? intent.tenant_id, intent.id, payment?.id ?? null);
     return await finish("plan_applied", { tenant_id: tid });
   }
 
@@ -341,6 +362,8 @@ Deno.serve(async (req) => {
   try {
     await db.auth.admin.updateUserById(userId, { app_metadata: { tenant_id: tenantId, role: "admin" } });
   } catch (_) { /* nao-fatal */ }
+
+  await registrarVendaIndicada(db, tenantId, intent.id, payment?.id ?? null);
 
   const { error: mailErr } = await pub.auth.resetPasswordForEmail(intent.admin_email);
   if (mailErr) {
