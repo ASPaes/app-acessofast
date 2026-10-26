@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import acessofastLogo from "@/assets/acessofast-logo.png.asset.json";
 import { useSolicitacoesAcesso } from "@/hooks/use-solicitacoes-acesso";
 import { useSugestoesNovas } from "@/lib/sugestoes";
+import { useRevendedoresPendentes } from "@/lib/indicacoes";
 
 type NavItem = {
   title: string;
@@ -136,7 +137,14 @@ export function AppSidebar() {
   const { data: solicitacoes } = useSolicitacoesAcesso(!!podeDecidir);
   const badges = solicitacoes?.length ? { "/usuarios": solicitacoes.length } : undefined;
   const { data: sugestoesNovas } = useSugestoesNovas(isSuper);
-  const badgesPlataforma = sugestoesNovas ? { "/sugestoes": sugestoesNovas } : undefined;
+  const { data: revendedoresPendentes } = useRevendedoresPendentes(isSuper);
+  const badgesPlataforma =
+    sugestoesNovas || revendedoresPendentes
+      ? {
+          ...(sugestoesNovas ? { "/sugestoes": sugestoesNovas } : {}),
+          ...(revendedoresPendentes ? { "/indicacoes": revendedoresPendentes } : {}),
+        }
+      : undefined;
 
   return (
     <Sidebar

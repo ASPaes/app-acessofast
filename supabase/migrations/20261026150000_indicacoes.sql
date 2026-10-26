@@ -11,8 +11,16 @@
 --   * A comissao entra no mes em que o pagamento caiu e e paga ate o dia 30,
 --     somando as vendas do mes.
 --   * Sem validade: quem abriu o link e pagou meses depois ainda conta.
---   * O revendedor ve so a quantidade de vendas, numa pagina sem login.
+--   * O revendedor ve so a quantidade de vendas, na area dele no site.
 --   * Cupom continua como esta; o link nao da desconto.
+--   * O revendedor se cadastra sozinho no site (nome, WhatsApp, Pix e senha) e
+--     espera a aprovacao da equipe, em ate 1 dia util; so entao o link funciona.
+--     O cadastro manual pelo painel continua e ja nasce aprovado.
+--
+-- Area do revendedor (acessofast.com.br/revendedor): entra com WhatsApp e senha.
+-- A sessao e a chave_painel guardada no navegador. Quem foi cadastrado pelo painel,
+-- ou esqueceu a senha, recebe da equipe o link de acesso (/revendedor/acesso/<chave>)
+-- e cria a senha la; "gerar novo acesso" no painel troca a chave e apaga a senha.
 --
 -- Quem grava:
 --   clique    -> site, registrar_clique_revendedor (anon)
@@ -34,15 +42,28 @@ create table if not exists public.revendedores (
   -- o revendedor ja espalhou pararia de funcionar.
   codigo          text not null unique,
   nome            text not null,
-  contato         text,
+  -- WhatsApp, so digitos com DDD (10 ou 11). E o login da area do revendedor.
+  telefone        text,
   pix             text,
   -- Valor por venda, copiado para a indicacao no momento da venda. Mudar aqui so
   -- vale para as vendas seguintes.
   comissao_cents  integer not null default 5000 check (comissao_cents >= 0),
-  -- Chave da pagina do revendedor (/revendedor/<chave> no painel). Quem tem o
-  -- link ve a quantidade de vendas dele; nada alem disso.
+  -- Sessao da area do revendedor e link de acesso (/revendedor/acesso/<chave>).
+  -- Quem tem a chave ve a quantidade de vendas dele; nada alem disso.
   chave_painel    uuid not null default gen_random_uuid() unique,
+  -- bcrypt (pgcrypto). Null = ainda nao criou senha: so entra pelo link de acesso.
+  senha_hash      text,
+  -- 'site' = se cadastrou sozinho; 'painel' = cadastrado pela equipe.
+  origem          text not null default 'painel' check (origem in ('site', 'painel')),
+  -- Aceite das regras e da politica de privacidade, no cadastro pelo site.
+  aceite_em       timestamptz,
+  -- So revendedor ativo marca clique e indicacao. Cadastro do site nasce inativo e
+  -- passa a ativo na aprovacao.
   ativo           boolean not null default true,
+  -- Situacao (private.revendedor_situacao): recusado_em preenchido = recusado;
+  -- aprovado_em vazio = aguardando aprovacao; senao, ativo ou inativo.
+  aprovado_em     timestamptz,
+  recusado_em     timestamptz,
   created_by      uuid references public.profiles(id),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -50,11 +71,19 @@ create table if not exists public.revendedores (
   constraint ck_revendedores_codigo
     check (codigo ~ '^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$'),
   constraint ck_revendedores_nome
-    check (length(btrim(nome)) between 1 and 120)
+    check (length(btrim(nome)) between 1 and 120),
+  constraint ck_revendedores_telefone
+    check (telefone is null or telefone ~ '^[1-9][0-9]{9,10}$'),
+  constraint ck_revendedores_pix
+    check (pix is null or length(pix) between 1 and 140)
 );
 
+-- Um WhatsApp por revendedor: e com ele que se entra na area.
+create unique index if not exists uq_revendedores_telefone
+  on public.revendedores(telefone) where telefone is not null;
+
 comment on table public.revendedores is
-  'Quem indica o AcessoFast com link proprio (acessofast.com.br/r/<codigo>). Escrita so por salvar_revendedor.';
+  'Quem indica o AcessoFast com link proprio (acessofast.com.br/r/<codigo>). Escrita so pelas funcoes desta migracao.';
 
 -- ---------------------------------------------------------------------
 -- 2. revendedor_cliques — um por visitante por dia
@@ -235,17 +264,262 @@ revoke all on function public.registrar_venda_indicada(uuid, uuid, text) from pu
 grant execute on function public.registrar_venda_indicada(uuid, uuid, text) to service_role;
 
 -- ---------------------------------------------------------------------
--- 7. Painel da plataforma (super_admin)
+-- 7. Area do revendedor no site (visitante anonimo)
 -- ---------------------------------------------------------------------
--- p_id null cria; senao edita nome, contato, pix e ativo. O codigo so vale na
+-- Cadastro e login devolvem o erro como valor em vez de levantar excecao: excecao
+-- desfaria a contagem do rl_hit, e o teto de tentativas nao seguraria nada.
+
+-- WhatsApp so com digitos e DDD (10 ou 11). Aceita o 55 do pais na frente.
+create or replace function private.revendedor_telefone(p_telefone text)
+returns text
+language sql
+immutable
+set search_path to ''
+as $fn$
+  select case
+           when x.d ~ '^55[1-9][0-9]{9,10}$' then substr(x.d, 3)
+           when x.d ~ '^[1-9][0-9]{9,10}$' then x.d
+         end
+    from (select regexp_replace(coalesce(p_telefone, ''), '\D', '', 'g') as d) x
+$fn$;
+
+-- IP de quem chamou, pelo cabecalho que o gateway do Supabase repassa.
+create or replace function private.ip_da_requisicao()
+returns text
+language sql
+stable
+set search_path to ''
+as $fn$
+  select nullif(btrim(split_part(
+           coalesce(nullif(current_setting('request.headers', true), '')::json ->> 'x-forwarded-for', ''),
+           ',', 1)), '')
+$fn$;
+
+-- Codigo do link a partir do nome, sem repetir: "Joao da Silva" vira joao-da-silva,
+-- e o segundo Joao da Silva vira joao-da-silva-2.
+create or replace function private.revendedor_codigo_livre(p_nome text)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $fn$
+declare
+  v_base   text;
+  v_codigo text;
+  v_n      integer := 1;
+begin
+  v_base := translate(lower(btrim(coalesce(p_nome, ''))),
+                      'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn');
+  v_base := btrim(regexp_replace(v_base, '[^a-z0-9]+', '-', 'g'), '-');
+  -- 28 deixa espaco para o sufixo "-NNN" sem passar dos 32 do codigo.
+  v_base := btrim(left(v_base, 28), '-');
+  if length(v_base) < 3 then
+    v_base := 'parceiro';
+  end if;
+
+  v_codigo := v_base;
+  while exists (select 1 from public.revendedores r where r.codigo = v_codigo) loop
+    v_n := v_n + 1;
+    v_codigo := v_base || '-' || v_n;
+  end loop;
+  return v_codigo;
+end;
+$fn$;
+
+-- pendente | recusado | ativo | inativo. Uma regra so para o painel e para a area.
+create or replace function private.revendedor_situacao(
+  p_ativo       boolean,
+  p_aprovado_em timestamptz,
+  p_recusado_em timestamptz
+) returns text
+language sql
+immutable
+set search_path to ''
+as $fn$
+  select case
+           when p_recusado_em is not null then 'recusado'
+           when p_aprovado_em is null then 'pendente'
+           when p_ativo then 'ativo'
+           else 'inativo'
+         end
+$fn$;
+
+-- Senha da area (Ryan, 26/10/2026): 8 caracteres ou mais, com letra maiuscula,
+-- letra minuscula e um caractere especial (espaco nao conta). 72 e o limite do
+-- bcrypt. O site confere a mesma regra antes de enviar.
+create or replace function private.revendedor_senha_forte(p_senha text)
+returns boolean
+language sql
+immutable
+set search_path to ''
+as $fn$
+  select coalesce(
+           length(p_senha) between 8 and 72
+           and p_senha ~ '[[:upper:]]'
+           and p_senha ~ '[[:lower:]]'
+           and p_senha ~ '[^[:alnum:][:space:]]',
+           false)
+$fn$;
+
+revoke all on function private.revendedor_telefone(text) from public;
+revoke all on function private.ip_da_requisicao() from public;
+revoke all on function private.revendedor_codigo_livre(text) from public;
+revoke all on function private.revendedor_situacao(boolean, timestamptz, timestamptz) from public;
+revoke all on function private.revendedor_senha_forte(text) from public;
+
+-- Cadastro pelo site. Nasce inativo, aguardando a aprovacao da equipe (ate 1 dia
+-- util): o link so marca indicacao depois de aprovado. A pessoa ja entra na area,
+-- que mostra o aviso. chave = sessao da area (o site guarda no navegador).
+create or replace function public.revendedor_cadastrar(
+  p_nome     text,
+  p_telefone text,
+  p_pix      text,
+  p_senha    text,
+  p_aceite   boolean
+) returns table(chave uuid, codigo text, erro text)
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $fn$
+#variable_conflict use_column
+declare
+  v_tel    text := private.revendedor_telefone(p_telefone);
+  v_ip     text := private.ip_da_requisicao();
+  v_codigo text;
+  v_chave  uuid;
+begin
+  if v_ip is not null and not public.rl_hit('rev:cad:ip:' || v_ip, 5, 3600) then
+    return query select null::uuid, null::text, 'muitas_tentativas';
+    return;
+  end if;
+  if length(btrim(coalesce(p_nome, ''))) not between 2 and 120 then
+    return query select null::uuid, null::text, 'nome_invalido';
+    return;
+  end if;
+  if v_tel is null then
+    return query select null::uuid, null::text, 'telefone_invalido';
+    return;
+  end if;
+  if length(btrim(coalesce(p_pix, ''))) not between 3 and 140 then
+    return query select null::uuid, null::text, 'pix_invalido';
+    return;
+  end if;
+  if not private.revendedor_senha_forte(p_senha) then
+    return query select null::uuid, null::text, 'senha_fraca';
+    return;
+  end if;
+  if p_aceite is not true then
+    return query select null::uuid, null::text, 'aceite_obrigatorio';
+    return;
+  end if;
+  if exists (select 1 from public.revendedores r where r.telefone = v_tel) then
+    return query select null::uuid, null::text, 'telefone_ja_cadastrado';
+    return;
+  end if;
+
+  v_codigo := private.revendedor_codigo_livre(p_nome);
+  begin
+    insert into public.revendedores (codigo, nome, telefone, pix, senha_hash, origem, aceite_em, ativo)
+    values (v_codigo, btrim(p_nome), v_tel, btrim(p_pix),
+            extensions.crypt(p_senha, extensions.gen_salt('bf', 8)), 'site', now(), false)
+    returning revendedores.chave_painel into v_chave;
+  exception when unique_violation then
+    -- Dois cadastros com o mesmo WhatsApp ao mesmo tempo.
+    return query select null::uuid, null::text, 'telefone_ja_cadastrado';
+    return;
+  end;
+
+  return query select v_chave, v_codigo, null::text;
+end;
+$fn$;
+
+revoke all on function public.revendedor_cadastrar(text, text, text, text, boolean) from public;
+grant execute on function public.revendedor_cadastrar(text, text, text, text, boolean) to anon, authenticated;
+
+-- Login da area: WhatsApp e senha. Devolve a chave da sessao.
+--   sem_senha         cadastrado pela equipe e ainda sem senha: entra pelo link de acesso
+--   dados_incorretos  WhatsApp sem cadastro ou senha errada (mesma resposta para os dois)
+create or replace function public.revendedor_entrar(p_telefone text, p_senha text)
+returns table(chave uuid, erro text)
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $fn$
+#variable_conflict use_column
+declare
+  v_tel   text := private.revendedor_telefone(p_telefone);
+  v_ip    text := private.ip_da_requisicao();
+  v_chave uuid;
+  v_hash  text;
+begin
+  if (v_ip is not null and not public.rl_hit('rev:login:ip:' || v_ip, 30, 900))
+     or (v_tel is not null and not public.rl_hit('rev:login:tel:' || v_tel, 10, 900)) then
+    return query select null::uuid, 'muitas_tentativas';
+    return;
+  end if;
+
+  select r.chave_painel, r.senha_hash into v_chave, v_hash
+    from public.revendedores r
+   where r.telefone = v_tel;
+
+  if v_chave is not null and v_hash is null then
+    return query select null::uuid, 'sem_senha';
+    return;
+  end if;
+  if v_hash is null or v_hash <> extensions.crypt(coalesce(p_senha, ''), v_hash) then
+    return query select null::uuid, 'dados_incorretos';
+    return;
+  end if;
+  return query select v_chave, null::text;
+end;
+$fn$;
+
+revoke all on function public.revendedor_entrar(text, text) from public;
+grant execute on function public.revendedor_entrar(text, text) to anon, authenticated;
+
+-- Cria a senha de quem ainda nao tem (primeiro acesso ou acesso novo gerado pela
+-- equipe). Quem ja tem senha nao troca por aqui. Devolve null ou o erro.
+create or replace function public.revendedor_definir_senha(p_chave uuid, p_senha text)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $fn$
+begin
+  if not private.revendedor_senha_forte(p_senha) then
+    return 'senha_fraca';
+  end if;
+  update public.revendedores r
+     set senha_hash = extensions.crypt(p_senha, extensions.gen_salt('bf', 8)),
+         updated_at = now()
+   where r.chave_painel = p_chave
+     and r.senha_hash is null;
+  if not found then
+    return 'nao_permitido';
+  end if;
+  return null;
+end;
+$fn$;
+
+revoke all on function public.revendedor_definir_senha(uuid, text) from public;
+grant execute on function public.revendedor_definir_senha(uuid, text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 8. Painel da plataforma (super_admin)
+-- ---------------------------------------------------------------------
+-- p_id null cria; senao edita nome, WhatsApp, pix e ativo. O codigo so vale na
 -- criacao. Os opcionais tem default para o painel poder omiti-los.
 create or replace function public.salvar_revendedor(
-  p_nome    text,
-  p_codigo  text default null,
-  p_contato text default null,
-  p_pix     text default null,
-  p_ativo   boolean default null,
-  p_id      uuid default null
+  p_nome     text,
+  p_codigo   text default null,
+  p_telefone text default null,
+  p_pix      text default null,
+  p_ativo    boolean default null,
+  p_id       uuid default null
 ) returns uuid
 language plpgsql
 volatile
@@ -253,32 +527,42 @@ security definer
 set search_path to ''
 as $fn$
 declare
-  v_id uuid;
+  v_id  uuid;
+  v_tel text := private.revendedor_telefone(p_telefone);
 begin
   if not private.is_super_admin() then
     raise exception 'forbidden' using errcode = '42501';
   end if;
+  if v_tel is null and btrim(coalesce(p_telefone, '')) <> '' then
+    raise exception 'telefone_invalido' using errcode = 'P0001';
+  end if;
 
   if p_id is null then
-    insert into public.revendedores (codigo, nome, contato, pix, ativo, created_by)
+    -- Cadastrado pela equipe ja nasce aprovado.
+    insert into public.revendedores (codigo, nome, telefone, pix, ativo, origem, aprovado_em, created_by)
     values (
       lower(btrim(p_codigo)),
       btrim(p_nome),
-      nullif(btrim(coalesce(p_contato, '')), ''),
+      v_tel,
       nullif(btrim(coalesce(p_pix, '')), ''),
       coalesce(p_ativo, true),
+      'painel',
+      now(),
       (select auth.uid())
     )
     returning id into v_id;
   else
-    update public.revendedores
+    -- Ativar/desativar so vale para quem ja foi aprovado; pendente e recusado mudam
+    -- por revendedor_decidir.
+    update public.revendedores r
        set nome       = btrim(p_nome),
-           contato    = nullif(btrim(coalesce(p_contato, '')), ''),
+           telefone   = v_tel,
            pix        = nullif(btrim(coalesce(p_pix, '')), ''),
-           ativo      = coalesce(p_ativo, ativo),
+           ativo      = case when r.aprovado_em is not null and r.recusado_em is null
+                             then coalesce(p_ativo, r.ativo) else r.ativo end,
            updated_at = now()
-     where id = p_id
-    returning id into v_id;
+     where r.id = p_id
+    returning r.id into v_id;
     if v_id is null then
       raise exception 'not_found' using errcode = 'P0002';
     end if;
@@ -289,6 +573,84 @@ $fn$;
 
 revoke all on function public.salvar_revendedor(text, text, text, text, boolean, uuid) from public, anon;
 grant execute on function public.salvar_revendedor(text, text, text, text, boolean, uuid) to authenticated;
+
+-- Aprova (o link passa a funcionar) ou recusa um cadastro do site. Recusado
+-- continua no banco: o WhatsApp fica ocupado e a area mostra que nao foi aprovado.
+-- Aprovar um recusado tambem vale, para desfazer engano.
+create or replace function public.revendedor_decidir(p_id uuid, p_aprovar boolean)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $fn$
+begin
+  if not private.is_super_admin() then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  update public.revendedores r
+     set aprovado_em = case when p_aprovar then coalesce(r.aprovado_em, now()) else r.aprovado_em end,
+         recusado_em = case when p_aprovar then null else now() end,
+         ativo       = p_aprovar,
+         updated_at  = now()
+   where r.id = p_id;
+  if not found then
+    raise exception 'not_found' using errcode = 'P0002';
+  end if;
+end;
+$fn$;
+
+revoke all on function public.revendedor_decidir(uuid, boolean) from public, anon;
+grant execute on function public.revendedor_decidir(uuid, boolean) to authenticated;
+
+-- Quantos cadastros esperam aprovacao: o numero no menu do painel.
+create or replace function public.revendedores_pendentes()
+returns integer
+language sql
+stable
+security definer
+set search_path to ''
+as $fn$
+  select count(*)::integer
+    from public.revendedores r
+   where r.aprovado_em is null
+     and r.recusado_em is null
+     and private.is_super_admin()
+$fn$;
+
+revoke all on function public.revendedores_pendentes() from public, anon;
+grant execute on function public.revendedores_pendentes() to authenticated;
+
+-- Esqueceu a senha (ou o link vazou): troca a chave, apaga a senha e devolve a
+-- chave nova para a equipe mandar o link de acesso. A sessao antiga cai.
+create or replace function public.revendedor_novo_acesso(p_id uuid)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $fn$
+declare
+  v_chave uuid;
+begin
+  if not private.is_super_admin() then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  update public.revendedores r
+     set chave_painel = gen_random_uuid(),
+         senha_hash   = null,
+         updated_at   = now()
+   where r.id = p_id
+  returning r.chave_painel into v_chave;
+  if v_chave is null then
+    raise exception 'not_found' using errcode = 'P0002';
+  end if;
+  return v_chave;
+end;
+$fn$;
+
+revoke all on function public.revendedor_novo_acesso(uuid) from public, anon;
+grant execute on function public.revendedor_novo_acesso(uuid) to authenticated;
 
 -- Numeros por revendedor. Periodo [p_inicio, p_fim), null = desde sempre:
 --   cliques   pelo dia do clique
@@ -302,9 +664,12 @@ create or replace function public.indicacoes_resumo(
   id            uuid,
   codigo        text,
   nome          text,
-  contato       text,
+  telefone      text,
   pix           text,
   ativo         boolean,
+  origem        text,
+  tem_senha     boolean,
+  situacao      text,
   chave_painel  uuid,
   created_at    timestamptz,
   cliques       bigint,
@@ -318,7 +683,10 @@ stable
 security definer
 set search_path to ''
 as $fn$
-  select r.id, r.codigo, r.nome, r.contato, r.pix, r.ativo, r.chave_painel, r.created_at,
+  select r.id, r.codigo, r.nome, r.telefone, r.pix, r.ativo, r.origem,
+         r.senha_hash is not null,
+         private.revendedor_situacao(r.ativo, r.aprovado_em, r.recusado_em),
+         r.chave_painel, r.created_at,
          (select count(*) from public.revendedor_cliques c
            where c.revendedor_id = r.id
              and (p_inicio is null or c.dia >= p_inicio)
@@ -339,7 +707,10 @@ as $fn$
            where i.revendedor_id = r.id and i.comissao_paga_em is not null)
     from public.revendedores r
    where private.is_super_admin()
-   order by r.ativo desc, r.nome
+   -- Quem espera aprovacao primeiro: e o que pede acao.
+   order by case private.revendedor_situacao(r.ativo, r.aprovado_em, r.recusado_em)
+              when 'pendente' then 0 when 'ativo' then 1 when 'inativo' then 2 else 3 end,
+            r.nome
 $fn$;
 
 revoke all on function public.indicacoes_resumo(date, date) from public, anon;
@@ -489,13 +860,19 @@ revoke all on function public.desvincular_indicacao(uuid) from public, anon;
 grant execute on function public.desvincular_indicacao(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------
--- 8. Pagina do revendedor (sem login, pela chave)
+-- 9. Area do revendedor (pela chave da sessao)
 -- ---------------------------------------------------------------------
--- So quantidade de vendas: nada de empresa, valor ou clique.
+-- Das vendas, so a quantidade: nada de empresa, valor ou clique. Os dados
+-- cadastrais sao os dele mesmo (WhatsApp e Pix), para ele conferir.
 create or replace function public.revendedor_painel(p_chave uuid)
 returns table(
   nome         text,
   codigo       text,
+  ativo        boolean,
+  tem_senha    boolean,
+  situacao     text,
+  telefone     text,
+  pix          text,
   vendas_total bigint,
   vendas_mes   bigint,
   meses        jsonb
@@ -505,7 +882,9 @@ stable
 security definer
 set search_path to ''
 as $fn$
-  select r.nome, r.codigo,
+  select r.nome, r.codigo, r.ativo, r.senha_hash is not null,
+         private.revendedor_situacao(r.ativo, r.aprovado_em, r.recusado_em),
+         r.telefone, r.pix,
          (select count(*) from public.indicacoes i
            where i.revendedor_id = r.id and i.venda_em is not null),
          (select count(*) from public.indicacoes i

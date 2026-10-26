@@ -2644,12 +2644,15 @@ export type Database = {
           chave_painel: string
           cliques: number
           codigo: string
-          contato: string | null
           created_at: string
           id: string
           nome: string
+          origem: string
           pago_cents: number
           pix: string | null
+          situacao: string
+          telefone: string | null
+          tem_senha: boolean
           vendas: number
         }[]
       }
@@ -2912,16 +2915,52 @@ export type Database = {
           version: string
         }[]
       }
+      revendedor_cadastrar: {
+        Args: {
+          p_aceite: boolean
+          p_nome: string
+          p_pix: string
+          p_senha: string
+          p_telefone: string
+        }
+        Returns: {
+          chave: string
+          codigo: string
+          erro: string
+        }[]
+      }
+      revendedor_decidir: {
+        Args: { p_aprovar: boolean; p_id: string }
+        Returns: undefined
+      }
+      revendedor_definir_senha: {
+        Args: { p_chave: string; p_senha: string }
+        Returns: string
+      }
+      revendedor_entrar: {
+        Args: { p_senha: string; p_telefone: string }
+        Returns: {
+          chave: string
+          erro: string
+        }[]
+      }
+      revendedor_novo_acesso: { Args: { p_id: string }; Returns: string }
       revendedor_painel: {
         Args: { p_chave: string }
         Returns: {
+          ativo: boolean
           codigo: string
           meses: Json
           nome: string
+          pix: string
+          situacao: string
+          telefone: string
+          tem_senha: boolean
           vendas_mes: number
           vendas_total: number
         }[]
       }
+      revendedores_pendentes: { Args: never; Returns: number }
       revoke_access_grant: { Args: { p_grant_id: string }; Returns: undefined }
       revoke_enrollment_secret: {
         Args: { p_secret_id: string }
@@ -2935,10 +2974,10 @@ export type Database = {
         Args: {
           p_ativo?: boolean
           p_codigo?: string
-          p_contato?: string
           p_id?: string
           p_nome: string
           p_pix?: string
+          p_telefone?: string
         }
         Returns: string
       }

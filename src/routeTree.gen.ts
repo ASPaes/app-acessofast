@@ -18,7 +18,6 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AguardandoAutorizacaoRouteImport } from './routes/aguardando-autorizacao'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RevendedorChaveRouteImport } from './routes/revendedor.$chave'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 import { Route as AuthenticatedSugestoesRouteImport } from './routes/_authenticated/sugestoes'
 import { Route as AuthenticatedMonitoramentoRouteImport } from './routes/_authenticated/monitoramento'
@@ -76,11 +75,6 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RevendedorChaveRoute = RevendedorChaveRouteImport.update({
-  id: '/revendedor/$chave',
-  path: '/revendedor/$chave',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
@@ -182,7 +176,6 @@ export interface FileRoutesByFullPath {
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/sugestoes': typeof AuthenticatedSugestoesRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
-  '/revendedor/$chave': typeof RevendedorChaveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -207,7 +200,6 @@ export interface FileRoutesByTo {
   '/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/sugestoes': typeof AuthenticatedSugestoesRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
-  '/revendedor/$chave': typeof RevendedorChaveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -234,7 +226,6 @@ export interface FileRoutesById {
   '/_authenticated/monitoramento': typeof AuthenticatedMonitoramentoRoute
   '/_authenticated/sugestoes': typeof AuthenticatedSugestoesRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
-  '/revendedor/$chave': typeof RevendedorChaveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -261,7 +252,6 @@ export interface FileRouteTypes {
     | '/monitoramento'
     | '/sugestoes'
     | '/usuarios'
-    | '/revendedor/$chave'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -286,7 +276,6 @@ export interface FileRouteTypes {
     | '/monitoramento'
     | '/sugestoes'
     | '/usuarios'
-    | '/revendedor/$chave'
   id:
     | '__root__'
     | '/'
@@ -312,7 +301,6 @@ export interface FileRouteTypes {
     | '/_authenticated/monitoramento'
     | '/_authenticated/sugestoes'
     | '/_authenticated/usuarios'
-    | '/revendedor/$chave'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -325,7 +313,6 @@ export interface RootRouteChildren {
   DefinirSenhaRoute: typeof DefinirSenhaRoute
   ExclusaoDeDadosRoute: typeof ExclusaoDeDadosRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
-  RevendedorChaveRoute: typeof RevendedorChaveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -391,13 +378,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/revendedor/$chave': {
-      id: '/revendedor/$chave'
-      path: '/revendedor/$chave'
-      fullPath: '/revendedor/$chave'
-      preLoaderRoute: typeof RevendedorChaveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/usuarios': {
@@ -548,7 +528,6 @@ const rootRouteChildren: RootRouteChildren = {
   DefinirSenhaRoute: DefinirSenhaRoute,
   ExclusaoDeDadosRoute: ExclusaoDeDadosRoute,
   PrivacidadeRoute: PrivacidadeRoute,
-  RevendedorChaveRoute: RevendedorChaveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

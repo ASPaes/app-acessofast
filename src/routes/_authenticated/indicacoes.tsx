@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
+import { REVENDEDORES_PENDENTES_KEY } from "@/lib/indicacoes";
 import { StatCard } from "@/components/stat-card";
 import type { KpiInfo } from "@/components/kpi-info";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,8 +85,10 @@ export const Route = createFileRoute("/_authenticated/indicacoes")({
 
 const SITE = "https://acessofast.com.br";
 const linkDeIndicacao = (codigo: string) => `${SITE}/r/${codigo}`;
-// A pagina do revendedor e uma rota publica do proprio painel.
-const linkDoRevendedor = (chave: string) => `${window.location.origin}/revendedor/${chave}`;
+// A area do revendedor fica no site: ele entra com WhatsApp e senha. O link de
+// acesso abre a area direto e, sem senha ainda, pede para ele criar uma.
+const AREA_DO_REVENDEDOR = "acessofast.com.br/revendedor";
+const linkDeAcesso = (chave: string) => `${SITE}/revendedor/acesso/${chave}`;
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -99,9 +102,13 @@ type Revendedor = {
   id: string;
   codigo: string;
   nome: string;
-  contato: string | null;
+  telefone: string | null;
   pix: string | null;
   ativo: boolean;
+  origem: string;
+  tem_senha: boolean;
+  // pendente | recusado | ativo | inativo (private.revendedor_situacao)
+  situacao: string;
   chave_painel: string;
   created_at: string;
   cliques: number;
@@ -165,6 +172,12 @@ function prazoDePagamento(competencia: string) {
 
 const dataCurta = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 
+/** O banco guarda só os dígitos: 49999990000 vira (49) 99999-0000. */
+function formatarTelefone(telefone: string | null) {
+  const m = telefone?.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : telefone;
+}
+
 /** Sugestão de código a partir do nome: "João da Silva" vira "joao-da-silva". */
 function codigoDoNome(nome: string) {
   return nome
@@ -181,6 +194,8 @@ function traduzirErro(msg: string) {
   if (msg.includes("revendedores_codigo_key")) return "Já existe um revendedor com esse código.";
   if (msg.includes("ck_revendedores_codigo"))
     return "Código inválido: use letras minúsculas, números e hífen, de 3 a 32 caracteres.";
+  if (msg.includes("uq_revendedores_telefone")) return "Esse WhatsApp já é de outro revendedor.";
+  if (msg.includes("telefone_invalido")) return "WhatsApp inválido: informe com DDD.";
   if (msg.includes("empresa_ja_indicada")) return "Essa empresa já está ligada a um revendedor.";
   if (msg.includes("comissao_ja_paga"))
     return "A comissão dessa empresa já foi paga, então o vínculo não pode sair.";
@@ -249,6 +264,7 @@ function IndicacoesPage() {
   const soma = (campo: "cliques" | "cadastros" | "vendas" | "a_pagar_cents") =>
     revendedores.reduce((total, r) => total + Number(r[campo]), 0);
   const selecionado = revendedores.find((r) => r.id === aberto) ?? null;
+  const pendentes = revendedores.filter((r) => r.situacao === "pendente").length;
   const carregando = resumo.isPending;
   const rotuloPeriodo = PERIODOS.find((p) => p.valor === periodo)?.rotulo.toLowerCase();
 
@@ -331,7 +347,20 @@ function IndicacoesPage() {
             Abra um revendedor para ver as empresas que ele trouxe e marcar a comissão como paga.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {pendentes > 0 && (
+            <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
+              <span className="font-medium">
+                {pendentes === 1
+                  ? "1 cadastro aguardando aprovação."
+                  : `${pendentes} cadastros aguardando aprovação.`}
+              </span>{" "}
+              <span className="text-muted-foreground">
+                O site promete resposta em até 1 dia útil. Abra o revendedor para aprovar ou
+                recusar.
+              </span>
+            </div>
+          )}
           {resumo.isError ? (
             <p className="text-sm text-muted-foreground">
               Não foi possível carregar as indicações. Tente de novo em instantes.
@@ -380,11 +409,7 @@ function IndicacoesPage() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{r.nome}</span>
-                            {!r.ativo && (
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                                inativo
-                              </span>
-                            )}
+                            <SeloSituacao situacao={r.situacao} />
                           </div>
                           <p className="text-xs text-muted-foreground">/r/{r.codigo}</p>
                         </TableCell>
@@ -439,6 +464,23 @@ function IndicacoesPage() {
   );
 }
 
+const SITUACAO: Record<string, { rotulo: string; classe: string }> = {
+  pendente: { rotulo: "aguardando aprovação", classe: "bg-warning/15 text-warning" },
+  recusado: { rotulo: "recusado", classe: "bg-destructive/10 text-destructive" },
+  inativo: { rotulo: "inativo", classe: "bg-muted text-muted-foreground" },
+};
+
+/** Ativo não ganha selo: é o normal. */
+function SeloSituacao({ situacao }: { situacao: string }) {
+  const s = SITUACAO[situacao];
+  if (!s) return null;
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${s.classe}`}>
+      {s.rotulo}
+    </span>
+  );
+}
+
 function BotaoCopiar({ texto, rotulo }: { texto: string; rotulo: string }) {
   const [copiado, setCopiado] = useState(false);
   return (
@@ -480,7 +522,7 @@ function RevendedorDialog({
   const [codigo, setCodigo] = useState(atual?.codigo ?? "");
   // Enquanto ninguém mexeu no código, ele acompanha o nome.
   const [codigoEditado, setCodigoEditado] = useState(false);
-  const [contato, setContato] = useState(atual?.contato ?? "");
+  const [telefone, setTelefone] = useState(formatarTelefone(atual?.telefone ?? null) ?? "");
   const [pix, setPix] = useState(atual?.pix ?? "");
   const [ativo, setAtivo] = useState(atual?.ativo ?? true);
 
@@ -491,7 +533,7 @@ function RevendedorDialog({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc("salvar_revendedor", {
         p_nome: nome.trim(),
-        p_contato: contato,
+        p_telefone: telefone,
         p_pix: pix,
         ...(novo ? { p_codigo: codigo } : { p_id: atual?.id, p_ativo: ativo }),
       });
@@ -544,7 +586,7 @@ function RevendedorDialog({
                 setCodigoEditado(true);
                 setCodigo(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""));
               }}
-              placeholder="joao-silva"
+              placeholder="ex.: joao-silva"
             />
             <p className="text-xs text-muted-foreground">
               {codigo ? linkDeIndicacao(codigo) : "Letras minúsculas, números e hífen."}
@@ -554,12 +596,13 @@ function RevendedorDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="rev-contato">Contato</Label>
+              <Label htmlFor="rev-telefone">WhatsApp</Label>
               <Input
-                id="rev-contato"
-                value={contato}
-                onChange={(e) => setContato(e.target.value)}
-                placeholder="Telefone ou e-mail"
+                id="rev-telefone"
+                type="tel"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                placeholder="(49) 99999-0000"
               />
             </div>
             <div className="space-y-1.5">
@@ -573,7 +616,8 @@ function RevendedorDialog({
             </div>
           </div>
 
-          {!novo && (
+          {/* Pendente e recusado mudam por Aprovar/Recusar, na ficha. */}
+          {(atual?.situacao === "ativo" || atual?.situacao === "inativo") && (
             <div className="flex items-center justify-between rounded-md border border-border/60 p-3">
               <div>
                 <p className="text-sm font-medium">Ativo</p>
@@ -633,6 +677,7 @@ function DetalheRevendedor({
   const queryClient = useQueryClient();
   const [vinculando, setVinculando] = useState(false);
   const [removendo, setRemovendo] = useState<Indicacao | null>(null);
+  const [trocandoAcesso, setTrocandoAcesso] = useState(false);
 
   const lista = useQuery({
     queryKey: listaKey(revendedor?.id ?? ""),
@@ -703,6 +748,41 @@ function DetalheRevendedor({
     onError: (e: Error) => toast.error(traduzirErro(e.message)),
   });
 
+  const novoAcesso = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("revendedor_novo_acesso", { p_id: revendedor!.id });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Acesso novo gerado. Copie o link de acesso e mande para ele.");
+      setTrocandoAcesso(false);
+      await atualizar();
+    },
+    onError: (e: Error) => toast.error(traduzirErro(e.message)),
+  });
+
+  const decidir = useMutation({
+    mutationFn: async (aprovar: boolean) => {
+      const { error } = await supabase.rpc("revendedor_decidir", {
+        p_id: revendedor!.id,
+        p_aprovar: aprovar,
+      });
+      if (error) throw error;
+    },
+    onSuccess: async (_d, aprovar) => {
+      toast.success(
+        aprovar
+          ? "Revendedor aprovado. O link dele já está funcionando."
+          : "Cadastro recusado. A área dele mostra que não foi aprovado.",
+      );
+      await Promise.all([
+        atualizar(),
+        queryClient.invalidateQueries({ queryKey: REVENDEDORES_PENDENTES_KEY }),
+      ]);
+    },
+    onError: (e: Error) => toast.error(traduzirErro(e.message)),
+  });
+
   return (
     <Sheet open={revendedor !== null} onOpenChange={(v) => !v && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
@@ -711,16 +791,20 @@ function DetalheRevendedor({
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
                 {revendedor.nome}
-                {!revendedor.ativo && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
-                    inativo
-                  </span>
-                )}
+                <SeloSituacao situacao={revendedor.situacao} />
               </SheetTitle>
               <SheetDescription>
-                {[revendedor.contato, revendedor.pix && `Pix: ${revendedor.pix}`]
+                {[
+                  revendedor.telefone && `WhatsApp ${formatarTelefone(revendedor.telefone)}`,
+                  revendedor.pix && `Pix: ${revendedor.pix}`,
+                ]
                   .filter(Boolean)
-                  .join(" · ") || "Sem contato nem Pix cadastrados."}
+                  .join(" · ") || "Sem WhatsApp nem Pix cadastrados."}
+                <span className="block">
+                  {revendedor.origem === "site"
+                    ? `Cadastrou-se pelo site em ${dataCurta(revendedor.created_at)}.`
+                    : `Cadastrado pela equipe em ${dataCurta(revendedor.created_at)}.`}
+                </span>
               </SheetDescription>
               <div>
                 <Button size="sm" variant="outline" onClick={onEditar}>
@@ -731,6 +815,55 @@ function DetalheRevendedor({
             </SheetHeader>
 
             <div className="mt-6 space-y-6">
+              {(revendedor.situacao === "pendente" || revendedor.situacao === "recusado") && (
+                <section
+                  className={`space-y-3 rounded-md border p-4 ${
+                    revendedor.situacao === "pendente"
+                      ? "border-warning/30 bg-warning/10"
+                      : "border-border/60"
+                  }`}
+                >
+                  <p className="text-sm">
+                    {revendedor.situacao === "pendente" ? (
+                      <>
+                        <span className="font-medium">Cadastro aguardando aprovação.</span>{" "}
+                        <span className="text-muted-foreground">
+                          O link dele só funciona depois de aprovado. O site disse que a resposta
+                          sai em até 1 dia útil.
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium">Cadastro recusado.</span>{" "}
+                        <span className="text-muted-foreground">
+                          O link não funciona e a área dele mostra que não foi aprovado.
+                        </span>
+                      </>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={decidir.isPending}
+                      onClick={() => decidir.mutate(true)}
+                    >
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      {revendedor.situacao === "pendente" ? "Aprovar" : "Aprovar mesmo assim"}
+                    </Button>
+                    {revendedor.situacao === "pendente" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={decidir.isPending}
+                        onClick={() => decidir.mutate(false)}
+                      >
+                        Recusar
+                      </Button>
+                    )}
+                  </div>
+                </section>
+              )}
+
               <section className="space-y-3">
                 <h3 className="flex items-center gap-2 text-sm font-semibold">
                   <Link2 className="h-4 w-4 text-primary" />
@@ -738,14 +871,27 @@ function DetalheRevendedor({
                 </h3>
                 <LinhaDeLink
                   titulo="Link de indicação"
-                  explicacao="É o que ele divulga. Quem abre e contrata fica ligado a ele."
+                  explicacao={
+                    revendedor.situacao === "pendente"
+                      ? "É o que ele divulga. Só passa a marcar indicações depois de aprovado."
+                      : "É o que ele divulga. Quem abre e contrata fica ligado a ele."
+                  }
                   link={linkDeIndicacao(revendedor.codigo)}
                 />
                 <LinhaDeLink
-                  titulo="Página das vendas dele"
-                  explicacao="Sem senha. Mostra só quantas vendas ele fez, sem empresas nem valores."
-                  link={linkDoRevendedor(revendedor.chave_painel)}
+                  titulo="Link de acesso à área dele"
+                  explicacao={
+                    revendedor.tem_senha
+                      ? `Ele entra em ${AREA_DO_REVENDEDOR} com o WhatsApp e a senha. Este link abre a área direto, sem senha.`
+                      : "Ele ainda não tem senha. Mande este link: ele abre a área e cria a senha ali."
+                  }
+                  link={linkDeAcesso(revendedor.chave_painel)}
                 />
+                {revendedor.tem_senha && (
+                  <Button size="sm" variant="ghost" onClick={() => setTrocandoAcesso(true)}>
+                    Esqueceu a senha? Gerar acesso novo
+                  </Button>
+                )}
               </section>
 
               <section className="space-y-3">
@@ -873,6 +1019,31 @@ function DetalheRevendedor({
                 await atualizar();
               }}
             />
+
+            <AlertDialog open={trocandoAcesso} onOpenChange={setTrocandoAcesso}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Gerar acesso novo para {revendedor.nome}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    A senha dele é apagada e o link de acesso antigo para de funcionar. Depois é só
+                    copiar o link novo e mandar para ele criar outra senha. O link de indicação e as
+                    vendas não mudam.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={novoAcesso.isPending}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      novoAcesso.mutate();
+                    }}
+                  >
+                    {novoAcesso.isPending ? "Gerando..." : "Gerar acesso novo"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <AlertDialog open={removendo !== null} onOpenChange={(v) => !v && setRemovendo(null)}>
               <AlertDialogContent>
