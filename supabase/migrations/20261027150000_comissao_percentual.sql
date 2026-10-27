@@ -14,6 +14,10 @@
 --
 -- Cadastro pelo site (revendedor_cadastrar) continua nascendo com R$ 50; a equipe
 -- muda em Editar, antes ou depois de aprovar.
+--
+-- Quatro funcoes mudam de argumentos ou de colunas, o que pede apagar a versao
+-- antiga. O conector do Supabase recusa DROP, entao a antiga fica renomeada com
+-- sufixo _v1 e sem permissao para ninguem.
 
 -- ---------------------------------------------------------------------
 -- 1. Colunas
@@ -128,7 +132,10 @@ grant execute on function public.registrar_venda_indicada(uuid, uuid, text) to s
 -- p_comissao_tipo null mantem o que esta (ou o padrao, R$ 50, na criacao).
 -- 'fixo' usa p_comissao_cents (null mantem o valor); 'percentual' exige
 -- p_comissao_percentual, de 0,01 a 100.
-drop function if exists public.salvar_revendedor(text, text, text, text, boolean, uuid);
+alter function public.salvar_revendedor(text, text, text, text, boolean, uuid)
+  rename to salvar_revendedor_v1;
+revoke all on function public.salvar_revendedor_v1(text, text, text, text, boolean, uuid)
+  from public, anon, authenticated;
 
 create or replace function public.salvar_revendedor(
   p_nome                text,
@@ -223,7 +230,10 @@ grant execute on function public.salvar_revendedor(text, text, text, text, boole
 -- p_valor_cents = valor que a empresa pagou, para a porcentagem de quem "ja
 -- pagou". Sem ele, vale o da 1a contratacao da empresa no site; venda fechada
 -- fora do site precisa informar.
-drop function if exists public.vincular_indicacao(uuid, uuid, boolean);
+alter function public.vincular_indicacao(uuid, uuid, boolean)
+  rename to vincular_indicacao_v1;
+revoke all on function public.vincular_indicacao_v1(uuid, uuid, boolean)
+  from public, anon, authenticated;
 
 create or replace function public.vincular_indicacao(
   p_revendedor_id uuid,
@@ -296,7 +306,10 @@ grant execute on function public.vincular_indicacao(uuid, uuid, boolean, integer
 -- ---------------------------------------------------------------------
 -- 6. Painel: leituras com a comissao combinada e a da venda
 -- ---------------------------------------------------------------------
-drop function if exists public.indicacoes_resumo(date, date);
+alter function public.indicacoes_resumo(date, date)
+  rename to indicacoes_resumo_v1;
+revoke all on function public.indicacoes_resumo_v1(date, date)
+  from public, anon, authenticated;
 
 create or replace function public.indicacoes_resumo(
   p_inicio date default null,
@@ -365,7 +378,10 @@ $fn$;
 revoke all on function public.indicacoes_resumo(date, date) from public, anon;
 grant execute on function public.indicacoes_resumo(date, date) to authenticated;
 
-drop function if exists public.indicacoes_do_revendedor(uuid);
+alter function public.indicacoes_do_revendedor(uuid)
+  rename to indicacoes_do_revendedor_v1;
+revoke all on function public.indicacoes_do_revendedor_v1(uuid)
+  from public, anon, authenticated;
 
 create or replace function public.indicacoes_do_revendedor(p_revendedor_id uuid)
 returns table(
