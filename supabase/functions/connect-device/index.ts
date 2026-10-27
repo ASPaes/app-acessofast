@@ -220,7 +220,11 @@ Deno.serve(async (req) => {
 
     // A partir daqui, qualquer falha deve DESFAZER o grant (e estornar o debito)
     // pra nao consumir quota/credito/free. revoke_access_grant faz tudo atomico.
+    // Clique repetido (27/10/2026): o grant reaproveitado e o do clique anterior, que ja
+    // entregou a senha e pode estar virando sessao agora. Desfazer apagaria a ficha dele
+    // e estornaria uma conexao que vai acontecer.
     const rollbackGrant = async () => {
+      if (grant.reutilizado === true) return;
       await admin.rpc("revoke_access_grant", { p_grant_id: grantId });
     };
 
