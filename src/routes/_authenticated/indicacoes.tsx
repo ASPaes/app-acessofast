@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -72,8 +73,9 @@ import {
 // ---------------------------------------------------------------------------
 // Indicacoes: revendedores com link proprio (acessofast.com.br/r/<codigo>). E da
 // plataforma: so a ASP cadastra revendedor, ve os numeros e marca a comissao
-// como paga. As regras (R$ 50 por empresa no 1o pagamento, pago ate o dia 30)
-// estao na migracao 20261026150000_indicacoes.
+// como paga. As regras (uma vez por empresa no 1o pagamento, pago ate o dia 30)
+// estao na migracao 20261026150000_indicacoes; a comissao em porcentagem, na
+// 20261027150000_comissao_percentual.
 // ---------------------------------------------------------------------------
 
 export const Route = createFileRoute("/_authenticated/indicacoes")({
@@ -91,6 +93,7 @@ const AREA_DO_REVENDEDOR = "acessofast.com.br/revendedor";
 const linkDeAcesso = (chave: string) => `${SITE}/revendedor/acesso/${chave}`;
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const decimal = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
 
 const RESUMO_KEY = ["indicacoes-resumo"] as const;
 const listaKey = (revendedorId: string) => ["indicacoes-do-revendedor", revendedorId] as const;
@@ -111,6 +114,10 @@ type Revendedor = {
   situacao: string;
   chave_painel: string;
   created_at: string;
+  comissao_tipo: TipoComissao;
+  // Valor fixo; com porcentagem fica guardado sem uso.
+  comissao_cents: number;
+  comissao_percentual: number | null;
   cliques: number;
   cadastros: number;
   vendas: number;
@@ -130,8 +137,30 @@ type Indicacao = {
   venda_em: string | null;
   competencia: string | null;
   comissao_cents: number | null;
+  // Da venda: a porcentagem aplicada (null = valor fixo) e o valor contratado.
+  comissao_percentual: number | null;
+  valor_venda_cents: number | null;
   comissao_paga_em: string | null;
 };
+
+type TipoComissao = "fixo" | "percentual";
+
+/** "R$ 50,00 por venda" ou "10% da venda". */
+function descreverComissao(
+  r: Pick<Revendedor, "comissao_tipo" | "comissao_cents" | "comissao_percentual">,
+) {
+  return r.comissao_tipo === "percentual" && r.comissao_percentual != null
+    ? `${decimal.format(r.comissao_percentual)}% da venda`
+    : `${brl.format(r.comissao_cents / 100)} por venda`;
+}
+
+/** Número digitado em português: "1.234,50", "12,5" ou "12.5". null se não for número. */
+function lerNumero(texto: string): number | null {
+  const t = texto.trim();
+  const normalizado = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+  if (!/^\d+(\.\d+)?$/.test(normalizado)) return null;
+  return Number(normalizado);
+}
 
 type Periodo = "mes" | "mes_passado" | "tudo";
 
@@ -199,6 +228,11 @@ function traduzirErro(msg: string) {
   if (msg.includes("empresa_ja_indicada")) return "Essa empresa já está ligada a um revendedor.";
   if (msg.includes("comissao_ja_paga"))
     return "A comissão dessa empresa já foi paga, então o vínculo não pode sair.";
+  if (msg.includes("comissao_invalida") || msg.includes("ck_revendedores_comissao"))
+    return "Comissão inválida: informe um valor maior que zero ou uma porcentagem de até 100%.";
+  if (msg.includes("valor_da_venda_obrigatorio"))
+    return "Essa empresa não contratou pelo site: informe o valor que ela pagou.";
+  if (msg.includes("valor_invalido")) return "Valor pago inválido.";
   if (msg.includes("forbidden")) return "Sem permissão.";
   return msg;
 }
@@ -218,7 +252,8 @@ const INFO: Record<"cliques" | "cadastros" | "vendas" | "aPagar", KpiInfo> = {
   },
   vendas: {
     oQue: "Empresas indicadas que fizeram o primeiro pagamento de plano.",
-    porQue: "É o que gera comissão: R$ 50 por empresa, uma vez só.",
+    porQue:
+      "É o que gera comissão, uma vez só por empresa: valor fixo ou porcentagem da venda, conforme o combinado com cada revendedor.",
     comoCalculamos:
       "Pelo mês do pagamento. Mensalidades seguintes e compra de créditos não contam como venda.",
   },
@@ -275,7 +310,7 @@ function IndicacoesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Indicações</h1>
           <p className="text-sm text-muted-foreground">
             Revendedores com link próprio. Cada empresa trazida por eles que paga o primeiro plano
-            rende R$ 50 de comissão, paga até o dia 30 do mês.
+            rende comissão (valor fixo ou porcentagem da venda), paga até o dia 30 do mês.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -411,7 +446,9 @@ function IndicacoesPage() {
                             <span className="font-medium">{r.nome}</span>
                             <SeloSituacao situacao={r.situacao} />
                           </div>
-                          <p className="text-xs text-muted-foreground">/r/{r.codigo}</p>
+                          <p className="text-xs text-muted-foreground">
+                            /r/{r.codigo} · {descreverComissao(r)}
+                          </p>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{r.cliques}</TableCell>
                         <TableCell className="text-right tabular-nums">{r.cadastros}</TableCell>
@@ -525,9 +562,23 @@ function RevendedorDialog({
   const [telefone, setTelefone] = useState(formatarTelefone(atual?.telefone ?? null) ?? "");
   const [pix, setPix] = useState(atual?.pix ?? "");
   const [ativo, setAtivo] = useState(atual?.ativo ?? true);
+  // Novo nasce com R$ 50 por venda, o padrão do programa.
+  const [tipoComissao, setTipoComissao] = useState<TipoComissao>(atual?.comissao_tipo ?? "fixo");
+  const [valorFixo, setValorFixo] = useState(
+    brl.format((atual?.comissao_cents ?? 5000) / 100).replace(/^R\$\s*/, ""),
+  );
+  const [percentual, setPercentual] = useState(
+    atual?.comissao_percentual != null ? decimal.format(atual.comissao_percentual) : "",
+  );
 
   const codigoValido = CODIGO_RE.test(codigo);
-  const podeSalvar = nome.trim().length > 0 && (!novo || codigoValido);
+  const fixoLido = lerNumero(valorFixo);
+  const percentualLido = lerNumero(percentual);
+  const comissaoValida =
+    tipoComissao === "fixo"
+      ? fixoLido !== null && fixoLido > 0
+      : percentualLido !== null && percentualLido > 0 && percentualLido <= 100;
+  const podeSalvar = nome.trim().length > 0 && (!novo || codigoValido) && comissaoValida;
 
   const salvar = useMutation({
     mutationFn: async () => {
@@ -535,6 +586,10 @@ function RevendedorDialog({
         p_nome: nome.trim(),
         p_telefone: telefone,
         p_pix: pix,
+        p_comissao_tipo: tipoComissao,
+        ...(tipoComissao === "fixo"
+          ? { p_comissao_cents: Math.round((fixoLido ?? 0) * 100) }
+          : { p_comissao_percentual: percentualLido ?? 0 }),
         ...(novo ? { p_codigo: codigo } : { p_id: atual?.id, p_ativo: ativo }),
       });
       if (error) throw error;
@@ -614,6 +669,50 @@ function RevendedorDialog({
                 placeholder="Para pagar a comissão"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Comissão por venda</Label>
+            <RadioGroup
+              value={tipoComissao}
+              onValueChange={(v) => setTipoComissao(v as TipoComissao)}
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="fixo" id="comissao-fixo" />
+                <Label htmlFor="comissao-fixo" className="font-normal">
+                  Valor fixo de R$
+                </Label>
+                <Input
+                  inputMode="decimal"
+                  value={valorFixo}
+                  disabled={tipoComissao !== "fixo"}
+                  className="h-8 w-24"
+                  aria-label="Valor fixo da comissão, em reais"
+                  onChange={(e) => setValorFixo(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="percentual" id="comissao-percentual" />
+                <Label htmlFor="comissao-percentual" className="font-normal">
+                  Porcentagem da venda
+                </Label>
+                <Input
+                  inputMode="decimal"
+                  value={percentual}
+                  disabled={tipoComissao !== "percentual"}
+                  className="h-8 w-20"
+                  placeholder="10"
+                  aria-label="Porcentagem da comissão"
+                  onChange={(e) => setPercentual(e.target.value)}
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              Uma vez por empresa, no primeiro pagamento de plano. A porcentagem vale sobre o valor
+              contratado: no plano anual, sobre o valor do ano.
+              {!novo && " Mudar aqui só vale para as vendas seguintes."}
+            </p>
           </div>
 
           {/* Pendente e recusado mudam por Aprovar/Recusar, na ficha. */}
@@ -805,6 +904,7 @@ function DetalheRevendedor({
                     ? `Cadastrou-se pelo site em ${dataCurta(revendedor.created_at)}.`
                     : `Cadastrado pela equipe em ${dataCurta(revendedor.created_at)}.`}
                 </span>
+                <span className="block">Comissão: {descreverComissao(revendedor)}.</span>
               </SheetDescription>
               <div>
                 <Button size="sm" variant="outline" onClick={onEditar}>
@@ -829,7 +929,8 @@ function DetalheRevendedor({
                         <span className="font-medium">Cadastro aguardando aprovação.</span>{" "}
                         <span className="text-muted-foreground">
                           O link dele só funciona depois de aprovado. O site disse que a resposta
-                          sai em até 1 dia útil.
+                          sai em até 1 dia útil. O cadastro pelo site começa com{" "}
+                          {descreverComissao(revendedor)}; para combinar outra comissão, use Editar.
                         </span>
                       </>
                     ) : (
@@ -988,6 +1089,15 @@ function DetalheRevendedor({
                                 {i.origem === "manual" ? "vinculada à mão" : "veio pelo link"} em{" "}
                                 {dataCurta(i.created_at)}
                               </span>
+                              {i.venda_em && i.comissao_cents != null && (
+                                <span>
+                                  · comissão {brl.format(i.comissao_cents / 100)}
+                                  {i.comissao_percentual != null &&
+                                    (i.valor_venda_cents != null
+                                      ? ` (${decimal.format(i.comissao_percentual)}% de ${brl.format(i.valor_venda_cents / 100)})`
+                                      : ` (${decimal.format(i.comissao_percentual)}%, sem o valor da venda)`)}
+                                </span>
+                              )}
                             </div>
                           </div>
                           {!i.comissao_paga_em && (
@@ -1117,6 +1227,12 @@ function VincularEmpresaDialog({
   const [busca, setBusca] = useState("");
   const [escolhida, setEscolhida] = useState<EmpresaParaVincular | null>(null);
   const [jaPagou, setJaPagou] = useState(false);
+  // Base da porcentagem de quem já pagou. Em branco, o banco usa o valor que a
+  // empresa contratou no site.
+  const [valorPago, setValorPago] = useState("");
+  const pedeValor = jaPagou && revendedor?.comissao_tipo === "percentual";
+  const valorLido = lerNumero(valorPago);
+  const valorOk = !pedeValor || valorPago.trim() === "" || (valorLido !== null && valorLido > 0);
 
   const empresas = useQuery({
     queryKey: ["indicacoes-empresas"],
@@ -1139,6 +1255,7 @@ function VincularEmpresaDialog({
         p_revendedor_id: revendedor!.id,
         p_tenant_id: escolhida!.id,
         p_ja_pagou: jaPagou,
+        ...(pedeValor && valorLido !== null ? { p_valor_cents: Math.round(valorLido * 100) } : {}),
       });
       if (error) throw error;
     },
@@ -1202,13 +1319,33 @@ function VincularEmpresaDialog({
               </span>
             </span>
           </label>
+          {pedeValor && revendedor && (
+            <div className="space-y-1.5">
+              <Label htmlFor="valor-pago">Valor pago pela empresa (R$)</Label>
+              <Input
+                id="valor-pago"
+                inputMode="decimal"
+                value={valorPago}
+                onChange={(e) => setValorPago(e.target.value)}
+                placeholder="ex.: 1.257,20"
+                className="w-40"
+              />
+              <p className="text-xs text-muted-foreground">
+                A comissão é {descreverComissao(revendedor)}. Em branco, usamos o valor que a
+                empresa contratou no site; venda fechada fora do site precisa do valor.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button disabled={!escolhida || vincular.isPending} onClick={() => vincular.mutate()}>
+          <Button
+            disabled={!escolhida || !valorOk || vincular.isPending}
+            onClick={() => vincular.mutate()}
+          >
             {vincular.isPending ? "Vinculando..." : "Vincular"}
           </Button>
         </DialogFooter>

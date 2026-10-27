@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-27",
+    tipo: "novo",
+    titulo: "Comissão de revendedor em porcentagem",
+    descricao:
+      "Em Indicações, ao cadastrar ou editar um revendedor, escolha entre valor fixo por venda ou uma porcentagem do valor contratado (no plano anual, do valor do ano). A comissão de cada revendedor aparece na lista e na ficha dele, e cada venda mostra quanto rendeu.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-10-27",
     tipo: "melhoria",
     titulo: "Filtro por status na Auditoria",
     descricao:
