@@ -2624,6 +2624,7 @@ export type Database = {
           aguardando_pagamento: boolean
           comissao_cents: number | null
           comissao_paga_em: string | null
+          comissao_percentual: number | null
           competencia: string | null
           created_at: string
           em_teste: boolean
@@ -2632,6 +2633,7 @@ export type Database = {
           id: string
           origem: string
           tenant_id: string | null
+          valor_venda_cents: number | null
           venda_em: string | null
         }[]
       }
@@ -2644,6 +2646,9 @@ export type Database = {
           chave_painel: string
           cliques: number
           codigo: string
+          comissao_cents: number
+          comissao_percentual: number | null
+          comissao_tipo: string
           created_at: string
           id: string
           nome: string
@@ -2974,6 +2979,9 @@ export type Database = {
         Args: {
           p_ativo?: boolean
           p_codigo?: string
+          p_comissao_cents?: number
+          p_comissao_percentual?: number
+          p_comissao_tipo?: string
           p_id?: string
           p_nome: string
           p_pix?: string
@@ -3086,7 +3094,12 @@ export type Database = {
         }[]
       }
       vincular_indicacao: {
-        Args: { p_ja_pagou?: boolean; p_revendedor_id: string; p_tenant_id: string }
+        Args: {
+          p_ja_pagou?: boolean
+          p_revendedor_id: string
+          p_tenant_id: string
+          p_valor_cents?: number
+        }
         Returns: string
       }
       vps_metrics_series: {
