@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-27",
+    tipo: "novo",
+    titulo: "Logo da sua empresa no AcessoFast dos clientes",
+    descricao:
+      "Em Configurações, envie a logo da sua empresa. Ela aparece no AcessoFast instalado nos computadores dos seus clientes, junto do ID, e chega a todos eles em alguns minutos, sem reinstalar nada. Quando o técnico conecta pelo painel ou pelo app, o cliente vê a logo na janela de acesso; quem tenta entrar por fora não ganha a logo, e o cliente vê um aviso de que o pedido não veio da sua empresa. Disponível nos planos pagos e no teste grátis.",
+    para: "admin",
+  },
+  {
+    data: "2026-10-27",
     tipo: "correcao",
     titulo: "Clique repetido em Conectar não aparece mais como falha",
     descricao:

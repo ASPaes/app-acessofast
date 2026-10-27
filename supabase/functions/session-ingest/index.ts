@@ -50,7 +50,7 @@ async function sha256Hex(input: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string; rotacao_modo?: string; client_version?: string };
+  let body: { rustdesk_id?: string; agent_token?: string; event?: string; peer_ip?: string; controller_rustdesk_id?: string; agent_version?: string; rotacao_modo?: string; client_version?: string; marca_versao?: string };
   try {
     body = await req.json();
   } catch {
@@ -74,6 +74,9 @@ Deno.serve(async (req) => {
   // AcessoFast antigo, sem versao propria). Opcional: so o agente que sabe atualizar o app
   // manda. Ausente = nao grava e nao oferece atualizacao do app.
   const client_version = (body.client_version ?? "").trim().slice(0, 40) || null;
+  // Logo da empresa (27/10/2026): versao da marca que o agente ja tem gravada ("" = nenhuma).
+  // Ausente = agente anterior a logo, que nao saberia baixar; ai nem se pergunta ao banco.
+  const marca_versao = typeof body.marca_versao === "string" ? body.marca_versao.trim().slice(0, 40) : null;
   // Passo 1 (Aposentar a senha rotativa): o modo de rotacao que o AGENTE diz estar
   // aplicando. So aceita os quatro valores — qualquer outra coisa vira null e nao e
   // gravada, para o painel nunca exibir um modo que o agente nao conhece.
@@ -398,12 +401,41 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Logo da empresa no app (27/10/2026). O bloco so vai quando muda alguma coisa: versao nova
+    // (com a URL assinada de vida curta, como a do anuncio) ou versao "" para tirar a logo —
+    // a empresa removeu, ou o plano deixou de ter direito (a regra mora na marca_da_maquina).
+    // Fail-open: se a consulta falhar nada vai, e a maquina segue com a logo que tem.
+    let marca: { versao: string; nome?: string; url?: string } | null = null;
+    if (marca_versao !== null) {
+      try {
+        const { data: marcaRows, error: marcaErr } = await db.rpc("marca_da_maquina", {
+          p_device_id: device.id,
+        });
+        if (marcaErr) {
+          console.warn("marca_da_maquina_falhou", rustdesk_id, marcaErr.message);
+        } else {
+          const m = Array.isArray(marcaRows) ? marcaRows[0] : marcaRows;
+          if (m?.versao && m?.logo_path) {
+            if (m.versao !== marca_versao) {
+              const { data: signed } = await db.storage
+                .from("logos-empresas")
+                .createSignedUrl(m.logo_path as string, 300);
+              if (signed?.signedUrl) marca = { versao: m.versao, nome: m.nome, url: signed.signedUrl };
+            }
+          } else if (marca_versao !== "") {
+            marca = { versao: "" };
+          }
+        }
+      } catch { /* a maquina fica com a logo que tem */ }
+    }
+
     const corpo: Record<string, unknown> = { ok: true, action: "presence" };
     if (update) corpo.update = update;
     if (client_update) corpo.client_update = client_update;
     if (aviso) corpo.aviso = aviso;
     if (rotacao) corpo.rotacao = rotacao;
     if (senha) corpo.senha = senha;
+    if (marca) corpo.marca = marca;
     return json(corpo);
   }
 
@@ -427,13 +459,34 @@ Deno.serve(async (req) => {
   async function latestActive() {
     const { data } = await db
       .from("connection_logs")
-      .select("id, session_start, notes, last_heartbeat_at")
+      .select("id, session_start, notes, last_heartbeat_at, technician_id, primeiro_sinal_em")
       .eq("rustdesk_id", rustdesk_id)
       .eq("status", "active")
       .order("session_start", { ascending: false })
       .limit(1)
       .maybeSingle();
     return data;
+  }
+
+  // Logo da empresa (27/10/2026): de onde veio o acesso em curso. A janela de acesso do app
+  // mostra o selo com a logo para "painel", o aviso de quem veio de fora para "externo", e
+  // nada para "desconhecido".
+  //
+  // "painel" pede a ficha do Conectar (ela guarda quem clicou) E a conexao chegando ate 2 min
+  // depois do clique — a mesma regra do horario de acesso para "esta conexao e mesmo a do
+  // clique". Na duvida nunca se da a logo: e ela que faria um estranho parecer o suporte.
+  // `primeiro_sinal_em` ainda nulo = este e o primeiro sinal, a chegada e agora.
+  function origemDoAcesso(a: {
+    session_start: string;
+    last_heartbeat_at: string | null;
+    technician_id: string | null;
+    primeiro_sinal_em: string | null;
+  }): "painel" | "externo" | "desconhecido" {
+    if (!a.technician_id) return "externo";
+    const chegada = a.last_heartbeat_at ? a.primeiro_sinal_em : nowIso;
+    if (!chegada) return "desconhecido";
+    const atraso = new Date(chegada).getTime() - new Date(a.session_start).getTime();
+    return atraso <= 2 * 60_000 ? "painel" : "desconhecido";
   }
 
   // Billing B2/B6: cap de 2h do free. Devolve o hard_cap_at do atendimento ABERTO
@@ -591,6 +644,7 @@ Deno.serve(async (req) => {
         session_id: active.id,
         action: "heartbeat",
         hard_cap_at,
+        origem_acesso: origemDoAcesso(active),
         ...(corteHorario ? { reason: "fora_do_horario" } : {}),
       });
     }
@@ -643,7 +697,7 @@ Deno.serve(async (req) => {
       // 15/09/2026 este ramo, mudo, deixava conta suspensa entrar por fora do painel sem
       // corte e sem ninguem saber (cast de billing_status quebrado na RPC).
       console.error("meter_external_session_falhou", rustdesk_id, meterErr.message);
-      return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null });
+      return json({ ok: true, session_id: inserted.id, action: "created_external", hard_cap_at: null, origem_acesso: "externo" });
     }
     const meter = Array.isArray(meterRows) ? meterRows[0] : meterRows;
     if (meter?.blocked) {
@@ -688,6 +742,7 @@ Deno.serve(async (req) => {
       action: "created_external",
       source: meter?.source ?? null,
       hard_cap_at: meter?.hard_cap_at ?? null,
+      origem_acesso: "externo",
     });
   }
 

@@ -1813,6 +1813,8 @@ export type Database = {
           horario_acesso_ativo: boolean
           horario_acesso_encerra_sessoes: boolean
           log_retention_days: number
+          logo_atualizada_em: string | null
+          logo_path: string | null
           notify_relay_quota: boolean
           prefs: Json
           tenant_id: string
@@ -1828,6 +1830,8 @@ export type Database = {
           horario_acesso_ativo?: boolean
           horario_acesso_encerra_sessoes?: boolean
           log_retention_days?: number
+          logo_atualizada_em?: string | null
+          logo_path?: string | null
           notify_relay_quota?: boolean
           prefs?: Json
           tenant_id: string
@@ -1843,6 +1847,8 @@ export type Database = {
           horario_acesso_ativo?: boolean
           horario_acesso_encerra_sessoes?: boolean
           log_retention_days?: number
+          logo_atualizada_em?: string | null
+          logo_path?: string | null
           notify_relay_quota?: boolean
           prefs?: Json
           tenant_id?: string
