@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-27",
+    tipo: "melhoria",
+    titulo: "Filtro por status na Auditoria",
+    descricao:
+      "Na Auditoria, ao lado do filtro de origem, escolha ver só as sessões ativas, as encerradas ou as que falharam. Com Ativas, você vê na hora quais atendimentos estão em andamento.",
+    para: "todos",
+  },
+  {
     data: "2026-10-26",
     tipo: "novo",
     titulo: "Indicações: link próprio para revendedores",
