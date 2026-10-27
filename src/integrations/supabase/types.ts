@@ -2536,6 +2536,7 @@ export type Database = {
           charged: boolean
           effective_limit: number
           grant_id: string
+          reutilizado: boolean
           rustdesk_id: string
           source: string
           tenant_id: string

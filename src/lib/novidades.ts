@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-10-27",
+    tipo: "correcao",
+    titulo: "Clique repetido em Conectar não aparece mais como falha",
+    descricao:
+      "Clicar em Conectar mais de uma vez na mesma máquina, antes de a conexão abrir, agora conta como um acesso só. Na Auditoria, essas tentativas repetidas deixam de aparecer como sessões que falharam, inclusive as antigas, e o filtro Que falharam mostra apenas as conexões que de fato não chegaram à máquina.",
+    para: "todos",
+  },
+  {
+    data: "2026-10-27",
     tipo: "novo",
     titulo: "Comissão de revendedor em porcentagem",
     descricao:
