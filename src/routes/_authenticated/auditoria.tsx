@@ -78,12 +78,12 @@ const MARCA_FORA_DO_HORARIO = "fora do horario de acesso";
 // para não sobreviver a uma mudança de fórmula.
 //
 // Detalhe que vale explicitar em TODOS os textos desta tela: os cartões contam
-// a LISTA FILTRADA, não o banco. Período, técnico, origem, empresa e busca já
-// entraram. Um cartão que ignorasse os filtros ao lado deles seria armadilha.
+// a LISTA FILTRADA, não o banco. Período, técnico, origem, status, empresa e busca
+// já entraram. Um cartão que ignorasse os filtros ao lado deles seria armadilha.
 // ---------------------------------------------------------------------------
 const INFO: Record<string, KpiInfo> = {
   sessoes: {
-    oQue: "Atendimentos que passaram pelos filtros ativos — período, técnico, origem, empresa e busca.",
+    oQue: "Atendimentos que passaram pelos filtros ativos — período, técnico, origem, status, empresa e busca.",
     porQue:
       "É o denominador de tudo nesta tela. Os outros quatro cartões são recortes deste, então ler qualquer um deles sem olhar este dá porcentagem errada de cabeça.",
     comoCalculamos: "connection_logs do período, aplicados os filtros da tela",
@@ -134,6 +134,15 @@ const ROTULO_PERIODO: Record<Periodo, string> = {
 };
 
 const TODOS = "__todos__";
+
+type StatusSessao = "active" | "ended" | "failed";
+
+/** Nome do status no selo da linha e no chip do filtro — os dois falam igual. */
+const ROTULO_STATUS: Record<StatusSessao, string> = {
+  active: "ativa",
+  ended: "encerrada",
+  failed: "falhou",
+};
 
 /** Teto de linhas por consulta. Quando é atingido, a tela diz — ver `noTeto`. */
 const TETO = 500;
@@ -193,6 +202,7 @@ function AuditoriaPage() {
   const [periodo, setPeriodo] = useState<Periodo>("7d");
   const [tecnico, setTecnico] = useState<string>(TODOS);
   const [origem, setOrigem] = useState<string>(TODOS);
+  const [status, setStatus] = useState<StatusSessao | typeof TODOS>(TODOS);
   const [empresa, setEmpresa] = useState<string>(TODOS);
 
   /**
@@ -226,9 +236,13 @@ function AuditoriaPage() {
    * TETO linhas mais recentes são as de todas as contas, e recortar depois
    * mostraria só os acessos da empresa que couberam nessa fatia. Com o `eq` no
    * banco, o teto passa a ser da empresa escolhida.
+   *
+   * O status também é coluna e desce pelo mesmo motivo: "ativas" num período
+   * longo tem de achar a sessão aberta há dias — a fantasma, que é quem mais
+   * interessa —, e não só as que estão entre as TETO mais recentes.
    */
   const { data, isLoading } = useQuery({
-    queryKey: ["connection_logs", periodo, empresa],
+    queryKey: ["connection_logs", periodo, empresa, status],
     queryFn: async () => {
       let q = supabase
         .from("connection_logs")
@@ -248,6 +262,7 @@ function AuditoriaPage() {
         q = q.gte("session_start", new Date(Date.now() - janela).toISOString());
       }
       if (empresa !== TODOS) q = q.eq("tenant_id", empresa);
+      if (status !== TODOS) q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
@@ -332,6 +347,11 @@ function AuditoriaPage() {
       label: `origem: ${origem === "externo" ? "fora do painel" : "pelo painel"}`,
       limpar: () => setOrigem(TODOS),
     },
+    status !== TODOS && {
+      k: "status",
+      label: `status: ${ROTULO_STATUS[status]}`,
+      limpar: () => setStatus(TODOS),
+    },
     empresa !== TODOS && {
       k: "empresa",
       label: `empresa: ${nomeEmpresaFiltrada ?? "selecionada"}`,
@@ -348,6 +368,7 @@ function AuditoriaPage() {
     setPeriodo("tudo");
     setTecnico(TODOS);
     setOrigem(TODOS);
+    setStatus(TODOS);
     setEmpresa(TODOS);
     setBusca("");
   };
@@ -595,8 +616,22 @@ function AuditoriaPage() {
                 <SelectItem value="externo">Fora do painel</SelectItem>
               </SelectContent>
             </Select>
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(v as StatusSessao | typeof TODOS)}
+            >
+              <SelectTrigger className="w-[170px]" aria-label="Status da sessão">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TODOS}>Todos os status</SelectItem>
+                <SelectItem value="active">Ativas</SelectItem>
+                <SelectItem value="ended">Encerradas</SelectItem>
+                <SelectItem value="failed">Que falharam</SelectItem>
+              </SelectContent>
+            </Select>
             {/* Empresa é o único filtro cuja lista cresce com o negócio: os
-                outros três têm um punhado de opções fixas, este tem uma por
+                outros têm um punhado de opções, este tem uma por
                 conta vendida. Por isso ele é o único que abre com campo de
                 busca — rolar uma lista de centenas atrás de um nome é o que
                 faz um filtro deixar de ser usado. */}
@@ -1039,14 +1074,13 @@ function VazioComFiltro({ temFiltro, limpar }: { temFiltro: boolean; limpar: () 
   );
 }
 
-function StatusBadge({ status }: { status: "active" | "ended" | "failed" }) {
-  const map = {
-    active: { label: "ativa", variant: "default" as const },
-    ended: { label: "encerrada", variant: "secondary" as const },
-    failed: { label: "falhou", variant: "destructive" as const },
+function StatusBadge({ status }: { status: StatusSessao }) {
+  const variante = {
+    active: "default" as const,
+    ended: "secondary" as const,
+    failed: "destructive" as const,
   };
-  const s = map[status];
-  return <Badge variant={s.variant}>{s.label}</Badge>;
+  return <Badge variant={variante[status]}>{ROTULO_STATUS[status]}</Badge>;
 }
 
 function formatDuration(seconds: number | null): string {
