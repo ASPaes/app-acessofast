@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Building2,
   ChevronRight,
@@ -49,6 +50,7 @@ import { ProvisionTenantDialog } from "@/components/provision-tenant-dialog";
 import { PlanoEmpresaDialog, type EmpresaPlano } from "@/components/plano-empresa-dialog";
 import { EditarEmpresaDialog, type EmpresaCadastro } from "@/components/editar-empresa-dialog";
 import { mascararDocumento } from "@/lib/documento";
+import { situacaoCobranca, type SituacaoCobranca } from "@/lib/pagante";
 
 export const Route = createFileRoute("/_authenticated/empresas")({
   head: () => ({
@@ -62,6 +64,12 @@ const rotuloCobranca: Record<string, string> = {
   credits: "créditos",
   plan: "plano",
 };
+
+/**
+ * Pagante é quem tem plano pago sendo cobrado — a mesma conta da Receita
+ * contratada do Financeiro. Quem só compra crédito avulso fica em não pagantes.
+ */
+type FiltroPagamento = "todas" | "pagantes" | "nao_pagantes";
 
 const rotuloPapel: Record<string, string> = {
   super_admin: "Super Admin",
@@ -77,6 +85,7 @@ function EmpresasPage() {
   const [cadastroEmEdicao, setCadastroEmEdicao] = useState<EmpresaCadastro | null>(null);
   const [inativando, setInativando] = useState<TenantLinha | null>(null);
   const [excluindo, setExcluindo] = useState<TenantLinha | null>(null);
+  const [filtro, setFiltro] = useState<FiltroPagamento>("todas");
 
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -104,13 +113,26 @@ function EmpresasPage() {
       const { data, error } = await supabase
         .from("tenants")
         .select(
-          "id, name, cnpj, billing_email, seat_limit, max_concurrent_per_tech, is_active, created_at, plan_code, billing_mode, billing_status, is_trial, profiles(count), address_book(count)",
+          "id, name, cnpj, billing_email, seat_limit, max_concurrent_per_tech, is_active, created_at, plan_code, billing_mode, billing_status, is_trial, billing_exempt, billing_exempt_until, asaas_subscription_id, plan_expires_at, profiles(count), address_book(count)",
         )
         .order("name");
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  // Ciclo da última contratação paga: o anual não cria assinatura no Asaas, e
+  // sem ele a conta que pagou o ano inteiro cairia em "não pagante".
+  const { data: contratados } = useQuery({
+    queryKey: ["financeiro-plataforma-contratados"],
+    enabled: !!isSuper,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("valores_contratados_plataforma");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const cicloPorConta = new Map((contratados ?? []).map((c) => [c.tenant_id, c.billing_cycle]));
 
   const toggleAtivaMutation = useMutation({
     mutationFn: async (vars: { id: string; ativar: boolean }) => {
@@ -168,6 +190,20 @@ function EmpresasPage() {
   const empresas = (data ?? []).filter((t) => !ehIndividual(t)).length;
   const individuais = (data ?? []).filter(ehIndividual).length;
 
+  // Mesma regra do Financeiro (lib/pagante): o número de pagantes daqui bate
+  // com o da Receita contratada de lá.
+  const agora = Date.now();
+  const situacaoPorConta = new Map(
+    (data ?? []).map((t) => [t.id, situacaoCobranca(t, cicloPorConta.get(t.id), agora)]),
+  );
+  const pagantes = (data ?? []).filter((t) => situacaoPorConta.get(t.id) === "pagante").length;
+  const naoPagantes = (data?.length ?? 0) - pagantes;
+  const visiveis = (data ?? []).filter((t) => {
+    if (filtro === "todas") return true;
+    const paga = situacaoPorConta.get(t.id) === "pagante";
+    return filtro === "pagantes" ? paga : !paga;
+  });
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -181,14 +217,25 @@ function EmpresasPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-primary" />
-            Contas cadastradas
-          </CardTitle>
-          <CardDescription>
-            {data ? `${empresas} empresa(s) · ${individuais} individual(is)` : "Carregando…"}
-          </CardDescription>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-primary" />
+              Contas cadastradas
+            </CardTitle>
+            <CardDescription>
+              {data
+                ? `${empresas} empresa(s) · ${individuais} individual(is) · ${pagantes} pagante(s)`
+                : "Carregando…"}
+            </CardDescription>
+          </div>
+          <Tabs value={filtro} onValueChange={(v) => setFiltro(v as FiltroPagamento)}>
+            <TabsList aria-label="Mostrar contas">
+              <TabsTrigger value="todas">Todas ({data?.length ?? 0})</TabsTrigger>
+              <TabsTrigger value="pagantes">Pagantes ({pagantes})</TabsTrigger>
+              <TabsTrigger value="nao_pagantes">Não pagantes ({naoPagantes})</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border border-border/60 overflow-hidden">
@@ -219,15 +266,19 @@ function EmpresasPage() {
                       ))}
                     </TableRow>
                   ))}
-                {!isLoading && (data?.length ?? 0) === 0 && (
+                {!isLoading && visiveis.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
-                      Nenhuma conta cadastrada ainda.
+                      {(data?.length ?? 0) === 0
+                        ? "Nenhuma conta cadastrada ainda."
+                        : filtro === "pagantes"
+                          ? "Nenhuma conta pagante."
+                          : "Todas as contas são pagantes."}
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading &&
-                  data?.map((t) => {
+                  visiveis.map((t) => {
                     const membros = t.profiles?.[0]?.count ?? 0;
                     const dispositivos = t.address_book?.[0]?.count ?? 0;
                     const individual = ehIndividual(t);
@@ -239,6 +290,7 @@ function EmpresasPage() {
                         membros={membros}
                         dispositivos={dispositivos}
                         individual={individual}
+                        situacao={situacaoPorConta.get(t.id) ?? "gratis"}
                         aberta={on}
                         ehPropriaEmpresa={t.id === me?.tenant_id}
                         onToggle={() => setAberta(on ? null : t.id)}
@@ -338,6 +390,7 @@ function LinhaConta({
   membros,
   dispositivos,
   individual,
+  situacao,
   aberta,
   ehPropriaEmpresa,
   onToggle,
@@ -351,6 +404,7 @@ function LinhaConta({
   membros: number;
   dispositivos: number;
   individual: boolean;
+  situacao: SituacaoCobranca;
   aberta: boolean;
   ehPropriaEmpresa: boolean;
   onToggle: () => void;
@@ -437,6 +491,31 @@ function LinhaConta({
           {tenant.is_trial && (
             <Badge variant="secondary" className="ml-1.5">
               teste
+            </Badge>
+          )}
+          {/* Teste, grátis e créditos já se leem nos selos ao lado e inativa na
+              coluna Status. Aqui só entra o que nenhum deles conta: se a conta
+              paga, e por que uma conta em plano não paga. */}
+          {situacao === "pagante" && (
+            <Badge
+              variant="outline"
+              className="ml-1.5 border-success/30 bg-success/10 text-success"
+            >
+              pagante
+            </Badge>
+          )}
+          {situacao === "sem_cobranca" && (
+            <Badge
+              variant="outline"
+              className="ml-1.5 border-viz-amber/40 text-viz-amber"
+              title="Plano pago sem cobrança ativa no Asaas — ninguém está cobrando esta conta"
+            >
+              sem cobrança
+            </Badge>
+          )}
+          {situacao === "isenta" && (
+            <Badge variant="outline" className="ml-1.5 text-muted-foreground">
+              isenta
             </Badge>
           )}
         </TableCell>
