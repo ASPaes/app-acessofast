@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-10-28",
+    tipo: "melhoria",
+    titulo: "Auditoria mostra só os acessos que chegaram à máquina",
+    descricao:
+      "Clicar em Conectar numa máquina que não respondeu, desligada por exemplo, não aparece mais na Auditoria como sessão que falhou, inclusive nas tentativas antigas. A Auditoria lista só os acessos que de fato aconteceram, e o filtro de status fica com Ativas e Encerradas. Se o clique tinha usado um acesso gratuito ou um crédito, ele continua sendo devolvido.",
+    para: "todos",
+  },
+  {
     data: "2026-10-27",
     tipo: "correcao",
     titulo: "Clique repetido em Conectar não aparece mais como falha",

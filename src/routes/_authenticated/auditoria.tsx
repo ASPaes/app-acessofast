@@ -374,7 +374,6 @@ function AuditoriaPage() {
   };
 
   const ativas = filtradas.filter((l) => l.status === "active").length;
-  const falhas = filtradas.filter((l) => l.status === "failed").length;
   const externas = filtradas.filter(ehExterno).length;
   const tecnicosNoPeriodo = new Set(filtradas.map(nomeTecnico).filter(Boolean)).size;
   const empresasNoPeriodo = new Set(filtradas.map((l) => l.tenant_id)).size;
@@ -414,9 +413,9 @@ function AuditoriaPage() {
    * data: a pergunta que essa visão responde é "quem usa mais", e a lista
    * ordenada por último acesso responderia "quem usou por último".
    *
-   * `acessos` conta ativa + encerrada, a mesma regra da visão por máquina —
-   * tentativa que falhou não é acesso, e contá-la inflaria o uso de uma conta
-   * que na prática não entrou em máquina nenhuma. As falhas aparecem à parte.
+   * `acessos` conta ativa + encerrada, a mesma regra da visão por máquina. O
+   * clique em Conectar que não chegou à máquina nem aparece aqui: ele sai da
+   * trilha de sessões (cliques_sem_conexao), porque não é acesso.
    */
   const porEmpresa = useMemo(() => {
     const map = new Map<string, LogRow[]>();
@@ -434,7 +433,6 @@ function AuditoriaPage() {
           tenant_id,
           empresa: nomeEmpresa(ordenadas[0]),
           acessos: ordenadas.filter((s) => s.status === "active" || s.status === "ended").length,
-          falhas: ordenadas.filter((s) => s.status === "failed").length,
           externas: ordenadas.filter(ehExterno).length,
           tecnicos: new Set(ordenadas.map(nomeTecnico).filter(Boolean)).size,
           maquinas: new Set(ordenadas.map((s) => s.rustdesk_id)).size,
@@ -627,7 +625,6 @@ function AuditoriaPage() {
                 <SelectItem value={TODOS}>Todos os status</SelectItem>
                 <SelectItem value="active">Ativas</SelectItem>
                 <SelectItem value="ended">Encerradas</SelectItem>
-                <SelectItem value="failed">Que falharam</SelectItem>
               </SelectContent>
             </Select>
             {/* Empresa é o único filtro cuja lista cresce com o negócio: os
@@ -931,7 +928,6 @@ function AuditoriaPage() {
                     <TableHead className="text-right">Máquinas</TableHead>
                     <TableHead className="text-right">Técnicos</TableHead>
                     <TableHead className="text-right">Fora do painel</TableHead>
-                    <TableHead className="text-right">Falhas</TableHead>
                     <TableHead>Último acesso</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -939,7 +935,7 @@ function AuditoriaPage() {
                   {isLoading &&
                     Array.from({ length: 6 }).map((_, i) => (
                       <TableRow key={i}>
-                        {Array.from({ length: 7 }).map((_, j) => (
+                        {Array.from({ length: 6 }).map((_, j) => (
                           <TableCell key={j}>
                             <Skeleton className="h-4 w-24" />
                           </TableCell>
@@ -948,7 +944,7 @@ function AuditoriaPage() {
                     ))}
                   {!isLoading && porEmpresa.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-0">
+                      <TableCell colSpan={6} className="py-0">
                         <VazioComFiltro temFiltro={chips.length > 0} limpar={limparTudo} />
                       </TableCell>
                     </TableRow>
@@ -984,9 +980,6 @@ function AuditoriaPage() {
                             <span className="text-muted-foreground">0</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-                          {e.falhas}
-                        </TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
                           {new Date(e.ultimo.session_start).toLocaleString("pt-BR")}
                         </TableCell>
@@ -1003,11 +996,6 @@ function AuditoriaPage() {
             <p className="mt-3 text-xs text-warning">
               Mostrando as {TETO} sessões mais recentes de {ROTULO_PERIODO[periodo]} — há mais
               registros no período. Reduza o intervalo para ver o restante.
-            </p>
-          )}
-          {falhas > 0 && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              {falhas} tentativa(s) de conexão falharam no período filtrado.
             </p>
           )}
         </CardContent>
