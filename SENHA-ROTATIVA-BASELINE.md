@@ -293,6 +293,28 @@ pré-requisito do Passo 2 — mas o ganho neste número específico é **hipóte
 
 ## Revisões
 
+**Revisão 3 (28/10/2026)** — onde está o "falhou" agora. Desde
+`20261028120000_cliques_sem_conexao`, o clique que não vira sessão **sai de `connection_logs`** e vai
+para `public.cliques_sem_conexao` (mesmo `id`, `clicado_em` = o antigo `session_start`). As fichas
+`failed` antigas foram movidas também. Em `connection_logs` não sobra `status = 'failed'`, então as
+consultas acima, re-rodadas como estão, dariam **0% de falha**. Para re-rodar, troque a fonte dos
+grants por esta, que devolve o mesmo formato:
+
+```sql
+with cliques as (
+  select cl.id, cl.rustdesk_id, cl.technician_id, cl.address_book_id, cl.session_start, cl.status::text as status
+    from public.connection_logs cl
+   where cl.technician_id is not null and cl.status = 'ended'
+  union all
+  select c.id, c.rustdesk_id, c.technician_id, c.address_book_id, c.clicado_em, 'failed'
+    from public.cliques_sem_conexao c
+)
+```
+
+A consulta 4 (cliques por atendimento) também precisa contar `cliques_sem_conexao`. O clique
+repetido do mesmo técnico não entra em nenhuma das duas tabelas: desde 27/10 ele é absorvido pela
+sessão real (`20261027170000_clique_repetido_no_conectar`).
+
 **Revisão 2 (11/09/2026)** — investigando a `BOMBONIERI03` para escolher canários, apareceram dois
 vieses na Revisão 1:
 
