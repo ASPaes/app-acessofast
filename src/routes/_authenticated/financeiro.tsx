@@ -24,6 +24,7 @@ import { StatCard } from "@/components/stat-card";
 import type { KpiInfo } from "@/components/kpi-info";
 import { useMe } from "@/hooks/use-me";
 import { aplicarDesconto, percentualDaOferta, useOfertaLancamento } from "@/lib/oferta-lancamento";
+import { devePagar as devePagarConta, ehPagante, isentaAgora } from "@/lib/pagante";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -38,7 +39,9 @@ import {
   Unlink,
   Users,
   Megaphone,
+  Wallet,
 } from "lucide-react";
+import type { Database } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
   head: () => ({
@@ -125,6 +128,15 @@ const INFO: Record<string, KpiInfo> = {
       "valor da última contratação paga de cada conta (com a oferta de lançamento ou o cupom que entrou nela): mensal pela mensalidade atual, anual pelo total do ano ÷ 12. Entram as contas ativas em plano, sem teste, sem isenção vigente, com assinatura no Asaas (mensal) ou com o ano pago ainda valendo (anual)",
     referencia:
       "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado. Plano pago que ninguém está cobrando não entra — vai para o cartão Sem cobrança.",
+  },
+  pago30: {
+    oQue: "O que os clientes pagaram pelo Asaas nos últimos 30 dias: planos e créditos.",
+    porQue:
+      "É o dinheiro que de fato saiu do bolso do cliente, ao contrário da receita contratada, que é o que está assinado. No cartão parcelado o cliente paga tudo na compra, mas cada parcela só cai na conta no mês dela: por isso o que ainda vai cair aparece embaixo.",
+    comoCalculamos:
+      "soma do valor das cobranças pagas (confirmadas ou recebidas no Asaas) com data de pagamento nos últimos 30 dias; o que ainda vai cair é o valor líquido das pagas com data de crédito depois de hoje",
+    referencia:
+      "Só entram as cobranças ligadas a uma conta do AcessoFast. A conta do Asaas também recebe pagamentos de outros produtos, e esses ficam de fora.",
   },
   semCobranca: {
     oQue: "Contas em plano pago que ninguém está cobrando.",
@@ -885,9 +897,10 @@ function BillingStatusBadge({
  *
  * Sobre os números: o que a tela chama de RECEITA CONTRATADA é a soma do preço
  * mensal dos planos das contas ativas — é o que foi contratado, não o que foi
- * recebido. Quem recebe é o Asaas, e o painel não tem esse extrato. Chamar isso
- * de faturamento seria mentira no instante em que alguém deixasse de pagar, e
- * por isso as contas em atraso aparecem separadas em vez de somadas.
+ * recebido. Chamar isso de faturamento seria mentira no instante em que alguém
+ * deixasse de pagar, e por isso as contas em atraso aparecem separadas em vez de
+ * somadas. O que foi pago de fato vem de outra fonte: os avisos de pagamento do
+ * Asaas (pagamentos_plataforma), no cartão Pago em 30 dias e na aba Pagamentos.
  *
  * Só entra na receita a conta que tem assinatura no Asaas. Trocar o plano pela
  * coluna Plano em Empresas (RPC assign_plan) liga billing_mode = plan mas não
@@ -958,6 +971,20 @@ function FinanceiroPlataforma() {
   });
   const { data: oferta } = useOfertaLancamento();
 
+  /**
+   * Cada cobrança do Asaas ligada a uma conta do AcessoFast: valor, parcela,
+   * forma e quando cai na conta. É daqui que sai "quanto pagou e em quantas
+   * vezes" — o valor contratado sozinho não diz como o cliente pagou.
+   */
+  const { data: pagamentos, isLoading: carregandoPagamentos } = useQuery({
+    queryKey: ["financeiro-plataforma-pagamentos"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("pagamentos_plataforma");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   // Preço de hoje para quem ainda não paga: tabela com a oferta de lançamento,
   // o mesmo que o site mostra e que a conta pagaria se contratasse agora.
   const pctOferta = percentualDaOferta(oferta);
@@ -976,35 +1003,13 @@ function FinanceiroPlataforma() {
 
   const ativas = (empresas ?? []).filter((t) => t.is_active);
 
-  /**
-   * Isenção só vale até billing_exempt_until — mesma regra do cron de
-   * suspensão. Isenção vencida volta a ser conta que deveria pagar.
-   */
+  // A regra de quem paga mora em lib/pagante: o filtro Pagantes de Empresas
+  // usa a mesma, e os dois números precisam bater.
   const agora = Date.now();
-  const isenta = (t: (typeof ativas)[number]) =>
-    t.billing_exempt &&
-    (!t.billing_exempt_until || new Date(t.billing_exempt_until).getTime() > agora);
-
-  /**
-   * Plano pago: ativa, em plano, fora do teste e sem isenção vigente. Teste e
-   * isenção ficam de fora porque nenhuma das duas gera cobrança — incluí-las
-   * inflaria a receita com dinheiro que ninguém vai receber.
-   */
-  const devePagar = (t: (typeof ativas)[number]) =>
-    t.billing_mode === "plan" && !t.is_trial && !isenta(t);
-
-  /**
-   * Pagante de verdade: plano pago E alguém cobrando. Mensal = assinatura no
-   * Asaas. Anual = o ano pago ainda vale, porque o anual não cria assinatura.
-   */
-  const pagante = (t: (typeof ativas)[number]) => {
-    if (!devePagar(t)) return false;
-    const c = contratadoPorConta.get(t.id);
-    if (c?.billing_cycle === "annual") {
-      return !!t.plan_expires_at && new Date(t.plan_expires_at).getTime() > agora;
-    }
-    return !!t.asaas_subscription_id;
-  };
+  const isenta = (t: (typeof ativas)[number]) => isentaAgora(t, agora);
+  const devePagar = (t: (typeof ativas)[number]) => devePagarConta(t, agora);
+  const pagante = (t: (typeof ativas)[number]) =>
+    ehPagante(t, contratadoPorConta.get(t.id)?.billing_cycle, agora);
 
   /**
    * Valor por mês de uma conta: o que ela paga de verdade, se já contratou (anual
@@ -1034,6 +1039,28 @@ function FinanceiroPlataforma() {
     0,
   );
 
+  const nomePorConta = new Map((empresas ?? []).map((t) => [t.id, t.name]));
+  const pagos = (pagamentos ?? []).filter(foiPago);
+
+  /** Pagamentos de plano já pagos, por conta, do mais recente para o mais antigo. */
+  const planoPagoPorConta = new Map<string, Pagamento[]>();
+  for (const p of pagos) {
+    if (p.origem !== "plano") continue;
+    planoPagoPorConta.set(p.tenant_id, [...(planoPagoPorConta.get(p.tenant_id) ?? []), p]);
+  }
+
+  const hoje = diaIso(agora);
+  const desde30 = diaIso(agora - 30 * 86_400_000);
+  const pagos30 = pagos.filter((p) => !!p.pago_em && p.pago_em >= desde30);
+  const valorPago30 = pagos30.reduce((s, p) => s + (p.valor_cents ?? 0), 0);
+  // Cartão parcelado é confirmado inteiro na compra, mas cada parcela cai na
+  // conta num mês: o que já foi pago não é o que já entrou.
+  const aCair = pagos
+    .filter((p) => !!p.credito_em && p.credito_em > hoje)
+    .reduce((s, p) => s + (p.liquido_cents ?? 0), 0);
+  const totalPago = pagos.reduce((s, p) => s + (p.valor_cents ?? 0), 0);
+  const totalLiquido = pagos.reduce((s, p) => s + (p.liquido_cents ?? 0), 0);
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -1043,7 +1070,7 @@ function FinanceiroPlataforma() {
         </p>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           title="Receita contratada"
           info={INFO.receita}
@@ -1052,6 +1079,19 @@ function FinanceiroPlataforma() {
           hint={`${pagantes.length} conta(s) pagante(s) · por mês`}
           loading={isLoading}
           color="emerald"
+        />
+        <StatCard
+          title="Pago em 30 dias"
+          info={INFO.pago30}
+          value={emReais(valorPago30)}
+          icon={Wallet}
+          hint={
+            aCair > 0
+              ? `${pagos30.length} pagamento(s) · ${emReais(aCair)} ainda a cair na conta`
+              : `${pagos30.length} pagamento(s) pelo Asaas`
+          }
+          loading={carregandoPagamentos}
+          color="cyan"
         />
         <StatCard
           title="Em atraso"
@@ -1094,6 +1134,7 @@ function FinanceiroPlataforma() {
       <Tabs defaultValue="contas">
         <TabsList>
           <TabsTrigger value="contas">Contas</TabsTrigger>
+          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           <TabsTrigger value="cupons">Cupons</TabsTrigger>
         </TabsList>
 
@@ -1116,20 +1157,22 @@ function FinanceiroPlataforma() {
                       <TableHead>Cobrança</TableHead>
                       <TableHead>Situação</TableHead>
                       <TableHead>Vence</TableHead>
+                      <TableHead>Contrato</TableHead>
+                      <TableHead className="text-right">Já pago</TableHead>
                       <TableHead className="text-right">Valor/mês</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading && (
                       <TableRow>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={8}>
                           <Skeleton className="h-8 w-full" />
                         </TableCell>
                       </TableRow>
                     )}
                     {!isLoading && ativas.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                           Nenhuma conta ativa.
                         </TableCell>
                       </TableRow>
@@ -1139,6 +1182,8 @@ function FinanceiroPlataforma() {
                         const preco = valorMes(t);
                         const cobra = devePagar(t);
                         const semAsaas = cobra && !pagante(t);
+                        const contrato = contratadoPorConta.get(t.id);
+                        const pagosConta = planoPagoPorConta.get(t.id) ?? [];
                         return (
                           <TableRow key={t.id}>
                             <TableCell className="font-medium">{t.name}</TableCell>
@@ -1165,11 +1210,139 @@ function FinanceiroPlataforma() {
                                 ? new Date(t.plan_expires_at).toLocaleDateString("pt-BR")
                                 : "—"}
                             </TableCell>
+                            <TableCell className="text-sm">
+                              {contrato ? (
+                                <>
+                                  <span className="block tabular-nums">
+                                    {emReais(contrato.valor_cents)}
+                                    <span className="text-muted-foreground">
+                                      {contrato.billing_cycle === "annual"
+                                        ? " por ano"
+                                        : " por mês"}
+                                    </span>
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {comoPaga(contrato.billing_cycle, pagosConta[0])}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {pagosConta.length > 0 ? (
+                                <>
+                                  <span className="block tabular-nums">
+                                    {emReais(
+                                      pagosConta.reduce((s, p) => s + (p.valor_cents ?? 0), 0),
+                                    )}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {resumoDoPago(pagosConta)}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {/* Isenta e em teste mostram traço, não zero: zero
                                   lê como "plano sem preço" e manda investigar um
                                   problema que não existe. */}
                               {cobra && preco ? emReais(preco) : "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pagamentos" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Pagamentos</CardTitle>
+              <CardDescription>
+                {pagos.length > 0 &&
+                  `${emReais(totalPago)} pagos · ${emReais(totalLiquido)} depois da taxa do Asaas${
+                    aCair > 0 ? ` · ${emReais(aCair)} ainda a cair na conta` : ""
+                  }. `}
+                Cartão parcelado é aprovado inteiro na compra, e cada parcela cai na conta num mês.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-border/60 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Pago em</TableHead>
+                      <TableHead>Conta</TableHead>
+                      <TableHead>Referente a</TableHead>
+                      <TableHead>Forma</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right" title="Valor menos a taxa do Asaas">
+                        Líquido
+                      </TableHead>
+                      <TableHead>Cai na conta</TableHead>
+                      <TableHead>Situação</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {carregandoPagamentos && (
+                      <TableRow>
+                        <TableCell colSpan={8}>
+                          <Skeleton className="h-8 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!carregandoPagamentos && (pagamentos?.length ?? 0) === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                          Nenhum pagamento recebido ainda.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!carregandoPagamentos &&
+                      pagamentos?.map((p) => {
+                        const situacao = situacaoDoPagamento(p);
+                        return (
+                          <TableRow key={p.payment_id}>
+                            <TableCell className="text-sm tabular-nums">
+                              {p.pago_em ? (
+                                diaBr(p.pago_em)
+                              ) : p.vencimento ? (
+                                <span className="text-muted-foreground">
+                                  vence {diaBr(p.vencimento)}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {nomePorConta.get(p.tenant_id) ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {referenteA(p)}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {FORMA[p.forma ?? ""] ?? p.forma ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {p.valor_cents !== null ? emReais(p.valor_cents) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-muted-foreground">
+                              {p.liquido_cents !== null ? emReais(p.liquido_cents) : "—"}
+                            </TableCell>
+                            <TableCell className="text-sm tabular-nums text-muted-foreground">
+                              {p.credito_em ? diaBr(p.credito_em) : "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={TOM_SITUACAO[situacao.tom]}>
+                                {situacao.rotulo}
+                              </Badge>
                             </TableCell>
                           </TableRow>
                         );
@@ -1195,3 +1368,112 @@ const MODO_COBRANCA: Record<string, string> = {
   credits: "Créditos",
   free: "Grátis",
 };
+
+// ---------------------------------------------------------------------------
+// Pagamentos (pagamentos_plataforma): uma cobrança do Asaas por linha.
+// ---------------------------------------------------------------------------
+
+type Pagamento = Database["public"]["Functions"]["pagamentos_plataforma"]["Returns"][number];
+
+/** billingType do Asaas. UNDEFINED é cobrança em que o cliente ainda escolhe a forma. */
+const FORMA: Record<string, string> = {
+  CREDIT_CARD: "Cartão",
+  DEBIT_CARD: "Débito",
+  PIX: "Pix",
+  BOLETO: "Boleto",
+  UNDEFINED: "A escolher",
+};
+
+/** CONFIRMED = pago, dinheiro ainda a cair; RECEIVED = já caiu na conta. */
+const STATUS_PAGO = ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"];
+
+/**
+ * Cobrança removida no Asaas continua com o status de antes (PENDING): só o
+ * tipo do último evento diz que ela saiu.
+ */
+function foiPago(p: Pagamento): boolean {
+  return p.evento !== "PAYMENT_DELETED" && STATUS_PAGO.includes(p.status ?? "");
+}
+
+type TomSituacao = "ok" | "espera" | "alerta" | "neutro";
+
+const TOM_SITUACAO: Record<TomSituacao, string> = {
+  ok: "border-success/30 bg-success/10 text-success",
+  espera: "border-primary/30 bg-primary/10 text-primary",
+  alerta: "border-warning/30 bg-warning/10 text-warning",
+  neutro: "text-muted-foreground",
+};
+
+function situacaoDoPagamento(p: Pagamento): { rotulo: string; tom: TomSituacao } {
+  if (p.evento === "PAYMENT_DELETED") return { rotulo: "Removida", tom: "neutro" };
+  switch (p.status) {
+    case "RECEIVED":
+    case "RECEIVED_IN_CASH":
+      return { rotulo: "Recebido", tom: "ok" };
+    case "CONFIRMED":
+      return { rotulo: "Pago", tom: "ok" };
+    case "PENDING":
+    case "AWAITING_RISK_ANALYSIS":
+      return { rotulo: "Aguardando", tom: "espera" };
+    case "OVERDUE":
+      return { rotulo: "Vencido", tom: "alerta" };
+    case "REFUNDED":
+      return { rotulo: "Estornado", tom: "neutro" };
+    case "REFUND_REQUESTED":
+    case "REFUND_IN_PROGRESS":
+      return { rotulo: "Estorno pedido", tom: "alerta" };
+    case "CHARGEBACK_REQUESTED":
+    case "CHARGEBACK_DISPUTE":
+    case "AWAITING_CHARGEBACK_REVERSAL":
+      return { rotulo: "Contestado", tom: "alerta" };
+    default:
+      return { rotulo: p.status ?? "—", tom: "neutro" };
+  }
+}
+
+function referenteA(p: Pagamento): string {
+  if (p.origem === "creditos") return "Créditos";
+  if (p.parcelas && p.parcelas > 1 && p.parcela) {
+    return `Plano · parcela ${p.parcela} de ${p.parcelas}`;
+  }
+  return p.assinatura_id ? "Mensalidade" : "Plano";
+}
+
+/**
+ * Como a conta paga o contrato, a partir do pagamento mais recente do plano:
+ * "3x de R$ 1.257,20 · Cartão". Sem pagamento no painel (contratação anterior
+ * ao registro dos avisos do Asaas), não inventa: volta vazio.
+ */
+function comoPaga(ciclo: string, ultimo: Pagamento | undefined): string {
+  if (!ultimo) return "";
+  const forma = FORMA[ultimo.forma ?? ""] ?? ultimo.forma ?? "";
+  if (ultimo.parcelas && ultimo.parcelas > 1 && ultimo.valor_cents !== null) {
+    return `${ultimo.parcelas}x de ${emReais(ultimo.valor_cents)} · ${forma}`;
+  }
+  return ciclo === "annual" ? `à vista · ${forma}` : forma;
+}
+
+/** "3 de 3 parcelas" no parcelado; "4 pagamentos" na mensalidade. */
+function resumoDoPago(pagosConta: Pagamento[]): string {
+  const ultimo = pagosConta[0];
+  if (ultimo?.parcelamento_id && ultimo.parcelas && ultimo.parcelas > 1) {
+    const pagas = pagosConta.filter((p) => p.parcelamento_id === ultimo.parcelamento_id).length;
+    return `${pagas} de ${ultimo.parcelas} parcelas`;
+  }
+  return `${pagosConta.length} pagamento(s)`;
+}
+
+/**
+ * Datas do Asaas chegam sem hora (AAAA-MM-DD). `new Date()` leria como
+ * meia-noite UTC e, no Brasil, mostraria o dia anterior.
+ */
+function diaBr(dia: string): string {
+  return dia.split("-").reverse().join("/");
+}
+
+/** Dia local em AAAA-MM-DD, para comparar com as datas do Asaas como texto. */
+function diaIso(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}

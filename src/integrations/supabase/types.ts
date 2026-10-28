@@ -2756,6 +2756,27 @@ export type Database = {
           tecnicos: number
         }[]
       }
+      pagamentos_plataforma: {
+        Args: never
+        Returns: {
+          assinatura_id: string | null
+          atualizado_em: string
+          credito_em: string | null
+          evento: string
+          forma: string | null
+          liquido_cents: number | null
+          origem: string
+          pago_em: string | null
+          parcela: number | null
+          parcelamento_id: string | null
+          parcelas: number | null
+          payment_id: string
+          status: string | null
+          tenant_id: string
+          valor_cents: number | null
+          vencimento: string | null
+        }[]
+      }
       promo_code_attach_tenant: {
         Args: { p_redemption_id: string; p_tenant_id: string }
         Returns: undefined
