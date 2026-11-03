@@ -2541,6 +2541,7 @@ export type Database = {
         Returns: boolean
       }
       close_stale_sessions: { Args: never; Returns: number }
+      conta_ja_contratou: { Args: never; Returns: boolean }
       create_access_grant: {
         Args: {
           p_actor: string

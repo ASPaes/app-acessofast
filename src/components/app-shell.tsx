@@ -15,6 +15,7 @@ import { Novidades } from "@/components/novidades";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { OttoAjudante } from "@/components/otto/otto-ajudante";
 import { Button } from "@/components/ui/button";
+import { useJaContratou } from "@/hooks/use-ja-contratou";
 import { URL_DOWNLOAD_AGENTE } from "@/lib/download-agente";
 
 const routeLabels: Record<string, string> = {
@@ -93,6 +94,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const planoPago = !!plano && (plano.is_custom || (plano.price_month_cents ?? 0) > 0);
   const contaGratuita =
     (tenant?.billing_mode === "free" || tenant?.billing_mode === "credits") && !planoPago;
+
+  const { data: jaContratou } = useJaContratou(me?.tenant_id);
 
   const { data: activeUsers } = useQuery({
     queryKey: ["active-users-count", me?.tenant_id],
@@ -203,7 +206,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 currentPlanCode={tenant?.plan_code}
                 activeUsers={activeUsers}
                 contaGratuita={contaGratuita}
-                nuncaContratou={!!tenant && !tenant.asaas_customer_id}
+                nuncaContratou={!!tenant && !tenant.asaas_customer_id && jaContratou === false}
               />
             )}
             {ajustarUsuarios ? (

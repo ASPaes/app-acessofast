@@ -21,9 +21,10 @@ type Props = {
    */
   contaGratuita: boolean;
   /**
-   * A conta nunca pagou pelo Asaas (sem cliente lá). Com data de fim gravada e
-   * fora do teste, é a conta que usava o AcessoFast sem cobrança e ganhou prazo
-   * para contratar: o aviso é "contrate", não "renove".
+   * A conta nunca pagou: sem cliente no Asaas e sem contratação paga (Pix por fora
+   * da plataforma não cria cliente lá). Com data de fim gravada e fora do teste, é
+   * a conta que usava o AcessoFast sem cobrança e ganhou prazo para contratar: o
+   * aviso é "contrate", não "renove".
    */
   nuncaContratou: boolean;
 };
