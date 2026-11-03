@@ -109,6 +109,9 @@ Deno.serve(async (req) => {
       .from("address_book")
       .insert({ tenant_id: targetTenant, rustdesk_id: rustdeskId, alias, device_group: deviceGroup, os, created_by: user.id })
       .select("id, rustdesk_id").single();
+    // Conta suspensa ou inativa nao adiciona computador novo (gatilho no address_book).
+    if (insErr?.message?.includes("billing_blocked")) return json({ error: "billing_blocked" }, 403);
+    if (insErr?.message?.includes("conta_inativa")) return json({ error: "conta_inativa" }, 403);
     if (insErr || !device) return json({ error: "create_failed" }, 500);
 
     // Provisiona a senha (mesmo contrato de cripto do provision-device-secret).
