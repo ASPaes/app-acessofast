@@ -22,6 +22,7 @@ import { AcessoRestrito } from "@/components/acesso-restrito";
 import { SecaoCupons } from "@/components/secao-cupons";
 import { StatCard } from "@/components/stat-card";
 import type { KpiInfo } from "@/components/kpi-info";
+import { useJaContratou } from "@/hooks/use-ja-contratou";
 import { useMe } from "@/hooks/use-me";
 import { aplicarDesconto, percentualDaOferta, useOfertaLancamento } from "@/lib/oferta-lancamento";
 import { devePagar as devePagarConta, ehPagante, isentaAgora } from "@/lib/pagante";
@@ -240,6 +241,7 @@ function Financeiro() {
     },
   });
   const { data: oferta } = useOfertaLancamento(isAdmin);
+  const { data: jaContratou } = useJaContratou(tenantId);
 
   /**
    * Atendimentos dos últimos 30 dias — deliberadamente NÃO "do ciclo".
@@ -363,14 +365,16 @@ function Financeiro() {
   const isTrial = !!tenant?.is_trial;
   const dias = tenant?.plan_expires_at ? diasAte(tenant.plan_expires_at) : null;
   // Conta que usava o AcessoFast sem cobrança e ganhou prazo para contratar:
-  // tem data de fim, mas nunca pagou pelo Asaas. A data é a do bloqueio, não
-  // a de uma renovação (mesma regra da faixa do topo, em billing-banner).
+  // tem data de fim, mas nunca pagou (Pix por fora da plataforma conta como pago,
+  // mesmo sem cliente no Asaas). A data é a do bloqueio, não a de uma renovação
+  // (mesma regra da faixa do topo, em billing-banner).
   const prazoContratar =
     isPlan &&
     !isTrial &&
     !tenant?.billing_exempt &&
     !!tenant?.plan_expires_at &&
-    !tenant?.asaas_customer_id;
+    !tenant?.asaas_customer_id &&
+    jaContratou === false;
   const reason: "assinar" | "renovar" =
     isPlan && !isTrial && !prazoContratar ? "renovar" : "assinar";
   const rotuloPrazo = isTrial ? "Teste termina" : prazoContratar ? "Bloqueio em" : null;
