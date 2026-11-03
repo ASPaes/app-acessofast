@@ -533,6 +533,10 @@ export type Database = {
       connection_logs: {
         Row: {
           address_book_id: string | null
+          controlador_device_id: string | null
+          controlador_status: string | null
+          controlador_visto_em: string | null
+          controller_rustdesk_id: string | null
           created_at: string
           duration_seconds: number | null
           id: string
@@ -549,6 +553,10 @@ export type Database = {
         }
         Insert: {
           address_book_id?: string | null
+          controlador_device_id?: string | null
+          controlador_status?: string | null
+          controlador_visto_em?: string | null
+          controller_rustdesk_id?: string | null
           created_at?: string
           duration_seconds?: number | null
           id?: string
@@ -565,6 +573,10 @@ export type Database = {
         }
         Update: {
           address_book_id?: string | null
+          controlador_device_id?: string | null
+          controlador_status?: string | null
+          controlador_visto_em?: string | null
+          controller_rustdesk_id?: string | null
           created_at?: string
           duration_seconds?: number | null
           id?: string
@@ -583,6 +595,13 @@ export type Database = {
           {
             foreignKeyName: "connection_logs_address_book_id_fkey"
             columns: ["address_book_id"]
+            isOneToOne: false
+            referencedRelation: "address_book"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_logs_controlador_device_id_fkey"
+            columns: ["controlador_device_id"]
             isOneToOne: false
             referencedRelation: "address_book"
             referencedColumns: ["id"]

@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-11-03",
+    tipo: "melhoria",
+    titulo: "Auditoria mostra de qual computador veio cada acesso",
+    descricao:
+      "Na Auditoria, a coluna Quem acessou passa a mostrar o técnico e o computador de onde ele conectou. Quando o acesso é aberto direto pelo ID, sem o pedido de acesso, aparece o nome do computador. Se ele não for da sua empresa, aparece o aviso Computador de fora, com o ID dele. Vale para os acessos feitos a partir de agora.",
+    para: "admin",
+  },
+  {
+    data: "2026-11-03",
     tipo: "correcao",
     titulo: "Conta com acesso bloqueado não adiciona computadores novos",
     descricao:
