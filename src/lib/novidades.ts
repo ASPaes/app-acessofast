@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-11-03",
+    tipo: "correcao",
+    titulo: "Conta com acesso bloqueado não adiciona computadores novos",
+    descricao:
+      "Enquanto a conta estiver sem plano ativo ou inativa, não dá para adicionar computadores novos, em Dispositivos, em Conectar ou pelo aplicativo. Os computadores já cadastrados continuam na lista. Assim que o plano for contratado ou o pagamento confirmado, é só adicionar normalmente.",
+    para: "todos",
+  },
+  {
     data: "2026-10-28",
     tipo: "melhoria",
     titulo: "Financeiro mostra quanto cada conta pagou, e Empresas separa pagantes",

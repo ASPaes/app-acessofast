@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { AnuncioSlot } from "@/components/anuncio-slot";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemContaBloqueada } from "@/lib/conta-bloqueada";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2990,6 +2991,23 @@ function AdicionarDispositivoDialog({
   const isSuper = role === "super_admin";
   const effectiveTenant = isSuper ? tenantSelecionado : tenantId;
 
+  // Conta suspensa ou inativa não adiciona computador novo. Quem barra de verdade é o
+  // servidor (gatilho no address_book); isto só explica antes de preencher o formulário.
+  const { data: motivoBloqueio } = useQuery({
+    queryKey: ["conta_bloqueada", tenantId],
+    enabled: !isSuper && !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("billing_status, is_active")
+        .eq("id", tenantId as string)
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.is_active === false) return "conta_inativa";
+      return data?.billing_status === "suspended" ? "billing_blocked" : null;
+    },
+  });
+
   const { data: tenants } = useQuery({
     queryKey: ["tenants_lista"],
     enabled: isSuper,
@@ -3185,6 +3203,8 @@ function AdicionarDispositivoDialog({
 
       if (error || data?.error) {
         const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
+        const bloqueio = mensagemContaBloqueada(raw);
+        if (bloqueio) throw new Error(bloqueio);
         if (raw.includes("no_pending_claim")) {
           throw new Error(
             "Esse computador ainda não apareceu aqui. Confirme que o cliente instalou o AcessoFast e está online, depois leia o ID de novo.",
@@ -3270,6 +3290,30 @@ function AdicionarDispositivoDialog({
     e.preventDefault();
     mutation.mutate();
   };
+
+  if (motivoBloqueio) {
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button size="sm" data-tour="add-device">
+            <Plus className="h-4 w-4 mr-1" />
+            Adicionar dispositivo
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Não é possível adicionar computadores agora</DialogTitle>
+            <DialogDescription>{mensagemContaBloqueada(motivoBloqueio)}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog
