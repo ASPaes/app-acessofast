@@ -2522,6 +2522,10 @@ export type Database = {
           reason: string
         }[]
       }
+      cancelar_pagamento_manual: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
       claim_poll: {
         Args: { p_nonce_hash: string; p_rustdesk_id: string }
         Returns: string
@@ -2619,6 +2623,18 @@ export type Database = {
       }
       desvincular_indicacao: {
         Args: { p_indicacao_id: string }
+        Returns: undefined
+      }
+      editar_pagamento_manual: {
+        Args: {
+          p_forma: string
+          p_id: string
+          p_observacao: string
+          p_pago_em: string
+          p_referencia: string
+          p_valor_cents: number
+          p_vence_em: string
+        }
         Returns: undefined
       }
       find_tenant_by_document: {
@@ -2776,6 +2792,31 @@ export type Database = {
           tecnicos: number
         }[]
       }
+      pagamentos_manuais_lista: {
+        Args: never
+        Returns: {
+          asaas_payment_id: string | null
+          cancelado_em: string | null
+          cancelado_por: string | null
+          empresa: string
+          forma: string
+          id: string
+          motivo_cancelamento: string | null
+          observacao: string | null
+          pago_em: string
+          plan_code: string
+          pode_desfazer: boolean
+          referencia: string | null
+          registrado_em: string
+          registrado_por: string | null
+          status: string
+          tenant_id: string
+          vagas: number | null
+          valor_cents: number
+          vencimento_anterior: string | null
+          vencimento_novo: string
+        }[]
+      }
       pagamentos_plataforma: {
         Args: never
         Returns: {
@@ -2795,6 +2836,16 @@ export type Database = {
           tenant_id: string
           valor_cents: number | null
           vencimento: string | null
+        }[]
+      }
+      pix_sem_vinculo: {
+        Args: never
+        Returns: {
+          comprovante_url: string | null
+          pago_em: string
+          payment_id: string
+          recebido_em: string
+          valor_cents: number
         }[]
       }
       promo_code_attach_tenant: {
@@ -2937,6 +2988,21 @@ export type Database = {
       registrar_indicacao: {
         Args: { p_codigo: string; p_signup_intent_id: string; p_tenant_id?: string }
         Returns: boolean
+      }
+      registrar_pagamento_manual: {
+        Args: {
+          p_asaas_payment_id?: string
+          p_forma?: string
+          p_observacao?: string
+          p_pago_em?: string
+          p_plan_code: string
+          p_referencia?: string
+          p_tenant: string
+          p_vagas?: number
+          p_valor_cents?: number
+          p_vence_em?: string
+        }
+        Returns: string
       }
       registrar_venda_indicada: {
         Args: { p_payment_id: string; p_signup_intent_id: string; p_tenant_id: string }
