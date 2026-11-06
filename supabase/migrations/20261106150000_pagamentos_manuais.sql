@@ -36,6 +36,10 @@
 --
 -- Leitura: tabela com RLS e sem policy. O painel le por pagamentos_manuais_lista e
 -- pix_sem_vinculo, as duas com private.is_super_admin().
+--
+-- Aplicada em 06/11/2026 via apply_migration (pagamentos_manuais). Testada no banco com
+-- super_admin simulado e tudo desfeito no fim: registrar, corrigir e cancelar na conta
+-- "teste" (cancelar devolveu a conta igual), cobranca ja ligada recusada, tecnico recusado.
 
 -- ---------------------------------------------------------------------
 -- 1. Tabela
