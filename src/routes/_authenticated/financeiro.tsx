@@ -20,6 +20,7 @@ import { PlanPickerDialog } from "@/components/plan-picker-dialog";
 import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
 import { AcessoRestrito } from "@/components/acesso-restrito";
 import { SecaoCupons } from "@/components/secao-cupons";
+import { PagamentosPorFora } from "@/components/pagamentos-por-fora";
 import { StatCard } from "@/components/stat-card";
 import type { KpiInfo } from "@/components/kpi-info";
 import { useJaContratou } from "@/hooks/use-ja-contratou";
@@ -131,11 +132,11 @@ const INFO: Record<string, KpiInfo> = {
       "Receita CONTRATADA, não recebida. O que está em atraso continua somando aqui e aparece de novo no cartão ao lado. Plano pago que ninguém está cobrando não entra — vai para o cartão Sem cobrança.",
   },
   pago30: {
-    oQue: "O que os clientes pagaram pelo Asaas nos últimos 30 dias: planos e créditos.",
+    oQue: "O que os clientes pagaram nos últimos 30 dias, pelo Asaas ou por fora do checkout: planos e créditos.",
     porQue:
       "É o dinheiro que de fato saiu do bolso do cliente, ao contrário da receita contratada, que é o que está assinado. No cartão parcelado o cliente paga tudo na compra, mas cada parcela só cai na conta no mês dela: por isso o que ainda vai cair aparece embaixo.",
     comoCalculamos:
-      "soma do valor das cobranças pagas (confirmadas ou recebidas no Asaas) com data de pagamento nos últimos 30 dias; o que ainda vai cair é o valor líquido das pagas com data de crédito depois de hoje",
+      "soma do valor das cobranças pagas (confirmadas ou recebidas no Asaas) e dos pagamentos registrados por fora sem cobrança no Asaas, com data de pagamento nos últimos 30 dias; o que ainda vai cair é o valor líquido das pagas com data de crédito depois de hoje",
     referencia:
       "Só entram as cobranças ligadas a uma conta do AcessoFast. A conta do Asaas também recebe pagamentos de outros produtos, e esses ficam de fora.",
   },
@@ -1092,7 +1093,7 @@ function FinanceiroPlataforma() {
           hint={
             aCair > 0
               ? `${pagos30.length} pagamento(s) · ${emReais(aCair)} ainda a cair na conta`
-              : `${pagos30.length} pagamento(s) pelo Asaas`
+              : `${pagos30.length} pagamento(s)`
           }
           loading={carregandoPagamentos}
           color="cyan"
@@ -1139,6 +1140,7 @@ function FinanceiroPlataforma() {
         <TabsList>
           <TabsTrigger value="contas">Contas</TabsTrigger>
           <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          <TabsTrigger value="por-fora">Pagamentos por fora</TabsTrigger>
           <TabsTrigger value="cupons">Cupons</TabsTrigger>
         </TabsList>
 
@@ -1361,6 +1363,10 @@ function FinanceiroPlataforma() {
         <TabsContent value="cupons" className="mt-4">
           <SecaoCupons />
         </TabsContent>
+
+        <TabsContent value="por-fora" className="mt-4">
+          <PagamentosPorFora />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1386,6 +1392,10 @@ const FORMA: Record<string, string> = {
   PIX: "Pix",
   BOLETO: "Boleto",
   UNDEFINED: "A escolher",
+  // Pagamento registrado por fora do checkout sem cobrança no Asaas (pagamentos_manuais).
+  TRANSFER: "Transferência",
+  CASH: "Dinheiro",
+  OTHER: "Outro",
 };
 
 /** CONFIRMED = pago, dinheiro ainda a cair; RECEIVED = já caiu na conta. */
