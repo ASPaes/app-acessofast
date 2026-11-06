@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-11-06",
+    tipo: "novo",
+    titulo: "Dias grátis ao alterar o plano de uma conta",
+    descricao:
+      "Em Empresas, Alterar plano ganhou o campo Dias grátis. Preencha para a conta usar o plano de graça, em teste, até a data mostrada logo abaixo do campo; depois disso o acesso remoto é bloqueado até ela assinar. A conta passa a aparecer com o selo teste e a data de fim, e o cliente vê a contagem dos dias no topo do painel. Conta pagante ou isenta não recebe dias grátis.",
+    para: "plataforma",
+  },
+  {
     data: "2026-11-03",
     tipo: "melhoria",
     titulo: "Auditoria mostra de qual computador veio cada acesso",

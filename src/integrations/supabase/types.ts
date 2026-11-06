@@ -2545,6 +2545,10 @@ export type Database = {
         Returns: boolean
       }
       close_stale_sessions: { Args: never; Returns: number }
+      conceder_dias_gratis: {
+        Args: { p_dias: number; p_tenant: string }
+        Returns: string
+      }
       conta_ja_contratou: { Args: never; Returns: boolean }
       create_access_grant: {
         Args: {

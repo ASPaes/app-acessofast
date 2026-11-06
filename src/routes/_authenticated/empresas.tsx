@@ -302,6 +302,9 @@ function EmpresasPage() {
                             seat_limit: t.seat_limit,
                             max_concurrent_per_tech: t.max_concurrent_per_tech,
                             usuarios: membros,
+                            is_trial: t.is_trial,
+                            plan_expires_at: t.plan_expires_at,
+                            situacao: situacaoPorConta.get(t.id) ?? "gratis",
                           })
                         }
                         onEditarCadastro={() =>
@@ -376,6 +379,7 @@ type TenantLinha = {
   billing_mode: string;
   billing_status: string;
   is_trial: boolean;
+  plan_expires_at: string | null;
 };
 
 /**
@@ -488,9 +492,16 @@ function LinhaConta({
           <Badge variant="outline">
             {rotuloCobranca[tenant.billing_mode] ?? tenant.billing_mode}
           </Badge>
+          {/* A data de fim fica no selo: é a pergunta que vem logo depois de
+              "está em teste", e sem ela é preciso abrir o plano para saber. */}
           {tenant.is_trial && (
             <Badge variant="secondary" className="ml-1.5">
               teste
+              {tenant.plan_expires_at &&
+                ` até ${new Date(tenant.plan_expires_at).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}`}
             </Badge>
           )}
           {/* Teste, grátis e créditos já se leem nos selos ao lado e inativa na
