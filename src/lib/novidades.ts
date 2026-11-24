@@ -29,6 +29,46 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-11-06",
+    tipo: "novo",
+    titulo: "Dias grátis ao alterar o plano de uma conta",
+    descricao:
+      "Em Empresas, Alterar plano ganhou o campo Dias grátis. Preencha para a conta usar o plano de graça, em teste, até a data mostrada logo abaixo do campo; depois disso o acesso remoto é bloqueado até ela assinar. A conta passa a aparecer com o selo teste e a data de fim, e o cliente vê a contagem dos dias no topo do painel. Conta pagante ou isenta não recebe dias grátis.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-11-03",
+    tipo: "melhoria",
+    titulo: "Auditoria mostra de qual computador veio cada acesso",
+    descricao:
+      "Na Auditoria, a coluna Quem acessou passa a mostrar o técnico e o computador de onde ele conectou. Quando o acesso é aberto direto pelo ID, sem o pedido de acesso, aparece o nome do computador. Se ele não for da sua empresa, aparece o aviso Computador de fora, com o ID dele. Vale para os acessos feitos a partir de agora.",
+    para: "admin",
+  },
+  {
+    data: "2026-11-03",
+    tipo: "correcao",
+    titulo: "Conta com acesso bloqueado não adiciona computadores novos",
+    descricao:
+      "Enquanto a conta estiver sem plano ativo ou inativa, não dá para adicionar computadores novos, em Dispositivos, em Conectar ou pelo aplicativo. Os computadores já cadastrados continuam na lista. Assim que o plano for contratado ou o pagamento confirmado, é só adicionar normalmente.",
+    para: "todos",
+  },
+  {
+    data: "2026-10-28",
+    tipo: "melhoria",
+    titulo: "Financeiro mostra quanto cada conta pagou, e Empresas separa pagantes",
+    descricao:
+      "No Financeiro, a lista de contas ganhou o valor do contrato com a forma de pagamento (por exemplo, 3x de R$ 1.257,20 no cartão) e o total já pago. A nova aba Pagamentos lista cada pagamento com valor, valor depois da taxa e o dia em que cai na conta, e o cartão Pago em 30 dias soma o que os clientes pagaram no período. Em Empresas, escolha ver todas as contas, só as pagantes ou só as não pagantes; cada conta mostra se é pagante, isenta ou está sem cobrança.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-10-28",
+    tipo: "melhoria",
+    titulo: "Auditoria mostra só os acessos que chegaram à máquina",
+    descricao:
+      "Clicar em Conectar numa máquina que não respondeu, desligada por exemplo, não aparece mais na Auditoria como sessão que falhou, inclusive nas tentativas antigas. A Auditoria lista só os acessos que de fato aconteceram, e o filtro de status fica com Ativas e Encerradas. Se o clique tinha usado um acesso gratuito ou um crédito, ele continua sendo devolvido.",
+    para: "todos",
+  },
+  {
     data: "2026-10-27",
     tipo: "novo",
     titulo: "Logo da sua empresa no AcessoFast dos clientes",

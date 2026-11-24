@@ -226,6 +226,17 @@ Deno.serve(async (req) => {
         action: "cut_unknown_controller",
         hard_cap_at: new Date().toISOString(),
       }, 403);
+    } else if (a?.reason === "billing_blocked" || a?.reason === "conta_inativa") {
+      // Conta do tecnico suspensa ou inativa (03/11/2026): a maquina NAO entra no cadastro
+      // dela e a sessao cai, com o mesmo sinal de corte do caso acima. Tem de vir antes do
+      // device_not_registered, que nao corta. Ver 20261103120000.
+      console.warn("auto_adocao_barrada", rustdesk_id, a.reason);
+      return json({
+        error: a.reason,
+        action: "blocked_external",
+        reason: a.reason,
+        hard_cap_at: new Date().toISOString(),
+      }, 403);
     }
     // no_claim_or_bad_token (ou nulo) -> cai no device_not_registered abaixo.
   }

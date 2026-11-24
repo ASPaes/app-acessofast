@@ -60,6 +60,9 @@ Deno.serve(async (req) => {
     if (rErr) {
       if (rErr.code === "P0002" || (rErr.message ?? "").includes("no_pending_claim"))
         return j({ error: "no_pending_claim", detail: "Nenhum computador aguardando adocao com esse ID. Confirme que o cliente instalou e leia o ID de novo." }, 404);
+      // Conta suspensa ou inativa nao adiciona computador novo (gatilho no address_book).
+      if ((rErr.message ?? "").includes("billing_blocked")) return j({ error: "billing_blocked" }, 403);
+      if ((rErr.message ?? "").includes("conta_inativa")) return j({ error: "conta_inativa" }, 403);
       return j({ error: "adopt_failed", detail: rErr.message }, 500);
     }
     const r = Array.isArray(rows) ? rows[0] : rows;

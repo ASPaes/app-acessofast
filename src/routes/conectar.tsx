@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemContaBloqueada } from "@/lib/conta-bloqueada";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1508,7 +1509,10 @@ function ResolverMaquina({
       });
       if (error || data?.error) {
         const raw = error ? await invokeErrorMessage(error) : (data?.error ?? "");
-        if (raw.includes("no_pending_claim")) {
+        const bloqueio = mensagemContaBloqueada(raw);
+        if (bloqueio) {
+          toast.error(bloqueio);
+        } else if (raw.includes("no_pending_claim")) {
           toast.error(
             "Esse computador ainda não apareceu aqui. Confirme que o AcessoFast foi instalado e abriu, depois tente de novo.",
           );

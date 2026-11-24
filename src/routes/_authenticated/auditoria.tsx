@@ -111,7 +111,7 @@ const INFO: Record<string, KpiInfo> = {
       "Empresa aqui é a conta que contratou o AcessoFast — não o cliente final da coluna Cliente.",
   },
   foraDoPainel: {
-    oQue: "Atendimentos que começaram pelo executável, sem passar pelo botão Conectar do painel.",
+    oQue: "Atendimentos abertos direto pelo ID do computador, sem o pedido de acesso do painel ou do aplicativo.",
     porQue:
       "É o caminho que escapa da quota e da senha efêmera. Um número que só cresce aqui indica técnico reusando credencial por fora — que é exatamente o que o controle de acesso existe para fechar.",
     comoCalculamos: "linhas filtradas cuja nota começa com “Acesso externo”",
@@ -174,6 +174,26 @@ const nomeCliente = (l: ComMaquina) => l.address_book?.clients?.name ?? null;
  * auditoria trocaria "quem paga" por "quem foi atendido".
  */
 const nomeEmpresa = (l: ComEmpresa) => l.tenants?.name?.trim() || null;
+
+type ComOrigem = {
+  controller_rustdesk_id: string | null;
+  controlador_status: string | null;
+  computador_origem: { alias: string | null } | null;
+};
+
+/**
+ * Computador de onde a sessão veio, informado pela máquina acessada. Ele não prova quem
+ * estava nele, por isso nunca vira nome de técnico. "De fora" é o que não está cadastrado
+ * na empresa dona da máquina; para o admin, o apelido desse computador nem chega (o RLS de
+ * address_book o esconde) e sobra o ID.
+ */
+function computadorDeOrigem(l: ComOrigem) {
+  const id = l.controller_rustdesk_id;
+  if (!id) return null;
+  const deFora =
+    l.controlador_status === "outra_empresa" || l.controlador_status === "desconhecido";
+  return { id, nome: l.computador_origem?.alias?.trim() || null, deFora };
+}
 
 function AuditoriaPage() {
   /**
@@ -249,7 +269,9 @@ function AuditoriaPage() {
         .select(
           `id, rustdesk_id, technician_email, status, session_start, session_end,
            duration_seconds, technician_ip, notes, tenant_id,
+           controller_rustdesk_id, controlador_status,
            profiles!connection_logs_technician_id_fkey ( full_name ),
+           computador_origem:address_book!connection_logs_controlador_device_id_fkey ( alias ),
            tenants!connection_logs_tenant_id_fkey ( name ),
            address_book!connection_logs_address_book_id_fkey (
              alias, os, clients ( name )
@@ -297,6 +319,8 @@ function AuditoriaPage() {
       // da máquina ou do cliente — não do campo onde aquilo está guardado.
       return [
         nomeTecnico(l),
+        computadorDeOrigem(l)?.nome,
+        l.controller_rustdesk_id,
         nomeMaquina(l),
         nomeCliente(l),
         l.rustdesk_id,
@@ -374,7 +398,6 @@ function AuditoriaPage() {
   };
 
   const ativas = filtradas.filter((l) => l.status === "active").length;
-  const falhas = filtradas.filter((l) => l.status === "failed").length;
   const externas = filtradas.filter(ehExterno).length;
   const tecnicosNoPeriodo = new Set(filtradas.map(nomeTecnico).filter(Boolean)).size;
   const empresasNoPeriodo = new Set(filtradas.map((l) => l.tenant_id)).size;
@@ -398,7 +421,6 @@ function AuditoriaPage() {
           maquina: nomeMaquina(ultimo),
           cliente: nomeCliente(ultimo),
           empresa: nomeEmpresa(ultimo),
-          tecnico: nomeTecnico(ultimo),
           acessos: ordenadas.filter((s) => s.status === "active" || s.status === "ended").length,
           sessoes: ordenadas,
         };
@@ -414,9 +436,9 @@ function AuditoriaPage() {
    * data: a pergunta que essa visão responde é "quem usa mais", e a lista
    * ordenada por último acesso responderia "quem usou por último".
    *
-   * `acessos` conta ativa + encerrada, a mesma regra da visão por máquina —
-   * tentativa que falhou não é acesso, e contá-la inflaria o uso de uma conta
-   * que na prática não entrou em máquina nenhuma. As falhas aparecem à parte.
+   * `acessos` conta ativa + encerrada, a mesma regra da visão por máquina. O
+   * clique em Conectar que não chegou à máquina nem aparece aqui: ele sai da
+   * trilha de sessões (cliques_sem_conexao), porque não é acesso.
    */
   const porEmpresa = useMemo(() => {
     const map = new Map<string, LogRow[]>();
@@ -434,7 +456,6 @@ function AuditoriaPage() {
           tenant_id,
           empresa: nomeEmpresa(ordenadas[0]),
           acessos: ordenadas.filter((s) => s.status === "active" || s.status === "ended").length,
-          falhas: ordenadas.filter((s) => s.status === "failed").length,
           externas: ordenadas.filter(ehExterno).length,
           tecnicos: new Set(ordenadas.map(nomeTecnico).filter(Boolean)).size,
           maquinas: new Set(ordenadas.map((s) => s.rustdesk_id)).size,
@@ -516,7 +537,7 @@ function AuditoriaPage() {
           info={INFO.foraDoPainel}
           value={externas}
           icon={ShieldAlert}
-          hint="Iniciadas pelo instalador"
+          hint="Sem pedido de acesso"
           loading={isLoading}
           color="violet"
         />
@@ -627,7 +648,6 @@ function AuditoriaPage() {
                 <SelectItem value={TODOS}>Todos os status</SelectItem>
                 <SelectItem value="active">Ativas</SelectItem>
                 <SelectItem value="ended">Encerradas</SelectItem>
-                <SelectItem value="failed">Que falharam</SelectItem>
               </SelectContent>
             </Select>
             {/* Empresa é o único filtro cuja lista cresce com o negócio: os
@@ -741,7 +761,7 @@ function AuditoriaPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Quando</TableHead>
-                    <TableHead>Técnico</TableHead>
+                    <TableHead>Quem acessou</TableHead>
                     <TableHead>Máquina</TableHead>
                     <TableHead>Cliente</TableHead>
                     {mostraEmpresa && <TableHead>Empresa</TableHead>}
@@ -778,7 +798,9 @@ function AuditoriaPage() {
                         <TableCell className="text-xs whitespace-nowrap">
                           {new Date(l.session_start).toLocaleString("pt-BR")}
                         </TableCell>
-                        <TableCell className="text-xs">{nomeTecnico(l) ?? "—"}</TableCell>
+                        <TableCell className="text-xs">
+                          <CelulaQuemAcessou sessao={l} />
+                        </TableCell>
                         <TableCell className="text-xs">
                           <CelulaMaquina apelido={nomeMaquina(l)} id={l.rustdesk_id} />
                         </TableCell>
@@ -814,7 +836,7 @@ function AuditoriaPage() {
                     <TableHead>Cliente</TableHead>
                     {mostraEmpresa && <TableHead>Empresa</TableHead>}
                     <TableHead>Último acesso</TableHead>
-                    <TableHead>Técnico</TableHead>
+                    <TableHead>Quem acessou</TableHead>
                     <TableHead className="text-right">Acessos</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -865,7 +887,9 @@ function AuditoriaPage() {
                             <TableCell className="text-xs whitespace-nowrap">
                               {new Date(g.ultimo.session_start).toLocaleString("pt-BR")}
                             </TableCell>
-                            <TableCell className="text-xs">{g.tecnico ?? "—"}</TableCell>
+                            <TableCell className="text-xs">
+                              <CelulaQuemAcessou sessao={g.ultimo} />
+                            </TableCell>
                             <TableCell className="text-right tabular-nums text-xs">
                               {g.acessos}
                             </TableCell>
@@ -878,7 +902,7 @@ function AuditoriaPage() {
                                     <TableHeader>
                                       <TableRow>
                                         <TableHead>Início</TableHead>
-                                        <TableHead>Técnico</TableHead>
+                                        <TableHead>Quem acessou</TableHead>
                                         <TableHead>Origem</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Duração</TableHead>
@@ -892,7 +916,7 @@ function AuditoriaPage() {
                                             {new Date(s.session_start).toLocaleString("pt-BR")}
                                           </TableCell>
                                           <TableCell className="text-xs">
-                                            {nomeTecnico(s) ?? "—"}
+                                            <CelulaQuemAcessou sessao={s} />
                                           </TableCell>
                                           <TableCell>
                                             <OrigemBadge
@@ -931,7 +955,6 @@ function AuditoriaPage() {
                     <TableHead className="text-right">Máquinas</TableHead>
                     <TableHead className="text-right">Técnicos</TableHead>
                     <TableHead className="text-right">Fora do painel</TableHead>
-                    <TableHead className="text-right">Falhas</TableHead>
                     <TableHead>Último acesso</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -939,7 +962,7 @@ function AuditoriaPage() {
                   {isLoading &&
                     Array.from({ length: 6 }).map((_, i) => (
                       <TableRow key={i}>
-                        {Array.from({ length: 7 }).map((_, j) => (
+                        {Array.from({ length: 6 }).map((_, j) => (
                           <TableCell key={j}>
                             <Skeleton className="h-4 w-24" />
                           </TableCell>
@@ -948,7 +971,7 @@ function AuditoriaPage() {
                     ))}
                   {!isLoading && porEmpresa.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-0">
+                      <TableCell colSpan={6} className="py-0">
                         <VazioComFiltro temFiltro={chips.length > 0} limpar={limparTudo} />
                       </TableCell>
                     </TableRow>
@@ -984,9 +1007,6 @@ function AuditoriaPage() {
                             <span className="text-muted-foreground">0</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-                          {e.falhas}
-                        </TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
                           {new Date(e.ultimo.session_start).toLocaleString("pt-BR")}
                         </TableCell>
@@ -1003,11 +1023,6 @@ function AuditoriaPage() {
             <p className="mt-3 text-xs text-warning">
               Mostrando as {TETO} sessões mais recentes de {ROTULO_PERIODO[periodo]} — há mais
               registros no período. Reduza o intervalo para ver o restante.
-            </p>
-          )}
-          {falhas > 0 && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              {falhas} tentativa(s) de conexão falharam no período filtrado.
             </p>
           )}
         </CardContent>
@@ -1027,6 +1042,57 @@ function CelulaMaquina({ apelido, id }: { apelido: string | null; id: string }) 
     <div className="flex flex-col leading-tight">
       <span className="font-medium text-foreground">{apelido}</span>
       <span className="font-mono text-[11px] text-muted-foreground">{id}</span>
+    </div>
+  );
+}
+
+/**
+ * Quem acessou. O nome só vem do pedido de acesso, que é quando se sabe quem clicou. Sem
+ * ele, o computador de origem é o que há de concreto, e a célula diz isso com todas as
+ * letras: num registro de segurança, "—" não responde nada.
+ */
+function CelulaQuemAcessou({ sessao }: { sessao: ComTecnico & ComOrigem }) {
+  const nome = nomeTecnico(sessao);
+  const origem = computadorDeOrigem(sessao);
+  if (!origem) {
+    return nome ? (
+      <span className="font-medium text-foreground">{nome}</span>
+    ) : (
+      <span className="text-muted-foreground">Não identificado</span>
+    );
+  }
+  const detalheDeFora = origem.nome ? `${origem.nome} · ${origem.id}` : origem.id;
+  const avisoDeFora = "Este computador não está cadastrado na sua empresa.";
+  if (nome) {
+    return (
+      <div className="flex flex-col leading-tight">
+        <span className="font-medium text-foreground">{nome}</span>
+        {origem.deFora ? (
+          <span className="text-[11px] text-warning" title={avisoDeFora}>
+            de um computador de fora · {detalheDeFora}
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">
+            do computador {origem.nome ?? origem.id}
+          </span>
+        )}
+      </div>
+    );
+  }
+  if (origem.deFora) {
+    return (
+      <div className="flex flex-col leading-tight">
+        <span className="font-medium text-warning" title={avisoDeFora}>
+          Computador de fora
+        </span>
+        <span className="font-mono text-[11px] text-muted-foreground">{detalheDeFora}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className="font-medium text-foreground">Computador {origem.nome ?? origem.id}</span>
+      <span className="text-[11px] text-muted-foreground">técnico não identificado</span>
     </div>
   );
 }
