@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LogoEmpresaCard } from "@/components/logo-empresa-card";
 import {
   DIAS,
   FUSOS,
@@ -142,7 +143,10 @@ function ConfiguracoesPage() {
         </Card>
       ) : (
         // key: trocar de empresa recomeca o formulario, em vez de levar o rascunho junto.
-        <HorarioAcessoCard key={tenantId} tenantId={tenantId} salvo={config.data} />
+        <>
+          <HorarioAcessoCard key={tenantId} tenantId={tenantId} salvo={config.data} />
+          <LogoEmpresaCard key={`logo-${tenantId}`} tenantId={tenantId} />
+        </>
       )}
     </div>
   );
