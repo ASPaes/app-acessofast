@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-11-25",
+    tipo: "correcao",
+    titulo: "Aviso certo ao adicionar um computador que já está no painel",
+    descricao:
+      "Ao adicionar um computador que já está cadastrado, em Dispositivos ou em Conectar, a mensagem agora diz com que nome ele está no painel, em vez de dizer que ele ainda não apareceu. Isso acontece quando o computador entrou sozinho, ao ser acessado pelo ID. Se ele estiver inativo, a mensagem explica como reativar.",
+    para: "todos",
+  },
+  {
     data: "2026-11-24",
     tipo: "novo",
     titulo: "Logo da sua empresa no AcessoFast dos clientes",

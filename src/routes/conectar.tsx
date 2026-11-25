@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { mensagemContaBloqueada } from "@/lib/conta-bloqueada";
+import { mensagemSemPedidoDeCadastro } from "@/lib/sem-pedido-de-cadastro";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1513,9 +1514,7 @@ function ResolverMaquina({
         if (bloqueio) {
           toast.error(bloqueio);
         } else if (raw.includes("no_pending_claim")) {
-          toast.error(
-            "Esse computador ainda não apareceu aqui. Confirme que o AcessoFast foi instalado e abriu, depois tente de novo.",
-          );
+          toast.error(await mensagemSemPedidoDeCadastro(id));
         } else if (raw.includes("rustdesk_id_invalido")) {
           toast.error("ID inválido — são de 6 a 12 dígitos.");
         } else {

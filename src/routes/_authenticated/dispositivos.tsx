@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { AnuncioSlot } from "@/components/anuncio-slot";
 import { supabase } from "@/integrations/supabase/client";
 import { mensagemContaBloqueada } from "@/lib/conta-bloqueada";
+import { mensagemSemPedidoDeCadastro } from "@/lib/sem-pedido-de-cadastro";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -3206,9 +3207,7 @@ function AdicionarDispositivoDialog({
         const bloqueio = mensagemContaBloqueada(raw);
         if (bloqueio) throw new Error(bloqueio);
         if (raw.includes("no_pending_claim")) {
-          throw new Error(
-            "Esse computador ainda não apareceu aqui. Confirme que o cliente instalou o AcessoFast e está online, depois leia o ID de novo.",
-          );
+          throw new Error(await mensagemSemPedidoDeCadastro(normalizado));
         }
         if (raw.includes("rustdesk_id_invalido")) {
           throw new Error("Rustdesk ID inválido — informe de 6 a 12 dígitos.");
