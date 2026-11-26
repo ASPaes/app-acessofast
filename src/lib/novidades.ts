@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-11-26",
+    tipo: "novo",
+    titulo: "Grupo do AcessoFast no WhatsApp",
+    descricao:
+      "Depois de pagar o plano ou comprar créditos, a tela de pagamento confirmado traz o convite para o grupo do AcessoFast no WhatsApp. É só clicar em Entrar no grupo para entrar direto.",
+    para: "admin",
+  },
+  {
+    data: "2026-11-26",
     tipo: "correcao",
     titulo: "Empresas mostra quais contas estão suspensas",
     descricao:
