@@ -29,6 +29,14 @@ export type Novidade = {
 
 export const NOVIDADES: Novidade[] = [
   {
+    data: "2026-11-26",
+    tipo: "correcao",
+    titulo: "Empresas mostra quais contas estão suspensas",
+    descricao:
+      "Em Empresas, a coluna Status passa a mostrar o selo vermelho suspensa nas contas com o acesso remoto bloqueado, seja porque o teste grátis acabou sem contratação, seja porque a fatura venceu além da carência. Antes elas apareciam como ativa. O selo do teste também mudou: depois do fim, ele mostra teste encerrado e a data, em vez de continuar com teste até.",
+    para: "plataforma",
+  },
+  {
     data: "2026-11-25",
     tipo: "correcao",
     titulo: "Aviso certo ao adicionar um computador que já está no painel",
