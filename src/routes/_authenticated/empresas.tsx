@@ -437,6 +437,12 @@ function LinhaConta({
 
   const documento = tenant.cnpj ? mascararDocumento(tenant.cnpj) : null;
 
+  // is_trial continua true depois que o teste vence: o cron só grava a suspensão.
+  // Sem essa conta, o selo seguia dizendo "teste até 07/11" semanas depois.
+  const fimTeste = tenant.plan_expires_at ? new Date(tenant.plan_expires_at) : null;
+  const testeAcabou = tenant.is_trial && !!fimTeste && fimTeste.getTime() <= Date.now();
+  const diaMes = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+
   return (
     <>
       <TableRow className={aberta ? "bg-muted/40" : undefined}>
@@ -494,19 +500,20 @@ function LinhaConta({
           </Badge>
           {/* A data de fim fica no selo: é a pergunta que vem logo depois de
               "está em teste", e sem ela é preciso abrir o plano para saber. */}
-          {tenant.is_trial && (
-            <Badge variant="secondary" className="ml-1.5">
-              teste
-              {tenant.plan_expires_at &&
-                ` até ${new Date(tenant.plan_expires_at).toLocaleDateString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                })}`}
-            </Badge>
-          )}
-          {/* Teste, grátis e créditos já se leem nos selos ao lado e inativa na
-              coluna Status. Aqui só entra o que nenhum deles conta: se a conta
-              paga, e por que uma conta em plano não paga. */}
+          {tenant.is_trial &&
+            (testeAcabou && fimTeste ? (
+              <Badge variant="outline" className="ml-1.5 text-muted-foreground">
+                teste encerrado em {diaMes(fimTeste)}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="ml-1.5">
+                teste
+                {fimTeste && ` até ${diaMes(fimTeste)}`}
+              </Badge>
+            ))}
+          {/* Teste, grátis e créditos já se leem nos selos ao lado, e inativa ou
+              suspensa na coluna Status. Aqui só entra o que nenhum deles conta: se
+              a conta paga, e por que uma conta em plano não paga. */}
           {situacao === "pagante" && (
             <Badge
               variant="outline"
@@ -546,10 +553,22 @@ function LinhaConta({
             </>
           )}
         </TableCell>
+        {/* "ativa" sozinho dizia só que ninguém inativou a empresa, e escondia a
+            conta bloqueada pela cobrança (teste vencido ou fatura atrasada além da
+            carência). Inativa vem antes: é decisão da ASP e vale mesmo pagando. */}
         <TableCell>
-          <Badge variant={tenant.is_active ? "default" : "secondary"}>
-            {tenant.is_active ? "ativa" : "inativa"}
-          </Badge>
+          {!tenant.is_active ? (
+            <Badge variant="secondary">inativa</Badge>
+          ) : tenant.billing_status === "suspended" ? (
+            <Badge
+              variant="destructive"
+              title="Acesso remoto bloqueado até a conta contratar um plano ou pagar a fatura em aberto"
+            >
+              suspensa
+            </Badge>
+          ) : (
+            <Badge>ativa</Badge>
+          )}
         </TableCell>
         <TableCell className="text-xs text-muted-foreground">
           {new Date(tenant.created_at).toLocaleDateString("pt-BR")}
