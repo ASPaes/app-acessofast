@@ -30,6 +30,14 @@ export type Novidade = {
 export const NOVIDADES: Novidade[] = [
   {
     data: "2026-11-26",
+    tipo: "melhoria",
+    titulo: "Cobranças do AcessoFast identificadas no Asaas",
+    descricao:
+      "Os clientes do AcessoFast passam a ficar no grupo AcessoFast do Asaas, e as cobranças recebem a descrição do produto, do plano e da parcela, por exemplo AcessoFast Team · Plano mensal ou AcessoFast · Pacote de 50 créditos. Assim elas não se confundem com as vendas de outros produtos na mesma conta. O Asaas só deixa editar cobrança pendente ou vencida: a parcela de cartão, que já nasce confirmada, pode continuar com a descrição antiga, mas aparece no filtro pelo grupo.",
+    para: "plataforma",
+  },
+  {
+    data: "2026-11-26",
     tipo: "novo",
     titulo: "Grupo do AcessoFast no WhatsApp",
     descricao:
