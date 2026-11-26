@@ -1,8 +1,22 @@
-// AcessoFast — asaas-webhook-prod (v5)
+// AcessoFast — asaas-webhook-prod (v6)
 // PRODUCAO. verify_jwt = FALSE: quem chama e o Asaas (sem JWT); auth via header
 // asaas-access-token.
 // REGRA DE OURO: sempre responder 200 (exceto token invalido). 15 nao-2xx
 // seguidas fazem o Asaas PAUSAR a fila inteira.
+//
+// v6 (26/11/2026) — descricao das cobrancas no Asaas:
+//   A conta do Asaas e da ASP inteira, e o checkout nao passa descricao para a
+//   cobranca: no cartao parcelado ela nasce "Parcela 1 de 3." e na mensalidade,
+//   vazia. Aqui, em toda cobranca ligada ao AcessoFast (intencao de compra,
+//   assinatura de uma conta ou compra de creditos), trocamos por
+//   "AcessoFast Team · Plano anual · Parcela 1 de 3". Na mensalidade gravamos a
+//   descricao tambem na assinatura, para as proximas ja nascerem certas.
+//   Mantemos "Parcela N de M" no texto: pagamentos_plataforma() le o total de
+//   parcelas dali. Cobranca achada so pelo cliente do Asaas NAO e rotulada: o
+//   mesmo cliente pode comprar outro produto da ASP. Nao-fatal: o Asaas so
+//   deixa editar cobranca pendente ou vencida, e a recusa vira log.
+//   Tambem marcamos o cliente com o grupo "AcessoFast" (o cadastro do cliente
+//   se edita sempre), para filtrar no Asaas ate a parcela que ja nasceu paga.
 //
 // v5 (26/11/2026) — pagamento de quem ja tem conta (caso CTM):
 //   O admin de uma conta vencida assinou de novo pelo site com o mesmo e-mail.
@@ -146,17 +160,116 @@ async function registrarVendaIndicada(db, tenantId, intentId, paymentId) {
   }
 }
 
+// (v6) Descricao das cobrancas. Ver o cabecalho.
+const MARCA = "AcessoFast";
+
+function parcelaDe(payment) {
+  const m = /Parcela\s+(\d+)\s+de\s+(\d+)/i.exec(payment?.description ?? "");
+  return m ? `Parcela ${m[1]} de ${m[2]}` : null;
+}
+
+function comMarca(nome) {
+  const n = String(nome ?? "").trim();
+  if (!n) return MARCA;
+  return n.toLowerCase().startsWith(MARCA.toLowerCase()) ? n : `${MARCA} ${n}`;
+}
+
+function descricaoPlano(planName, billingCycle, payment) {
+  const ciclo = billingCycle === "annual" ? "Plano anual" : "Plano mensal";
+  return [comMarca(planName), ciclo, parcelaDe(payment)].filter(Boolean).join(" · ");
+}
+
+function descricaoCreditos(credits, payment) {
+  const pacote = credits ? `Pacote de ${credits} créditos` : "Pacote de créditos";
+  return [MARCA, pacote, parcelaDe(payment)].filter(Boolean).join(" · ");
+}
+
+async function asaasPut(path, body) {
+  try {
+    const r = await fetch(`${ASAAS_API}${path}`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        access_token: ASAAS_KEY,
+        "User-Agent": "AcessoFast/1.0",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    const resp = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, detail: `asaas_${r.status}: ${JSON.stringify(resp?.errors ?? resp).slice(0, 300)}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, detail: `asaas_unreachable: ${String(e).slice(0, 300)}` };
+  }
+}
+
+// Nao-fatal por construcao. Cobranca que ja comeca com a marca fica como esta:
+// e o que impede reescrever a cada evento (CONFIRMED, RECEIVED...).
+async function rotularCobranca(payment, descricao) {
+  try {
+    if (!payment?.id || payment.deleted || !descricao) return;
+    if (String(payment.description ?? "").startsWith(MARCA)) return;
+
+    // Mensalidade: a assinatura leva a descricao, e as proximas cobrancas ja
+    // nascem com ela. updatePendingPayments alcanca a que o Asaas ja gerou.
+    if (payment.subscription) {
+      const s = await asaasPut(`/subscriptions/${payment.subscription}`,
+                               { description: descricao, updatePendingPayments: true });
+      if (!s.ok) console.error("descricao: assinatura recusada", payment.subscription, s.detail);
+    }
+
+    // O PUT da cobranca exige billingType, value e dueDate; vao os mesmos que ela
+    // ja tem, para so a descricao mudar.
+    const r = await asaasPut(`/payments/${payment.id}`, {
+      billingType: payment.billingType,
+      value: payment.value,
+      dueDate: payment.dueDate,
+      description: descricao,
+    });
+    if (r.ok) console.log("descricao: cobranca rotulada", payment.id, payment.status, descricao);
+    else console.error("descricao: cobranca recusada", payment.id, payment.status, r.detail);
+  } catch (e) {
+    console.error("descricao falhou (nao-fatal):", String(e));
+  }
+}
+
+// Grupo "AcessoFast" no cadastro do cliente do Asaas. A cobranca paga nao se
+// edita, mas o cliente sim: com o grupo, a lista de cobrancas do Asaas filtra
+// so as do AcessoFast. Idempotente e nao-fatal.
+const GRUPO = "AcessoFast";
+async function marcarCliente(customerId) {
+  try {
+    if (!customerId) return;
+    const r = await asaasPut(`/customers/${customerId}`, { groupName: GRUPO });
+    if (!r.ok) console.error("grupo: cliente recusado", customerId, r.detail);
+  } catch (e) {
+    console.error("grupo falhou (nao-fatal):", String(e));
+  }
+}
+
+async function nomeDoPlano(db, planCode) {
+  if (!planCode) return null;
+  try {
+    const { data } = await db.from("plans").select("name").eq("code", planCode).maybeSingle();
+    return data?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // (v3) Compra de creditos ligada a este evento, ou null. Erro de leitura vira
 // null e o evento segue o caminho antigo — que, sem intencao, so registra.
 async function acharCompraDeCredito(db, checkoutSession, externalReference) {
   try {
     if (checkoutSession) {
-      const { data } = await db.from("credit_purchases").select("id, status")
+      const { data } = await db.from("credit_purchases").select("id, status, credits")
         .eq("asaas_checkout_id", checkoutSession).maybeSingle();
       if (data) return data;
     }
     if (externalReference && UUID_RE.test(externalReference)) {
-      const { data } = await db.from("credit_purchases").select("id, status")
+      const { data } = await db.from("credit_purchases").select("id, status, credits")
         .eq("id", externalReference).maybeSingle();
       if (data) return data;
     }
@@ -214,6 +327,12 @@ Deno.serve(async (req) => {
   //     segue para renovacao/reativacao/conta nova.
   const compra = await acharCompraDeCredito(db, checkout_session, external_reference);
   if (compra) {
+    // (v6) Antes do desvio: o Pix e o boleto nascem pendentes (PAYMENT_CREATED),
+    // que e quando o Asaas ainda deixa editar.
+    await Promise.all([
+      rotularCobranca(payment, descricaoCreditos(compra.credits, payment)),
+      marcarCliente(payment?.customer),
+    ]);
     if (!PROVISION_EVENTS.includes(event_type)) return await finish("credit_purchase_recorded");
     const { data, error } = await db.rpc("grant_credit_purchase", {
       p_purchase_id: compra.id,
@@ -233,7 +352,7 @@ Deno.serve(async (req) => {
 
   // 3) Localiza a intencao. Traz tenant_id e billing_cycle.
   let intent = null;
-  const ICOLS = "id, status, admin_email, company_name, asaas_customer_id, tenant_id, billing_cycle";
+  const ICOLS = "id, status, admin_email, company_name, asaas_customer_id, tenant_id, billing_cycle, plan_code";
   if (checkout_session) {
     const { data } = await db.from("signup_intents").select(ICOLS)
       .eq("asaas_checkout_id", checkout_session).maybeSingle();
@@ -257,11 +376,13 @@ Deno.serve(async (req) => {
 
   // 5) Localiza o TENANT por subscription/customer (renovacao/inadimplencia).
   let tenant = null;
-  const TCOLS = "id, billing_status, billing_exempt, billing_exempt_until, asaas_subscription_id, asaas_customer_id";
+  let tenantPelaAssinatura = false;
+  const TCOLS = "id, billing_status, billing_exempt, billing_exempt_until, asaas_subscription_id, asaas_customer_id, plan_code";
   if (payment?.subscription) {
     const { data } = await db.from("tenants").select(TCOLS)
       .eq("asaas_subscription_id", payment.subscription).maybeSingle();
     tenant = data ?? null;
+    tenantPelaAssinatura = !!tenant;
   }
   if (!tenant && payment?.customer) {
     const { data } = await db.from("tenants").select(TCOLS)
@@ -277,6 +398,20 @@ Deno.serve(async (req) => {
     if (Object.keys(faltando).length) {
       await db.from("tenants").update(faltando).eq("id", tenant.id);
     }
+  }
+
+  // 6a) (v6) DESCRICAO e GRUPO no Asaas. A descricao so com intencao ou
+  //     assinatura de uma conta: achar o tenant pelo cliente nao prova que a
+  //     cobranca e do AcessoFast. O grupo vale para qualquer conta achada: o
+  //     cliente ja e do AcessoFast.
+  if (payment && (intent || tenant)) {
+    const tarefas = [marcarCliente(payment.customer)];
+    if (intent || tenantPelaAssinatura) {
+      const planCode = intent?.plan_code ?? tenant?.plan_code ?? null;
+      const ciclo = intent?.billing_cycle ?? (payment.subscription ? "monthly" : null);
+      tarefas.push(rotularCobranca(payment, descricaoPlano(await nomeDoPlano(db, planCode), ciclo, payment)));
+    }
+    await Promise.all(tarefas);
   }
 
   // 6b) (v2) VOUCHER — conta a cobranca e, no fim da janela, devolve o preco
