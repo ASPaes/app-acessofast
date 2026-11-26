@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlanPickerDialog } from "@/components/plan-picker-dialog";
 import { AplicarCupomDialog } from "@/components/aplicar-cupom-dialog";
+import { ConviteGrupoWhatsapp, jaEntrouNoGrupo } from "@/components/convite-grupo-whatsapp";
 import { AcessoRestrito } from "@/components/acesso-restrito";
 import { SecaoCupons } from "@/components/secao-cupons";
 import { PagamentosPorFora } from "@/components/pagamentos-por-fora";
@@ -56,6 +57,9 @@ const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 const emReais = (centavos: number) => brl.format(centavos / 100);
 
 type CheckoutResult = { ok?: boolean; checkout_url?: string };
+
+const AVISO_COMPRA_DE_CREDITOS =
+  "Pagamento enviado. Os créditos entram no saldo assim que o pagamento for confirmado.";
 
 // Rótulos do razão de crédito (enum credit_entry_type).
 const ENTRY_LABEL: Record<string, string> = {
@@ -183,13 +187,20 @@ function Financeiro() {
   // Volta do checkout do Asaas. O crédito é lançado pelo webhook, segundos depois
   // do pagamento (Pix pode levar um pouco mais): recarrega saldo e histórico
   // algumas vezes em vez de deixar a tela mostrando o número antigo.
+  // Na mesma volta, quem ainda não entrou no grupo do WhatsApp recebe o convite;
+  // o aviso do pagamento vai dentro dele, para não abrir duas mensagens juntas.
   const qc = useQueryClient();
+  const [conviteGrupo, setConviteGrupo] = useState(false);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get("compra") !== "ok") return;
     url.searchParams.delete("compra");
     window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-    toast.success("Pagamento enviado. Os créditos entram no saldo assim que o pagamento for confirmado.");
+    if (jaEntrouNoGrupo()) {
+      toast.success(AVISO_COMPRA_DE_CREDITOS);
+    } else {
+      setConviteGrupo(true);
+    }
     const timers = [4000, 12000, 30000, 60000].map((ms) =>
       setTimeout(() => {
         qc.invalidateQueries({ queryKey: ["financeiro-saldo"] });
@@ -746,6 +757,12 @@ function Financeiro() {
         activeUsers={activeUsers ?? 0}
         reason={reason}
         tenantId={tenantId}
+      />
+
+      <ConviteGrupoWhatsapp
+        open={conviteGrupo}
+        onOpenChange={setConviteGrupo}
+        aviso={AVISO_COMPRA_DE_CREDITOS}
       />
     </div>
   );
