@@ -1,5 +1,14 @@
-// AcessoFast — create-checkout-prod (v7)
+// AcessoFast — create-checkout-prod (v8)
 // PRODUCAO. verify_jwt = FALSE: chamado pelo site comercial (visitante anonimo).
+//
+// v8 (26/11/2026) — e-mail que ja tem conta nao abre checkout aqui:
+//   Este checkout cria conta NOVA: o webhook so liga a compra a uma conta quando
+//   a intencao nasce com tenant_id, e isso so a create-renewal-prod (painel) faz.
+//   O admin de uma conta vencida que assinava por aqui era cobrado e ficava sem
+//   plano (caso CTM, 25/11/2026: create_user_failed no webhook). Agora o e-mail
+//   e conferido em auth.users antes de tudo e volta 409 email_already_registered;
+//   o site manda a pessoa entrar no painel. Se a conferencia falhar, aborta:
+//   cobrar sem conta para entregar e pior do que nao vender.
 //
 // v7 (26/10/2026) — indicacao de revendedor; codigo trazido para o repo:
 //   Ate a v6 o codigo vivia so no Supabase. `indicacao` opcional no body: o
@@ -195,6 +204,22 @@ Deno.serve(async (req) => {
     return j({ error: "rate_limited" }, 429);
   if (!(await rlAllows(db, "cc:em:" + admin_email, RL_EMAIL_LIMIT, RL_WINDOW)))
     return j({ error: "rate_limited" }, 429);
+
+  // (v8) Quem ja tem conta contrata pelo painel. Depois do rate limit, porque a
+  // resposta revela que o e-mail e cadastrado (o teste gratis ja revela o mesmo).
+  const { data: jaTemConta, error: emailErr } = await db.rpc("email_ja_cadastrado", {
+    p_email: admin_email,
+  });
+  if (emailErr) {
+    console.error("email_ja_cadastrado failed:", emailErr.message);
+    return j({ error: "db_error", detail: emailErr.message }, 500);
+  }
+  if (jaTemConta === true) {
+    return j({
+      error: "email_already_registered",
+      detail: "Este e-mail ja tem conta. Entre no painel para contratar ou renovar o plano.",
+    }, 409);
+  }
 
   const { data: plan, error: planErr } = await db
     .from("plans").select("code, name, price_month_cents, price_year_cents, is_active")

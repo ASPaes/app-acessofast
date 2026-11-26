@@ -1,8 +1,20 @@
-// AcessoFast — asaas-webhook-prod (v4)
+// AcessoFast — asaas-webhook-prod (v5)
 // PRODUCAO. verify_jwt = FALSE: quem chama e o Asaas (sem JWT); auth via header
 // asaas-access-token.
 // REGRA DE OURO: sempre responder 200 (exceto token invalido). 15 nao-2xx
 // seguidas fazem o Asaas PAUSAR a fila inteira.
+//
+// v5 (26/11/2026) — pagamento de quem ja tem conta (caso CTM):
+//   O admin de uma conta vencida assinou de novo pelo site com o mesmo e-mail.
+//   O passo 11 tentava criar o usuario, falhava ("already been registered") e a
+//   intencao ficava 'failed' sem tenant: cliente cobrado, conta suspensa.
+//   A create-checkout-prod v8 ja recusa esse e-mail antes do checkout; aqui fica
+//   a rede de seguranca para quem ganhou conta entre abrir o checkout e pagar.
+//   Antes de criar o usuario, vincular_intencao_ao_admin liga a intencao a conta
+//   quando o e-mail e admin dela e a conta nao paga plano agora (teste, gratis,
+//   creditos ou suspensa); a compra segue entao o mesmo caminho do passo 9.
+//   Conta pagante, isenta ou inativa nao e tocada: a intencao fica 'failed' com
+//   failure_reason "conta_existente: <motivo>" para revisao.
 //
 // v4 (26/10/2026) — venda de revendedor:
 //   Quando um pagamento de plano e aplicado (conta nova ou trial/gratis que
@@ -296,8 +308,9 @@ Deno.serve(async (req) => {
   if (!PROVISION_EVENTS.includes(event_type)) return await finish("recorded_only");
 
   // 9) CAMINHO RENOVACAO / TRIAL->PAGANTE / TROCA DE PLANO.
-  if (intent && intent.tenant_id) {
-    if (intent.status === "provisioned") return await finish("already_applied", { tenant_id: intent.tenant_id });
+  //    (v5) Tambem usado pelo passo 11a, quando a intencao acaba de ser ligada
+  //    a conta que ja existia.
+  const aplicarNaConta = async (tenantId, resultado) => {
     const { data: tid, error: applyErr } = await db.rpc("apply_paid_plan", { p_intent_id: intent.id });
     if (applyErr) {
       await db.from("signup_intents")
@@ -305,8 +318,13 @@ Deno.serve(async (req) => {
         .eq("id", intent.id);
       return await finish("apply_paid_plan_failed", { detail: applyErr.message });
     }
-    await registrarVendaIndicada(db, tid ?? intent.tenant_id, intent.id, payment?.id ?? null);
-    return await finish("plan_applied", { tenant_id: tid });
+    await registrarVendaIndicada(db, tid ?? tenantId, intent.id, payment?.id ?? null);
+    return await finish(resultado, { tenant_id: tid ?? tenantId });
+  };
+
+  if (intent && intent.tenant_id) {
+    if (intent.status === "provisioned") return await finish("already_applied", { tenant_id: intent.tenant_id });
+    return await aplicarNaConta(intent.tenant_id, "plan_applied");
   }
 
   // 10) REATIVACAO por pagamento avulso (sem intencao vinculada).
@@ -336,6 +354,30 @@ Deno.serve(async (req) => {
     } catch (e) { console.error("customer fetch failed:", String(e)); }
   }
   if (cnpj) await db.from("signup_intents").update({ cnpj }).eq("id", intent.id);
+
+  // 11a) (v5) E-mail que ja e admin de uma conta: criar o usuario falharia.
+  //      Erro na RPC nao bloqueia — cai na criacao como antes da v5.
+  const { data: vinc, error: vincErr } = await db.rpc("vincular_intencao_ao_admin", {
+    p_intent_id: intent.id,
+  });
+  if (vincErr) console.error("vincular_intencao_ao_admin failed:", vincErr.message);
+  const motivo = vincErr ? null : (vinc?.motivo ?? null);
+  if (motivo === "vinculada" || motivo === "ja_vinculada") {
+    // ja_vinculada: outro evento da mesma compra ligou antes. apply_paid_plan
+    // trava a intencao e e idempotente, entao nao aplica duas vezes.
+    return await aplicarNaConta(vinc.tenant_id, "plan_applied_existing_account");
+  }
+  if (motivo === "ja_provisionada") return await finish("already_provisioned");
+  if (motivo && motivo !== "email_nao_e_admin") {
+    console.error("pagamento de conta existente para revisao:", intent.id, motivo, vinc?.tenant_id ?? "");
+    await db.from("signup_intents")
+      .update({
+        status: "failed",
+        failure_reason: `conta_existente: ${motivo}${vinc?.tenant_id ? ` (tenant ${vinc.tenant_id})` : ""}`,
+      })
+      .eq("id", intent.id);
+    return await finish("existing_account_needs_review", { motivo, tenant_id: vinc?.tenant_id ?? null });
+  }
 
   const { data: created, error: createErr } = await db.auth.admin.createUser({
     email: intent.admin_email, email_confirm: true, user_metadata: {},
